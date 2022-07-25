@@ -1,5 +1,8 @@
 
+export const mod = function(Core){
+
 const {cwarn,globals}=Core;
+
 
 /*TODO
 
@@ -1132,5 +1135,7 @@ globals.zip = zipobj.zip;
 
 this.get_zip = ()=>{
 	return zipobj.zip;
+}
+
 }
 

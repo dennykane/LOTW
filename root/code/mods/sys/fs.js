@@ -1787,6 +1787,7 @@ if (LINK_RE.test(gotto)){
 						domv();
 						return;
 					} else {
+
 if (type == "www") {
 	let rv = await fetch(frompath);
 	if (!rv.ok){
@@ -1795,10 +1796,11 @@ if (type == "www") {
 		return;
 	}
 	await writeHtml5File(`${savedirpath}/${savename}`, await rv.blob());
-	mv_desk_icon(gotfrom, gotto, app);
+	if (!dom_objects) mv_desk_icon(gotfrom, gotto, app);
 	domv();
 	return;
 }
+
 						if (type == "local") {//«
 							let saver = new FileSaver();
 							saver.set_cb("error", mess => {
@@ -3050,7 +3052,17 @@ this.start_blob_stream=()=>{
 };
 this.append_blob=(arg,cb)=>{/* If no fSize is set,we can call update_cb with the number of bytes written */ if(stream_ended)return cerr("The stream is ended!");if(!stream_started)return cerr("Must call start_blob_stream first!");if(!check_cb(cb,2))return;if(!(arg instanceof Blob))return cerr("The first arg MUST be a Blob!");save_file_chunk(arg,cb);};
 this.end_blob_stream=()=>{stream_ended=true;make_kid_obj();if(done_cb)done_cb();};
-this.cancel=(cb)=>{cwarn("Cancelling... cleaning up!");cancelled=true;fEnt.remove(()=>{cwarn("fEnt.remove OK");cb();},()=>{cerr("fEnt.remove ERR");cb();});};
+this.cancel = (cb) => {
+	cwarn("Cancelling... cleaning up!");
+	cancelled = true;
+	fEnt.remove(() => {
+		cwarn("fEnt.remove OK");
+		cb();
+	}, () => {
+		cerr("fEnt.remove ERR");
+		cb();
+	});
+};
 
 }
 this.FileSaver=FileSaver;

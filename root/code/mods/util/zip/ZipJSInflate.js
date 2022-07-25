@@ -1,4 +1,6 @@
 
+export const mod = function(Core){
+
 (function(global) {
 
 //«
@@ -2126,4 +2128,6 @@
 })(this);
 
 Core.globals.zip.Inflater = this.Inflater;
+
+}
 

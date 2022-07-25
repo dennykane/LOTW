@@ -1,10 +1,13 @@
+
+export const mod = function(Core){
+
 // Copyright (c) 2013 Gildas Lormeau. All rights reserved.
 // * This program is based on JZlib 1.0.2 ymnk, JCraft,Inc.
 // * JZlib is based on zlib-1.1.3, so all credit should go authors
 // * Jean-loup Gailly(jloup@gzip.org) and Mark Adler(madler@alumni.caltech.edu)
 // * and contributors of zlib.
 
-(function(global) {
+(function(global) {//«
 	"use strict";
 
 	// Global
@@ -2028,6 +2031,9 @@
 	// 'zip' may not be defined in z-worker and some tests
 	var env = global.zip || global;
 	env.Deflater = env._jzlib_Deflater = Deflater;
-})(this);
+})(this);//»
 
 Core.globals.zip.Deflater = this.Deflater;
+
+}
+
