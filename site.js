@@ -7,6 +7,7 @@
 
 //Imports«
 
+const { execSync } = require("child_process");
 const spawn = require('child_process').spawn;
 const http = require('http');
 const https = require('https');
@@ -95,6 +96,60 @@ LOTW - Main
 </body>
 </html>
 `;
+//HTML_TOP«
+const HTML_TOP=`
+<html>
+<head>
+<title>
+LOTW Blog
+</title>
+<style>
+body{
+	padding-top:15px;
+	padding-bottom:15px;
+}
+.text{
+	max-width:85ch;
+	font-family:Arial;
+	margin-left:auto;
+	margin-right:auto;
+	padding-bottom:10px;
+	text-align:justify;
+}
+h2{
+	margin-left:-5ch;
+	margin-bottom:0px;
+}
+h3{
+	margin-left:-3ch;
+}
+</style>
+<link rel="icon" href="/www/img/favicon.ico">
+</head>
+
+<body>
+
+<div class="text">
+`;
+
+const HTML_BOT=`
+</div>
+</body>
+</html>
+`;
+
+//»
+const ext_to_mime = {
+	"js": "application/javascript",
+	"json": "application/javascript",
+	"html": "text/html",
+	"txt": "text/plain",
+	"synth": "text/plain",
+	"sh": "text/plain",
+	"gz": "application/gzip",
+	"wav": "audio/wav"
+};
+
 //»
 
 //OS_HTML«
@@ -119,7 +174,7 @@ const OS_HTML=`
 `;
 //»
 
-const OKAY_DIRS=["root","www"];
+const OKAY_DIRS=["root","www",'blog'];
 const log = (...args)=>{console.log(...args)}
 
 const BASEPATH = process.env.LOTW_PWD || process.env.PWD;
@@ -134,6 +189,7 @@ log(`Cannot stat: ${BINPATH}/dummy.js`);
 const WWWPATH = `${BASEPATH}/www`;
 const APPPATH = `${BASEPATH}/root/code/apps`;
 
+const DEFMIME = "application/octet-stream";
 
 let hostname;
 let use_port = process.env.LOTW_PORT;
@@ -267,6 +323,7 @@ const handle_request=async(req, res, url, args)=>{//«
 	let meth = req.method;
 	let body, path, enc, pos;
 	let marr;
+	let isblog = false;
 	if (meth == "GET") {//«
 		if (url=="/") {
 			if (args.path){//«
@@ -342,25 +399,25 @@ log(e);
 		parts.shift();
 		let dir = parts.shift();
 		if (!(dir&&OKAY_DIRS.includes(dir))) return nogo(res,"Not found");
-		let usemime = "application/octet-stream";
+		let dots = ".";
+		if (dir==="blog") {
+			isblog = true;
+			dots="..";
+		}
+//		let usemime = "application/octet-stream";
+		let usemime;
 		let useenc;
 		let str;
-		let ext_to_mime = {
-			"js": "application/javascript",
-			"json": "application/javascript",
-			"html": "text/html",
-			"txt": "text/plain",
-			"synth": "text/plain",
-			"sh": "text/plain",
-			"gz": "application/gzip",
-			"wav": "audio/wav"
-		}
-		if (marr = url.match(/\.(js|html|json|txt|sh|mf|synth)$/)) {
-			usemime = ext_to_mime[marr[1]];
+//		if (marr = url.match(/\.(js|html|json|txt|sh|mf|synth)$/)) {
+		if ((marr = url.match(/\.(js|html|json|txt|sh|mf|synth)$/)) || isblog) {
+
+			if (marr && marr[1]) usemime = ext_to_mime[marr[1]];
+
 			if (is_live && FS_CACHE[url]) str = FS_CACHE[url];
 			else {
 				try {
-					str = fs.readFileSync("."+decodeURIComponent(url), 'utf8');
+					if (isblog && !usemime) str = HTML_TOP + execSync(`markdown ${dots+decodeURIComponent(url)}`) + HTML_BOT;
+					else str = fs.readFileSync(dots+decodeURIComponent(url), 'utf8');
 					FS_CACHE[url] = str;
 				}
 				catch(e) {
@@ -383,19 +440,21 @@ log(e);
 			if (is_live && FS_CACHE[url]) str = FS_CACHE[url];
 			else {
 				try {
-					str = fs.readFileSync("."+decodeURIComponent(url));
+					str = fs.readFileSync(dots+decodeURIComponent(url));
 					FS_CACHE[url] = str;
 				}
 				catch(e) {
 					str = null
 				}
 			}
-
 		}
 		if (!str) {
 			nogo(res, "404: File not found: " + url);
-//debug("Not found");
 			return;
+		}
+		if (!usemime) {
+			if (isblog) usemime = ext_to_mime.html;
+			else usemime = DEFMIME;
 		}
 		okay(res, usemime, useenc);
 		res.end(str);
