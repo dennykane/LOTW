@@ -424,7 +424,7 @@ log(e);
 					str=null
 				}
 			}
-			if (is_live && req.headers['accept-encoding'].match(/\bgzip\b/)){
+			if (str && is_live && req.headers['accept-encoding'].match(/\bgzip\b/)){
 				if (GZIP_CACHE[url]){
 					str = GZIP_CACHE[url];
 				}
