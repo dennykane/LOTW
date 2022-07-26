@@ -141,7 +141,7 @@ a:visited{
 
 
 <div class="content">
-<h2>This "blog" exists just to fool Hacker News*</h2>
+<h2>This "blog" mainly exists to fool Hacker News*</h2>
 <hr>
 `;
 

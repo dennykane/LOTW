@@ -74,7 +74,7 @@ const DEL_LIBS=[
 //	"wasm"
 //	"synth",
 //	"net",
-//	"fs",
+	"fs",
 //	"js",
 //	"iface",
 //	"av"
@@ -286,6 +286,7 @@ this.set_tab_size = (s)=>{//«
 this.set_desk = arg=>{Desk = arg;}
 this.onescape=()=>{//«
 	textarea.focus();
+	if (check_scrolling()) return;
 	let dorender=false;
 	if (buffer_scroll_num !== null) {
 		buffer_scroll_num = null;
@@ -412,7 +413,35 @@ wrapdiv.tcol = TCOL;
 wrapdiv.fw = FW;
 wrapdiv.ff = FF;
 wrapdiv.style.whiteSpace = "pre";
-main.onscroll=e=>{e.preventDefault();scroll_middle();};
+main.onscroll=e=>{
+	e.preventDefault();
+	scroll_middle();
+};
+
+
+let is_scrolling = false;
+
+main.onwheel=e=>{
+	if (term_mode=="shell" && !sleeping){
+		let dy = e.deltaY;
+		if (!is_scrolling){
+			if (dy > 0) return;
+			scrollnum_hold = scroll_num;
+//			yhold = y;
+		}
+		is_scrolling = true;
+		if (dy < 0) dy = Math.ceil(dy*1);
+		else dy = Math.floor(dy*1);
+		scroll_num += dy;
+		if (scroll_num < 0) scroll_num = 0;
+		else if (scroll_num >= scrollnum_hold) {
+			scroll_num = scrollnum_hold;
+			is_scrolling = false;
+		}
+		render();
+	}
+};
+
 main.appendChild(wrapdiv);
 
 let tabdiv = make('div');
@@ -720,7 +749,7 @@ if (num2 > w) {
 		}//»
 
 //		if (!(pager||is_buf_scroll||stat_input_mode||scroll_cursor_mode)) {
-		if (!(pager||is_buf_scroll||stat_input_mode)) {//«
+		if (!(pager||is_buf_scroll||stat_input_mode||is_scrolling)) {//«
 			if (docursor && i==y && topwin_focused) {
 				if (!arr[usex]||arr[usex]=="\x00") {
 					arr[usex]=" ";
@@ -1582,6 +1611,7 @@ const get_command_arr=async (dir, pattern, cb)=>{//«
 		arr = termobj.builtins;
 		if (root_state) arr = arr.concat(termobj.sys_builtins);
 		arr = arr.concat(Object.keys(termobj.FUNCS));
+		arr = arr.concat(Object.keys(termobj.ALIASES));
 	}
 	else {
 log(`get_command_arr(): ${term_mode}`);
@@ -3048,9 +3078,29 @@ else if (sym=="l_A") log(line_colors);
 };
 //»
 
+const check_scrolling=()=>{
+	if (is_scrolling){
+		scroll_num = scrollnum_hold;
+//		y = yhold;
+		is_scrolling = false;
+		render();
+		return true;
+	}
+	return false;
+}
+
 const handle=(sym, e, ispress, code, mod)=>{//«
 	let marr;
-
+	if (is_scrolling){
+		if (!ispress) {
+			if (sym.match(/^[A-Z]+_$/)){}
+			else return;
+		}
+		scroll_num = scrollnum_hold;
+		is_scrolling = false;
+		render();
+		return;
+	}
 	if (e && sym=="d_C") e.preventDefault();
 
 	if (!ispress) {//«

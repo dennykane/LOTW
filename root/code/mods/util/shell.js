@@ -3288,6 +3288,10 @@ const read_stdin = (cb, opts={}) => {
 			if (_killcb) _killcb();
 		});
 		if (reader.is_terminal) {
+			if (opts.NOTERMINAL){
+				cb();
+				return;
+			}
 			if (if_once) {
 				respbr(true, true);
 				termobj.set_prompt(use_prompt, {
@@ -4345,7 +4349,6 @@ cerr("Dropping", ret);
 	let which = args.shift();
 	if (!which) return cberr("No lib given!");
 	let doit = () => {
-//		let keys = await NS.libs[which].coms;
 		let keys = NS.libs[which]();
 		cbok(fmt(keys.sort().join(" ")));
 	};
@@ -4835,7 +4838,25 @@ log(fent);
 		}
 	});
 },
-'buf':args=>{let sws=failopts(args,{SHORT:{r:1,n:1},LONG:{reverse:1}});if(!sws)return;let buf=termobj.get_buffer();if(sws.reverse||sws.r)buf=buf.reverse();if(sws.n)buf=Core.api.numberLines(buf);woutarr(buf);cbok(EOF);},
+'buf': args => {
+	let sws = failopts(args, {
+		SHORT: {
+			r: 1,
+			n: 1
+		},
+		LONG: {
+			reverse: 1
+		}
+	});
+	if (!sws) return;
+	let buf = termobj.get_buffer();
+	buf.pop();
+	buf.pop();
+	if (sws.reverse || sws.r) buf = buf.reverse();
+	if (sws.n) buf = Core.api.numberLines(buf);
+	wout(buf.join("\n"));
+	cbok(EOF);
+},
 'parse': args=>{com_cat(args, {OBJOK: true, PARSE: true});},
 'stringify': args=>{com_cat(args, {OBJOK: true, STRINGIFY: true});},
 'typeof': args=>{com_cat(args, {OBJOK:true, ECHOTYPE: true});},

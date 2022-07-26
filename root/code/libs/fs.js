@@ -731,7 +731,20 @@ else begin();
 		let Less, Pager;
         if (!(await capi.loadMod("util.pager"))) return cberr("Could not load the system pager!");
 		Pager = NS.mods["util.pager"];
-		let sws = failopts(args,{SHORT:{o:1,t:1,n:1}, LONG: {objok:1, "number-lines":1, "force-text":1}});
+		let sws = failopts(args, {
+			SHORT: {
+				o: 1,
+				t: 1,
+				n: 1,
+				b: 1
+			},
+			LONG: {
+				objok: 1,
+				"number-lines": 1,
+				"force-text": 1,
+				buffer: 1
+			}
+		});
 		if (!sws) return;
 		let num_files=0;
 		let opts = {};
@@ -743,7 +756,10 @@ else begin();
 			cbok(EOF);
 			killcb();
 		});
-		if (!args.length && get_reader().is_terminal) return cberr("Missing filename");
+		let isbuf = sws.buffer||sws.b;
+		if (!args.length && get_reader().is_terminal && !isbuf) return cberr("Missing filename");
+		if (isbuf) opts.NOTERMINAL = true;
+
 		let totfiles = args.length;		
 		let allfiles = 0;
 		read_file_args_or_stdin(args, (ret, fname, errmess)=>{
@@ -764,6 +780,7 @@ else begin();
 				return name = fname;
 			}
 			if (!name) name = "(stdin)";
+			if (!ret && isbuf) ret = termobj.get_buffer();
 			if (isobj(ret)) {
 				if (!objok) return cwarn("less: DROPPING OBJECT");
 				ret = [ret.toString()];
