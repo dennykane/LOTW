@@ -107,32 +107,57 @@ LOTW Blog
 body{
 	padding-top:15px;
 	padding-bottom:15px;
+	color: #ccc;
+	background-color: #000;
 }
-.text{
+.header{
+	text-align:center;
+}
+.content{
 	max-width:85ch;
 	font-family:Arial;
 	margin-left:auto;
 	margin-right:auto;
 	padding-bottom:10px;
-	text-align:justify;
+//	text-align:justify;
 }
-h2{
-	margin-left:-5ch;
-	margin-bottom:0px;
+a{
+	color: #99f;
 }
-h3{
-	margin-left:-3ch;
+a:visited{
+	color: #c9f;
 }
 </style>
 <link rel="icon" href="/www/img/favicon.ico">
 </head>
 
 <body>
+<div class="header">
+<a href="/desk">Desktop</a> || 
+<a href="/shell">Shell</a> ||
+<a href="https://github.com/linuxontheweb/LOTW">Github</a> ||
+<a href="https://gitter.im/linuxontheweb/community">Contact</a>
+</div>
 
-<div class="text">
+
+<div class="content">
+<h2>This "blog" exists just to fool Hacker News*</h2>
+<hr>
 `;
 
 const HTML_BOT=`
+<hr>
+<p>
+*A "real" blog is about having new and interesting things to say. If I ever have
+anything new or interesting to say, I'll say it to vim, in a .js file. So and but
+Hacker News (HN) is just like this place online where all the techies go if they
+want to get their things out there. It's real hard to get your little message to
+make much of a noise on HN. So, if you have anything you want to get noticed, you
+will probably need to devote a decent amount of time towards making regular posts.
+But they don't want you to keep repetitively putting the same exact link up there.
+So here I can make believe that I have an actual blog that I give two shits about,
+where each post obviously uses its own link. But all I'm ever going to write is
+maybe a short paragraph or two.
 </div>
 </body>
 </html>

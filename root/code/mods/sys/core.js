@@ -1835,6 +1835,7 @@ set_protos();
 if (winorig.match(/localhost/)||winorig.match(/127\.0\.0\.1/)||winorig.match(/192\.168\./)) {
 	dev_env = true;
 	globals.dev_env = true;
+	globals.is_local = true;
 }
 if (qobj.dev) {
 	dev_mode = true;

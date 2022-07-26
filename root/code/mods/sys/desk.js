@@ -146,7 +146,7 @@ Desk.ENV=_;
 const MODS = NS.mods;
 const{KC,kc,simulate,globals,log,cwarn,cerr,sys_url,xget}=Core;
 //const{menu:MENU,widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions}=globals;
-const{home_path, widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions,FOLDER_APP, TEXT_APP}=globals;
+const{home_path, widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions,FOLDER_APP, TEXT_APP, is_local}=globals;
 const path_to_obj = (path, cb, if_root, getlink) => {
 	fs.path_to_obj(path, cb, if_root, getlink);
 };
@@ -197,12 +197,15 @@ this.winh = winh;
 
 //Flags/Modes«
 
+
 //let DEF_NO_DELETE_ICONS = true;
 let DEF_NO_DELETE_ICONS = false;
 //let CYCLE_MIN_WINS = false;
 let PREV_DEF_ALL_KEYS = false;
 let CYCLE_MIN_WINS = true;
-let init_with_cur_showing = true;
+let init_with_cur_showing;
+if (is_local) init_with_cur_showing = true;
+else init_with_cur_showing = false;
 //let init_with_cur_showing = false;
 let cur_showing = false;
 let taskbar_hidden;
@@ -7005,7 +7008,6 @@ this.init = async (init_str, cb) => {
 
 }
 //»
-
 
 }
 
