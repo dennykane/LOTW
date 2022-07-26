@@ -4835,15 +4835,22 @@ this.update_all_paths = update_all_paths;
 //»
 
 
-const icon_array_off = (which) => {
+const icon_array_off = (which) => {//«
+	let icn = ICONS[0];
 	for (let i = 0; i < ICONS.length; i++) icon_off(ICONS[i]);
 	ICONS = [];
-}
+	if (icn && icn.parwin!==desk) icn.parwin.obj.update();
+}//»
 const icon_off = (icon, do_vacate) => {//«
 	if (!(icon && icon.imgdiv)) return;
 	if (do_vacate && ICONS.includes(icon)) ICONS.splice(ICONS.indexOf(icon), 1);
 	icon.bor = "2px solid transparent";
 	icon.bgcol="";
+	if (icon.parwin!==desk) {
+		if (ICONS.length===1) icon.parwin.obj.stat(ICONS[0].fullname);
+		else icon.parwin.obj.stat(`${ICONS.length} selected`);
+	}
+
 }//»
 const icon_on = (icon, do_add) => {//«
 	if (!(icon && icon.imgdiv)) return;
@@ -4858,6 +4865,8 @@ const icon_on = (icon, do_add) => {//«
 	else {
 		icon.bor = FOLDER_ICON_BOR;
 		icon.bgcol = FOLDER_ICON_BG;
+		if (ICONS.length===1) icon.parwin.obj.stat(icon.fullname);
+		else icon.parwin.obj.stat(`${ICONS.length} selected`);
 	}
 }//»
 //const make_icon_if_new = (path, appwinarg, fent) => {
