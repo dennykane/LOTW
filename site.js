@@ -172,7 +172,8 @@ const ext_to_mime = {
 	"synth": "text/plain",
 	"sh": "text/plain",
 	"gz": "application/gzip",
-	"wav": "audio/wav"
+	"wav": "audio/wav",
+	png:"image/png"
 };
 
 //»
@@ -461,7 +462,7 @@ log(e);
 			}
 		}
 		else {
-			if (marr = url.match(/\.(wav|gz)$/)) usemime = ext_to_mime[marr[1]];
+			if (marr = url.match(/\.(wav|gz|png)$/)) usemime = ext_to_mime[marr[1]];
 			if (is_live && FS_CACHE[url]) str = FS_CACHE[url];
 			else {
 				try {

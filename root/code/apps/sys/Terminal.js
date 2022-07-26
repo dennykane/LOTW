@@ -342,6 +342,7 @@ this.onfocus=()=>{//«
 }//»
 this.onblur=_=>{//«
 	topwin_focused=false;
+	render();
 	textarea.blur();
 	if (cur_scroll_command) insert_cur_scroll();
 }//»
@@ -592,6 +593,7 @@ log(real_lines);
 	if (opts.nocursor){}
 	else if (!TERMINAL_IS_LOCKED) docursor = true;
 
+
 	let usescroll = scroll_num;
 	let is_buf_scroll = false;
 	if (buffer_scroll_num!==null) {
@@ -750,7 +752,8 @@ if (num2 > w) {
 
 //		if (!(pager||is_buf_scroll||stat_input_mode||scroll_cursor_mode)) {
 		if (!(pager||is_buf_scroll||stat_input_mode||is_scrolling)) {//«
-			if (docursor && i==y && topwin_focused) {
+//			if (docursor && i==y && topwin_focused) {
+			if (docursor && i==y) {
 				if (!arr[usex]||arr[usex]=="\x00") {
 					arr[usex]=" ";
 				}
@@ -767,7 +770,10 @@ if (num2 > w) {
 				}
 				else usech = ch;
 				if (!usech.length) usech = " ";
-				arr[usex] = pre+`<span id="cursor_${winid}" style="background-color:${usebg};">${usech}</span>`;
+				let sty;
+				if (topwin_focused) sty = `background-color:${usebg}`;
+				else sty=`border:1px solid ${usebg}`;
+				arr[usex] = pre+`<span id="cursor_${winid}" style="${sty}">${usech}</span>`;
 			}
 		}//»
 		else if (error_cursor) {//«
