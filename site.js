@@ -92,6 +92,7 @@ LOTW - Main
 <li><h3><a href="/shell">The shell environment</a></h3>
 <li><h3><a href="/www/about.html">About page</a></h3>
 <li><h3><a href="https://github.com/linuxontheweb/LOTW">Source code and documentation on Github</a></h3>
+<li><h3><a href="https://gitter.im/linuxontheweb/community">Chat forum on Gitter</a></h3>
 </ul>
 </body>
 </html>
