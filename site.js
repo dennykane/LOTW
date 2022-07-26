@@ -261,42 +261,7 @@ else regexp = new RegExp("^" + pattern.replace(/\./g,"\\."));
 };//»
 
 //»
-/*
 
-	if (url=="/") {//«
-		else {
-			okay(res);
-			res.end("HI");
-		}
-	}//»
-	else if (url=="/_getdirobj"){//«
-		let path = decodeURIComponent(arg_hash.path);
-		if (path && !path.match(/\.\./)) {
-			if (path == "/") path = LOCAL_PATH;
-			else path = LOCAL_PATH + "/" + path;
-			let ret = allFilesSync(path);
-			okay(res,"application/javascript");
-			res.end(JSON.stringify(ret));
-		}   
-		else nogo(res);
-	}//»
-	else if (url=="/_getfilehash"){//«
-		let path = decodeURIComponent(arg_hash.path);
-		let ret;
-		try {
-			ret = fs.readFileSync(LOCAL_PATH+"/"+path);
-		}
-		catch(e){
-			nogo(res, "Trying to read directory?");
-			return;
-		}
-		let shasum = crypto.createHash('sha1');
-		shasum.update(ret);
-		let hexsum = shasum.digest('hex');
-		okay(res);
-		res.end(hexsum);
-	}//»
-*/
 const handle_request=async(req, res, url, args)=>{//«
 	"use strict";
 	let meth = req.method;
@@ -464,12 +429,61 @@ const app =(req,res)=>{//«
 };//»
 
 if (process.env.LOTW_LIVE) {
+
 	https.createServer({
 		key: fs.readFileSync(KEY_PATH),
 		cert: fs.readFileSync(CERT_PATH)
-	}, app).listen(port, hostname)
-}
-else http.createServer(app).listen(port, hostname);
+	}, app).listen(443, hostname)
 
-log(`Site server listening at http://${hostname}:${port}`);
+	http.createServer(app).listen(80, hostname)
+	log(`Site server listening at https://${hostname}:443`);
+	log(`Site server listening at http://${hostname}:80`);
+
+}
+else {
+
+	http.createServer(app).listen(port, hostname);
+	log(`Site server listening at http://${hostname}:${port}`);
+
+}
+
+
+
+
+/*
+	if (url=="/") {//«
+		else {
+			okay(res);
+			res.end("HI");
+		}
+	}//»
+	else if (url=="/_getdirobj"){//«
+		let path = decodeURIComponent(arg_hash.path);
+		if (path && !path.match(/\.\./)) {
+			if (path == "/") path = LOCAL_PATH;
+			else path = LOCAL_PATH + "/" + path;
+			let ret = allFilesSync(path);
+			okay(res,"application/javascript");
+			res.end(JSON.stringify(ret));
+		}   
+		else nogo(res);
+	}//»
+	else if (url=="/_getfilehash"){//«
+		let path = decodeURIComponent(arg_hash.path);
+		let ret;
+		try {
+			ret = fs.readFileSync(LOCAL_PATH+"/"+path);
+		}
+		catch(e){
+			nogo(res, "Trying to read directory?");
+			return;
+		}
+		let shasum = crypto.createHash('sha1');
+		shasum.update(ret);
+		let hexsum = shasum.digest('hex');
+		okay(res);
+		res.end(hexsum);
+	}//»
+*/
+
 
