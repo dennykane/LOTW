@@ -286,7 +286,7 @@ this.set_tab_size = (s)=>{//«
 this.set_desk = arg=>{Desk = arg;}
 this.onescape=()=>{//«
 	textarea.focus();
-	if (check_scrolling()) return;
+	if (check_scrolling()) return true;
 	let dorender=false;
 	if (buffer_scroll_num !== null) {
 		buffer_scroll_num = null;
@@ -421,18 +421,22 @@ main.onscroll=e=>{
 
 
 let is_scrolling = false;
-
+let wheel_iter;
 main.onwheel=e=>{
 	if (term_mode=="shell" && !sleeping){
 		let dy = e.deltaY;
 		if (!is_scrolling){
+			if (!scroll_num) return;
 			if (dy > 0) return;
 			scrollnum_hold = scroll_num;
 //			yhold = y;
+			is_scrolling = true;
+			wheel_iter = 0;
 		}
-		is_scrolling = true;
-		if (dy < 0) dy = Math.ceil(dy*1);
-		else dy = Math.floor(dy*1);
+		wheel_iter++;
+		if (wheel_iter%10) return;
+		if (dy < 0) dy = Math.ceil(dy);
+		else dy = Math.floor(dy);
 		scroll_num += dy;
 		if (scroll_num < 0) scroll_num = 0;
 		else if (scroll_num >= scrollnum_hold) {
@@ -3099,7 +3103,9 @@ const handle=(sym, e, ispress, code, mod)=>{//«
 	let marr;
 	if (is_scrolling){
 		if (!ispress) {
-			if (sym.match(/^[A-Z]+_$/)){}
+			if (sym.match(/^[A-Z]+_$/)){
+				if (sym==="SPACE_") return;
+			}
 			else return;
 		}
 		scroll_num = scrollnum_hold;

@@ -6078,18 +6078,16 @@ CG.off();
 
 	/*Open context menu of selected icon, desktop or current window*/
 	if (kstr == "c_A") {
-		let goticn = CUR.geticon();
-		if (ICONS.length||goticn){
-			if (ICONS.length==1||goticn){
-				let icn = ICONS[0]||goticn;
-				if (!desk.contains(icn)){
+//		let goticn = CUR.geticon();
+		if (ICONS.length===1){
+			let icn = ICONS[0];
+			if (!desk.contains(icn)){
 cwarn("There was an unattached icon in ICONS!");
-					icon_array_off(13);
-					return;
-				}
-				let r = icn.gbcr();
-				icn.wrapper.oncontextmenu({clientX: r.x, clientY: r.y, isFake: true});
+				icon_array_off(13);
+				return;
 			}
+			let r = icn.gbcr();
+			icn.wrapper.oncontextmenu({clientX: r.x, clientY: r.y, isFake: true});
 		}
 		
 		else if (!cwin) {
