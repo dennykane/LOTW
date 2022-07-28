@@ -92,6 +92,7 @@ LOTW - Main
 	height: 100%;
 	background: url('/www/img/lotw256.png') center center no-repeat;
 	opacity: 0.33;
+	z-index: -1;
 }
 </style>
 </head>
