@@ -83,10 +83,21 @@ const BASE_PAGE=`
 LOTW - Main
 </title>
 <link rel="icon" href="/www/img/favicon.ico">
+<style>
+.background{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	background: url('/www/img/lotw256.png') center center no-repeat;
+	opacity: 0.33;
+}
+</style>
 </head>
 <body>
+<div class="background"></div>
 <h2>Linux on the Web (LOTW)</h2>
-<img width="256" height="256" src="/www/img/lotw256.png"></img>
 <ul>
 <li><h3><a href="/desk">The desktop environment</a></h3>
 <li><h3><a href="/shell">The shell environment</a></h3>

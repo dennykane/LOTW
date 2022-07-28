@@ -434,7 +434,7 @@ main.onwheel=e=>{
 			wheel_iter = 0;
 		}
 		wheel_iter++;
-		if (wheel_iter%10) return;
+		if (wheel_iter%7) return;
 		if (dy < 0) dy = Math.ceil(dy);
 		else dy = Math.floor(dy);
 		scroll_num += dy;
