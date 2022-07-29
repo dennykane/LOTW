@@ -587,634 +587,9 @@ SELECT COUNT(column_name)
 
 »*/
 
-//Imports«
+export const lib = (comarg, args, Core, Shell)=>{
 
-const{NS,xgetobj,globals,log,cwarn,cerr}=Core;
-const{fs,util,widgets,dev_env,dev_mode}=globals;
-const{strnum,isarr,isobj,isstr,mkdv}=util;
-const {
-	readFile,
-	get_reader,
-	fmt,
-	read_stdin,
-	woutobj,
-	woutarr,
-	get_path_of_object,
-	pathToNode,
-	read_file_args_or_stdin,
-	serr,
-	normpath,
-	cur_dir,
-	respbr,
-	get_var_str,
-	refresh,
-	failopts,
-	cbok,
-	cberr,
-	wout,
-	werr,
-	termobj,
-	wrap_line,
-	kill_register,
-	EOF,
-	ENV
-} = shell_exports;
-const fsapi=NS.api.fs;
-const capi = Core.api;
-const fileorin = read_file_args_or_stdin;
-const stdin = read_stdin;
-const NUM = Number.isFinite;
-
-//»
-//Var«
-
-const HN_OBJ_TYPES=[
-	"HNItem",
-	"HNUser"
-];
-const CLEAR = {CLEAR:true};
-const TIME = {TIME:true};
-//const time=()=>{
-//	return {TIME:new Date().toUTCString()}
-//};
-const TAB_WIDTH=4;
-const TAB = "\xa0".repeat(TAB_WIDTH);
-let DEF_NUM_STORIES = 100;
-const gen_story_help=which=>{//«
-return `Get a listing of the current ${which} stories, as either full items or numerical ids
-
-General options:
-${TAB}--first or -f: Get the first (highest rated) story only
-${TAB}--get or -g: Get the full story items rather than the ids
-${TAB}--watch or -w: This does not return immediately, but rather listens for changes in the listings
-${TAB}--verbose or -v: Show diagnostic output
-
-Render options: These are typically used when sending the listing into a pipeline that ends in a renderer. Each of the below sends the given instruction operator to the renderer.
-${TAB}--time or -t: Display a timestamp.
-${TAB}--clear or -c: Clear the screen (this is useful when in conjuction with '--watch').
-
-Args:
-${TAB}If not getting the first story only, you can specify how many to get. (Default: ${DEF_NUM_STORIES} stories)
-`;
-};//»
-const HN_DB_LONG_NAME = "Hacker News WebSQL database";
-
-const TABLE_DEFS = {//«
-
-text:`id INT PRIMARY KEY,
-val TEXT
-`,
-
-item: `id BIGINT UNIQUE, 
-type CHAR(20),
-title CHAR(80),
-by CHAR(32),
-time BIGINT,
-parent BIGINT,
-descendants INT,
-score INT,
-dead INT,
-ttyp INT,
-text CHAR(255),
-kids CHAR(255)
-`,
-
-user: `id CHAR(30) UNIQUE,
-created BIGINT,
-karma INT,
-about CHAR(255)
-`
-
-};//»
-let TABLE_TYPES="";
-for (let k of Object.keys(TABLE_DEFS)){
-	if (!TABLE_TYPES) TABLE_TYPES = `"${k}"`
-	else TABLE_TYPES+=`, "${k}"`
-}
-
-//const TABLE_TYPES = Object.keys(TABLE_DEFS).join(", ");
-
-let ERRMESS=null;
-const HN_VER="v0";
-const HN_BASE_URL = "https://hacker-news.firebaseio.com";
-const HN_VER_URL = `${HN_BASE_URL}/${HN_VER}`;
-const HN_USER_URL = `${HN_VER_URL}/user`;
-const HN_ITEM_URL = `${HN_VER_URL}/item`;
-const HN_MAXITEM_URL = `${HN_VER_URL}/maxitem.json`;
-
-const HN_APPNAME = "hackernews";
-const HN_DB_NAME = `${HN_APPNAME}-${HN_VER}`;
-const HN_DB_DESC = `Hacker News Database - ${HN_VER}`;
-let DEF_DB_SIZE = 5*1024*1024;
-let ifapi = NS.api.iface;
-let is_connected = false;
-//»
-
-//Funcs//«
-
-const render=(type, obj, opts={})=>{//«
-
-let str='';
-let date = "";
-let arr=[];
-let is_html=opts.html||opts.h;
-
-const time_str=(secs)=>{
-	let date = new Date(secs);
-	let tm = date.toLocaleTimeString();
-	let arr = date.toUTCString().split(" ");
-	arr.pop();
-	arr.pop();
-	return `${tm} ${arr.join(" ")}`;
-}
-
-if (type=="HNUser") {
-	arr=[obj.id,`Created: ${(new Date(1000*obj.created)).toDateString()}`, `Karma: ${obj.karma||0}`, `About:${obj.about||""}`];
-}
-else if (type=="HNItem") {
-
-//	arr=[obj.title,`By: ${obj.by}`,`Time: ${(new Date(1000*obj.time)).toUTCString()}`, `Score: ${obj.score||0}`];
-	arr=[obj.title,`By: ${obj.by}`,`Time: ${time_str(1000*obj.time)}`, `Score: ${obj.score||0}`];
-	let t = obj.textType;
-	if (t==1||t==2){
-		let url=obj.text;
-		if (is_html) url=`<a href="${url}">${url}</a>`;
-		arr.push(`Url: ${url}`);
-	}
-	else if (t==3||t==4){
-		if (is_html) arr.push(`Text: <div>${obj.text}</div>`);
-		else arr.push(`Text: ${obj.text}`);
-	}
-}
-
-if (is_html){
-	str = arr.join("<br>");
-}
-else {
-	str = arr.join("\n");
-}
-return str;
-
-};//»
-
-const NOFB = "The 'hackernews' firebase module is not running\x20(call 'hnfbup' first)";
-const nofb=()=>{
-	if (ERRMESS) return;
-	ERRMESS=NOFB;
-};
-
-const get_ref = (path) =>{//«
-	let app = get_hn();
-	if (!app) return nofb();
-	let dbref = firebase.database(app);
-	return dbref.ref(path);
-};//»
-
-const ascii_safe=(val,nchars)=>{//«
-	if (!val) return "";
-	val = val.replace(/[^\x09\x0a\x20-\x7e]/g,"\xbf");
-	if (nchars && val.length > nchars) {
-		if (nchars>3) return val.slice(0, nchars-3)+"...";
-		return val.slice(0, nchars);
-	}
-	return val;
-}//»
-
-const HNItem = function(obj){//«
-
-/*
-item: `id BIGINT UNIQUE, 
-type CHAR(20),
-title CHAR(80),
-by CHAR(32),
-time BIGINT,
-parent BIGINT,
-descendants INT,
-score INT,
-dead INT,
-ttyp INT,
-text CHAR(255),
-kids CHAR(255)
-*/
-
-	this.id = obj.id;
-	this.type = obj.type;
-	this.title = obj.title||"";
-	this.by = obj.by;
-	this.time = obj.time
-	this.parent = obj.parent||null;
-	this.descendants = obj.descendants||0;
-	this.score = obj.score || 0;
-	this.dead = obj.dead?true:false;
-	this.textType = obj.ttyp;
-	this.text = obj.text;
-	if (isstr(obj.kids)) this.kids = JSON.parse(obj.kids);
-	else this.kids = obj.kids;
-
-};//»
-const HNUser = function(obj){//«
-	this.id = obj.id;
-	this.created = obj.created;
-	this.karma = obj.karma||0;
-	this.about = obj.about||"";
-};//»
-const dbtrans = (str, arr=[], if_force)=>{//«
-	return new Promise((y,n)=>{
-		if (window.openDatabase){
-			try {
-				let db = window.openDatabase(HN_DB_NAME, '', HN_DB_DESC, DEF_DB_SIZE);
-				db.transaction(tx=>{
-					tx.executeSql(str, arr, (tx,res)=>{
-						y(res);
-					}, (tx, err)=>{
-cerr("executeSql", err.message);
-//						ERRMESS=err.message;
-						cberr(err.message);
-//						y();
-					});
-				});
-			}
-			catch(e){
-cerr(e);
-				cberr(`dbtrans: caught: ${e.message}`);
-//				y();
-			}
-		}
-		else cberr("Your browser does not support the WebSQL API");
-	});
-};//»
-const load_iface=()=>{//«
-    return new Promise(async(Y,N)=>{
-        let rv = await fsapi.loadMod("iface.iface",{STATIC:true});
-        if (!rv) return Y();
-        Y(true);
-        if (typeof rv === "string") Core.do_update(`mods.iface.iface`, rv);
-    });
-}; //»
-const load_firebase=()=>{//«
-    return new Promise(async(y,n)=>{
-        ifapi = NS.api.iface;
-        if (!ifapi) {
-            if (!await load_iface()) return y("Could not load the interface module!");
-            ifapi = NS.api.iface;
-        }
-		if (!window.firebase) {
-			if (!ifapi.didInit()){
-				if (!(await ifapi.init())) return y("Could not initialize the realtime database!");
-			}
-		}
-		if (get_hn()) return y(true);
-//		else if (ERRMESS) return y();
-
-try {
-		firebase.initializeApp({databaseURL:HN_BASE_URL }, HN_APPNAME);
-}
-catch(e){
-log(e);
-ERRMESS=e.message;
-y();
-return;
-}
-		firebase.database().ref(".info/connected").on("value", snap=>{
-			if (snap.val() === true){
-cwarn("Connected to firebase: "+HN_APPNAME);
-				y(true);
-			}       
-			else{   
-cwarn("firebase is disconnected: "+HN_APPNAME);
-			}
-		});
-    });
-};//»
-const get_hn = ()=>{//«
-	if (!window.firebase) return false;
-	ifapi = NS.api.iface;
-	if (!ifapi) return false;
-	if (!ifapi.isConnected()){
-		ERRMESS="Firebase is disconnected";
-		return false;
-	}
-	for (let app of firebase.apps){
-		if (app.name==HN_APPNAME) return app;
-	}
-	return false;
-};//»
-const help=()=>{//«
-	let str = coms_help[com];
-	if (!str) return cberr("Error");
-	let arr = str.split("\n");
-	arr[0] = `${com}: ${arr[0]}`
-	for (let ln of arr) {
-		if (!ln) werr("\xa0");
-		else werr(fmt(ln));
-	}
-	cberr();
-};//»
-const get_stories=async (which)=>{//«
-	return new Promise(async(y,n)=>{
-		const doget=async arr=>{
-			let out = [];
-			if (if_clear) woutobj(CLEAR);
-			if (if_time) woutobj(TIME);
-			for (let id of arr) {
-				ERRMESS="";
-				let item = await get_item(id, opts.verbose||opts.v)
-				if (!item) werr(ERRMESS||`error getting: ${id}`);
-				else woutobj(item);
-			}
-			if (!if_watch) cbok();
-		};
-		let opts = failopts(args,{l:{time:1,clear:1,verbose:1,first:1,watch:1,get:1},s:{t:1,c:1,v:1,f:1,w:1,g:1}});
-		if (!opts) return;
-		let if_first = opts.first||opts.f;
-		let if_get = opts.get||opts.g;
-		let if_watch = opts.watch||opts.w;
-		let if_clear = opts.clear||opts.c;
-		let if_time = opts.time||opts.t;
-		let numstr = args.shift();
-		let num;
-		if (numstr){
-			if (if_first) return help(`hn${which}`);
-			num = numstr.ppi();
-			if (!NUM(num)) return help(`hn${which}`);
-		}
-		else if (if_first) num = 1;
-		else num = DEF_NUM_STORIES;
-		ERRMESS="";
-		let ref = get_ref(`/v0/${which}stories`)
-		if (!ref) return cberr(ERRMESS||NOFB);
-		ref = ref.limitToFirst(num);
-		if(if_watch){
-			werr(`Watching: ${which}stories`);
-			kill_register(cb=>{
-				if (ref) ref.off();
-				cb&&cb();
-			});
-			ref.on('value',rv=>{
-				let val = rv.val();
-				if (!val) return cberr("Error");
-				if (if_first) {
-					if (if_get) return doget([val[0]]);
-					if (if_clear) woutobj(CLEAR);
-					if (if_time) woutobj(TIME);
-					wout(val[0]);
-				}
-				else {
-					if (if_get) return doget(val);
-					if (if_clear) woutobj(CLEAR);
-					if (if_time) woutobj(TIME);
-					woutarr(val);
-				}
-			});
-		}
-		else {
-			ref.once('value',rv=>{
-				let val = rv.val();
-				if (!val) return cberr("Error");
-				if (if_get) return doget(val);
-				if (if_time) woutobj(TIME);
-				if (if_first) wout(val[0]);
-				else woutarr(val);
-				cbok();
-			});		
-		}
-
-	});
-};//»
-const get_fbase=(path)=>{//«
-	return new Promise(async(y,n)=>{
-		let ref = get_ref(`/v0/${path}`);
-		if (!ref) return y();
-		ref.once('value',snap=>{ 
-			y(snap.val());
-		});
-	});
-};//»
-const get_user = (who,if_verbose)=>{//«
-	return new Promise(async(y,n)=>{
-		let rv = await dbtrans(`SELECT * FROM user WHERE id = ?`,[who]);
-		if (rv.rows.length) {
-			if (if_verbose) werr(`Using cache: ${who}`);
-			return y(new HNUser(rv.rows[0]));
-		}
-		if (if_verbose) werr(`Fetching: ${who}`);
-		rv = await get_fbase(`user/${who}/created`);
-		if (!rv) {
-			if(!ERRMESS) ERRMESS=`${who}: user not found`;
-			y();
-			return;
-		}
-		let obj = {
-			id: who,
-			created: rv,
-			karma: await get_fbase(`user/${who}/karma`),
-		};
-		rv = await get_fbase(`user/${who}/about`);
-		if (rv){
-			let dv = mkdv();
-			dv.innerHTML = rv;
-			rv = ascii_safe(dv.innerText, 255)
-		}
-		else rv = "";
-		obj.about = rv;
-		rv = await dbtrans("INSERT INTO user VALUES (?,?,?,?)", [obj.id, obj.created, obj.karma||0, obj.about]);
-		if (rv&&rv.rowsAffected) y(new HNUser(obj));
-		else {
-			ERRMESS=`Insert failed: ${who}`;
-			y();
-		}
-	});
-};//»
-const get_user_subs=(who, num, if_recent)=>{//«
-	return new Promise(async(y,n)=>{
-		let ref = get_ref(`/v0/user/${who}/submitted`);
-		if (!ref) return y();
-		if (num) {
-			if (if_recent) ref = ref.limitToFirst(num);
-			else ref = ref.limitToLast(num);
-		}
-		ref.once('value',rv=>{
-			y(rv.val());
-		});		
-	});
-};//»
-const get_num_user_subs = (who)=>{//«
-	return new Promise(async(y,n)=>{
-		let rv = await get_user_subs(who, 1, false);
-		if (!rv) return y();
-		y(Object.keys(rv)[0]);
-	});
-};//»
-const get_item = (id,if_verbose) =>{//«
-
-return new Promise(async(y,n)=>{
-
-let ret = await dbtrans(`SELECT * FROM item WHERE id = ${id}`);
-
-if (ret&&ret.rows.length){//«
-if (if_verbose) werr(`Using cache: ${id}`);
-let item = ret.rows[0];
-if (item.ttyp==2||item.ttyp==4){
-	let rv = await dbtrans(`SELECT val from text WHERE rowid = ${item.text}`);
-	if (rv.rows.length) item.text = rv.rows[0].val;
-	else {
-cerr("Could not get the item text!");
-		item.text="\xbf";
-	}
-}
-else if(item.ttyp==2){
-cwarn("!!!");
-log(item);
-}
-	y(new HNItem(item));
-	return;
-}//»
-
-if (if_verbose) werr(`Fetching: ${id}`);
-let ref = await get_ref(`/v0/item/${id}`);
-if (!ref) return y();
-ref.once('value',async rv=>{
-let obj = rv.val();
-if (!obj) {
-ERRMESS = `Item not found: ${id}`;
-//	return cberr(`Not found: ${id}`);
-y();
-return;
-}
-let ttyp;
-let text;
-let usetext;
-if (usetext=obj.url) {
-	ttyp=1;
-	if (obj.url.length <= 255) {
-		ttyp=1;
-		text = obj.url;
-	}
-	else {
-		let rv = await dbtrans("INSERT INTO text (val) VALUES (?)", [obj.url]);
-		if (!rv.rowsAffected){
-cerr("Error inserting text!");
-			text = "\xbf";
-			ttyp = 0;
-		}
-		else {
-			text=rv.insertId+"";
-			ttyp = 2;
-		}
-	}
-}
-else if (usetext=obj.text){
-	ttyp = 3;
-	if (obj.text.length <= 255) {
-		ttyp=3;
-		text = obj.text;
-	}
-	else {
-		let rv = await dbtrans("INSERT INTO text (val) VALUES (?)", [obj.text]);
-		if (!rv.rowsAffected){
-cerr("Error inserting text!");
-			text = "\xbf";
-			ttyp = 0;
-		}
-		else {
-			text=rv.insertId+"";
-			ttyp = 4;
-		}
-	}
-}
-else {
-	usetext = text = "\xbf";
-	ttyp = 0;
-}
-
-let kids = obj.kids||[];
-let kidstr = JSON.stringify(kids);
-while(kidstr.length>255){
-	kids.pop();
-	kidstr = JSON.stringify(kids);
-}
-let arr = [
-	obj.id,
-	obj.type,
-	obj.title || "",
-	obj.by,
-	obj.time,
-	obj.parent || 0,
-	obj.descendants || 0,
-	obj.score || 0,
-	(obj.dead ? 1 : 0),
-	ttyp,
-	text,
-	kidstr
-];
-ret = await dbtrans("INSERT INTO item VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", arr);
-if (ret.rowsAffected) {
-	y(new HNItem({
-		id:arr[0],
-		type:arr[1],
-		title:arr[2],
-		by:arr[3],
-		time:arr[4],
-		parent:arr[5],
-		descendants:arr[6],
-		score:arr[7],
-		dead:arr[8],
-		ttyp:arr[9],
-		text:usetext,
-		kids:kids
-	}));
-}
-else {
-	ERRMESS=`Insert failed: ${id}`;
-	y();
-}
-
-});
-
-})
-
-}//»
-
-//»
-
-const get_date_obj=(fname)=>{//«
-
-return new Promise(async(y,n)=>{
-if (!fname) return cberr("No file arg!");
-	let dat = await readFile(fname);
-	if (!dat) return cberr(`${fname}: not found`);
-	if (!(isarr(dat) && isstr(dat[0]))) return cberr(`Invalid file data!`);
-	let obj;
-	try{
-		y(JSON.parse(dat.join("\n")));
-	}
-	catch(e){
-		cberr("JSON.parse error");
-		return;
-	}
-});
-
-};//»
-
-const gettime=id=>{//«
-	return new Promise(async(y,n)=>{
-		let ref = get_ref(`/v0/item/${id}/time`);
-		if (!ref) {
-			werr(`Reference error: ${id}`);
-			return y();
-		}
-		ref.once('value',snap=>{
-			let val = snap.val();
-			if (!NUM(val) && val > 0){
-				werr(`Value error: ${id}`);
-				return y();
-			}
-			y(val);
-		});
-	});
-};//»
-
-const coms={//«
+const COMS={//«
 
 
 hndatedays:async()=>{//«
@@ -1848,6 +1223,634 @@ hnusersubs:async()=>{//«
 
 }//»
 
+if (!comarg) return Object.keys(COMS);
+
+//Imports«
+
+const{NS,xgetobj,globals,log,cwarn,cerr}=Core;
+const{fs,util,widgets,dev_env,dev_mode}=globals;
+const{strnum,isarr,isobj,isstr,mkdv}=util;
+const {
+	readFile,
+	get_reader,
+	fmt,
+	read_stdin,
+	woutobj,
+	woutarr,
+	get_path_of_object,
+	pathToNode,
+	read_file_args_or_stdin,
+	serr,
+	normpath,
+	cur_dir,
+	respbr,
+	get_var_str,
+	refresh,
+	failopts,
+	cbok,
+	cberr,
+	wout,
+	werr,
+	termobj,
+	wrap_line,
+	kill_register,
+	EOF,
+	ENV
+} = Shell;
+const fsapi=NS.api.fs;
+const capi = Core.api;
+const fileorin = read_file_args_or_stdin;
+const stdin = read_stdin;
+const NUM = Number.isFinite;
+
+//»
+//Var«
+
+const HN_OBJ_TYPES=[
+	"HNItem",
+	"HNUser"
+];
+const CLEAR = {CLEAR:true};
+const TIME = {TIME:true};
+//const time=()=>{
+//	return {TIME:new Date().toUTCString()}
+//};
+const TAB_WIDTH=4;
+const TAB = "\xa0".repeat(TAB_WIDTH);
+let DEF_NUM_STORIES = 100;
+const gen_story_help=which=>{//«
+return `Get a listing of the current ${which} stories, as either full items or numerical ids
+
+General options:
+${TAB}--first or -f: Get the first (highest rated) story only
+${TAB}--get or -g: Get the full story items rather than the ids
+${TAB}--watch or -w: This does not return immediately, but rather listens for changes in the listings
+${TAB}--verbose or -v: Show diagnostic output
+
+Render options: These are typically used when sending the listing into a pipeline that ends in a renderer. Each of the below sends the given instruction operator to the renderer.
+${TAB}--time or -t: Display a timestamp.
+${TAB}--clear or -c: Clear the screen (this is useful when in conjuction with '--watch').
+
+Args:
+${TAB}If not getting the first story only, you can specify how many to get. (Default: ${DEF_NUM_STORIES} stories)
+`;
+};//»
+const HN_DB_LONG_NAME = "Hacker News WebSQL database";
+
+const TABLE_DEFS = {//«
+
+text:`id INT PRIMARY KEY,
+val TEXT
+`,
+
+item: `id BIGINT UNIQUE, 
+type CHAR(20),
+title CHAR(80),
+by CHAR(32),
+time BIGINT,
+parent BIGINT,
+descendants INT,
+score INT,
+dead INT,
+ttyp INT,
+text CHAR(255),
+kids CHAR(255)
+`,
+
+user: `id CHAR(30) UNIQUE,
+created BIGINT,
+karma INT,
+about CHAR(255)
+`
+
+};//»
+let TABLE_TYPES="";
+for (let k of Object.keys(TABLE_DEFS)){
+	if (!TABLE_TYPES) TABLE_TYPES = `"${k}"`
+	else TABLE_TYPES+=`, "${k}"`
+}
+
+//const TABLE_TYPES = Object.keys(TABLE_DEFS).join(", ");
+
+let ERRMESS=null;
+const HN_VER="v0";
+const HN_BASE_URL = "https://hacker-news.firebaseio.com";
+const HN_VER_URL = `${HN_BASE_URL}/${HN_VER}`;
+const HN_USER_URL = `${HN_VER_URL}/user`;
+const HN_ITEM_URL = `${HN_VER_URL}/item`;
+const HN_MAXITEM_URL = `${HN_VER_URL}/maxitem.json`;
+
+const HN_APPNAME = "hackernews";
+const HN_DB_NAME = `${HN_APPNAME}-${HN_VER}`;
+const HN_DB_DESC = `Hacker News Database - ${HN_VER}`;
+let DEF_DB_SIZE = 5*1024*1024;
+let ifapi = NS.api.iface;
+let is_connected = false;
+//»
+
+//Funcs//«
+
+const render=(type, obj, opts={})=>{//«
+
+let str='';
+let date = "";
+let arr=[];
+let is_html=opts.html||opts.h;
+
+const time_str=(secs)=>{
+	let date = new Date(secs);
+	let tm = date.toLocaleTimeString();
+	let arr = date.toUTCString().split(" ");
+	arr.pop();
+	arr.pop();
+	return `${tm} ${arr.join(" ")}`;
+}
+
+if (type=="HNUser") {
+	arr=[obj.id,`Created: ${(new Date(1000*obj.created)).toDateString()}`, `Karma: ${obj.karma||0}`, `About:${obj.about||""}`];
+}
+else if (type=="HNItem") {
+
+//	arr=[obj.title,`By: ${obj.by}`,`Time: ${(new Date(1000*obj.time)).toUTCString()}`, `Score: ${obj.score||0}`];
+	arr=[obj.title,`By: ${obj.by}`,`Time: ${time_str(1000*obj.time)}`, `Score: ${obj.score||0}`];
+	let t = obj.textType;
+	if (t==1||t==2){
+		let url=obj.text;
+		if (is_html) url=`<a href="${url}">${url}</a>`;
+		arr.push(`Url: ${url}`);
+	}
+	else if (t==3||t==4){
+		if (is_html) arr.push(`Text: <div>${obj.text}</div>`);
+		else arr.push(`Text: ${obj.text}`);
+	}
+}
+
+if (is_html){
+	str = arr.join("<br>");
+}
+else {
+	str = arr.join("\n");
+}
+return str;
+
+};//»
+
+const NOFB = "The 'hackernews' firebase module is not running\x20(call 'hnfbup' first)";
+const nofb=()=>{
+	if (ERRMESS) return;
+	ERRMESS=NOFB;
+};
+
+const get_ref = (path) =>{//«
+	let app = get_hn();
+	if (!app) return nofb();
+	let dbref = firebase.database(app);
+	return dbref.ref(path);
+};//»
+
+const ascii_safe=(val,nchars)=>{//«
+	if (!val) return "";
+	val = val.replace(/[^\x09\x0a\x20-\x7e]/g,"\xbf");
+	if (nchars && val.length > nchars) {
+		if (nchars>3) return val.slice(0, nchars-3)+"...";
+		return val.slice(0, nchars);
+	}
+	return val;
+}//»
+
+const HNItem = function(obj){//«
+
+/*
+item: `id BIGINT UNIQUE, 
+type CHAR(20),
+title CHAR(80),
+by CHAR(32),
+time BIGINT,
+parent BIGINT,
+descendants INT,
+score INT,
+dead INT,
+ttyp INT,
+text CHAR(255),
+kids CHAR(255)
+*/
+
+	this.id = obj.id;
+	this.type = obj.type;
+	this.title = obj.title||"";
+	this.by = obj.by;
+	this.time = obj.time
+	this.parent = obj.parent||null;
+	this.descendants = obj.descendants||0;
+	this.score = obj.score || 0;
+	this.dead = obj.dead?true:false;
+	this.textType = obj.ttyp;
+	this.text = obj.text;
+	if (isstr(obj.kids)) this.kids = JSON.parse(obj.kids);
+	else this.kids = obj.kids;
+
+};//»
+const HNUser = function(obj){//«
+	this.id = obj.id;
+	this.created = obj.created;
+	this.karma = obj.karma||0;
+	this.about = obj.about||"";
+};//»
+const dbtrans = (str, arr=[], if_force)=>{//«
+	return new Promise((y,n)=>{
+		if (window.openDatabase){
+			try {
+				let db = window.openDatabase(HN_DB_NAME, '', HN_DB_DESC, DEF_DB_SIZE);
+				db.transaction(tx=>{
+					tx.executeSql(str, arr, (tx,res)=>{
+						y(res);
+					}, (tx, err)=>{
+cerr("executeSql", err.message);
+//						ERRMESS=err.message;
+						cberr(err.message);
+//						y();
+					});
+				});
+			}
+			catch(e){
+cerr(e);
+				cberr(`dbtrans: caught: ${e.message}`);
+//				y();
+			}
+		}
+		else cberr("Your browser does not support the WebSQL API");
+	});
+};//»
+const load_iface=()=>{//«
+    return new Promise(async(Y,N)=>{
+        let rv = await fsapi.loadMod("iface.iface",{STATIC:true});
+        if (!rv) return Y();
+        Y(true);
+    });
+}; //»
+const load_firebase=()=>{//«
+    return new Promise(async(y,n)=>{
+        ifapi = NS.api.iface;
+        if (!ifapi) {
+            if (!await load_iface()) return y("Could not load the interface module!");
+            ifapi = NS.api.iface;
+        }
+		if (!window.firebase) {
+			if (!ifapi.didInit()){
+				if (!(await ifapi.init())) return y("Could not initialize the realtime database!");
+			}
+		}
+		if (get_hn()) return y(true);
+//		else if (ERRMESS) return y();
+
+try {
+		firebase.initializeApp({databaseURL:HN_BASE_URL }, HN_APPNAME);
+}
+catch(e){
+log(e);
+ERRMESS=e.message;
+y();
+return;
+}
+		firebase.database().ref(".info/connected").on("value", snap=>{
+			if (snap.val() === true){
+cwarn("Connected to firebase: "+HN_APPNAME);
+				y(true);
+			}       
+			else{   
+cwarn("firebase is disconnected: "+HN_APPNAME);
+			}
+		});
+    });
+};//»
+const get_hn = ()=>{//«
+	if (!window.firebase) return false;
+	ifapi = NS.api.iface;
+	if (!ifapi) return false;
+	if (!ifapi.isConnected()){
+		ERRMESS="Firebase is disconnected";
+		return false;
+	}
+	for (let app of firebase.apps){
+		if (app.name==HN_APPNAME) return app;
+	}
+	return false;
+};//»
+const help=()=>{//«
+	let str = coms_help[com];
+	if (!str) return cberr("Error");
+	let arr = str.split("\n");
+	arr[0] = `${com}: ${arr[0]}`
+	for (let ln of arr) {
+		if (!ln) werr("\xa0");
+		else werr(fmt(ln));
+	}
+	cberr();
+};//»
+const get_stories=async (which)=>{//«
+	return new Promise(async(y,n)=>{
+		const doget=async arr=>{
+			let out = [];
+			if (if_clear) woutobj(CLEAR);
+			if (if_time) woutobj(TIME);
+			for (let id of arr) {
+				ERRMESS="";
+				let item = await get_item(id, opts.verbose||opts.v)
+				if (!item) werr(ERRMESS||`error getting: ${id}`);
+				else woutobj(item);
+			}
+			if (!if_watch) cbok();
+		};
+		let opts = failopts(args,{l:{time:1,clear:1,verbose:1,first:1,watch:1,get:1},s:{t:1,c:1,v:1,f:1,w:1,g:1}});
+		if (!opts) return;
+		let if_first = opts.first||opts.f;
+		let if_get = opts.get||opts.g;
+		let if_watch = opts.watch||opts.w;
+		let if_clear = opts.clear||opts.c;
+		let if_time = opts.time||opts.t;
+		let numstr = args.shift();
+		let num;
+		if (numstr){
+			if (if_first) return help(`hn${which}`);
+			num = numstr.ppi();
+			if (!NUM(num)) return help(`hn${which}`);
+		}
+		else if (if_first) num = 1;
+		else num = DEF_NUM_STORIES;
+		ERRMESS="";
+		let ref = get_ref(`/v0/${which}stories`)
+		if (!ref) return cberr(ERRMESS||NOFB);
+		ref = ref.limitToFirst(num);
+		if(if_watch){
+			werr(`Watching: ${which}stories`);
+			kill_register(cb=>{
+				if (ref) ref.off();
+				cb&&cb();
+			});
+			ref.on('value',rv=>{
+				let val = rv.val();
+				if (!val) return cberr("Error");
+				if (if_first) {
+					if (if_get) return doget([val[0]]);
+					if (if_clear) woutobj(CLEAR);
+					if (if_time) woutobj(TIME);
+					wout(val[0]);
+				}
+				else {
+					if (if_get) return doget(val);
+					if (if_clear) woutobj(CLEAR);
+					if (if_time) woutobj(TIME);
+					woutarr(val);
+				}
+			});
+		}
+		else {
+			ref.once('value',rv=>{
+				let val = rv.val();
+				if (!val) return cberr("Error");
+				if (if_get) return doget(val);
+				if (if_time) woutobj(TIME);
+				if (if_first) wout(val[0]);
+				else woutarr(val);
+				cbok();
+			});		
+		}
+
+	});
+};//»
+const get_fbase=(path)=>{//«
+	return new Promise(async(y,n)=>{
+		let ref = get_ref(`/v0/${path}`);
+		if (!ref) return y();
+		ref.once('value',snap=>{ 
+			y(snap.val());
+		});
+	});
+};//»
+const get_user = (who,if_verbose)=>{//«
+	return new Promise(async(y,n)=>{
+		let rv = await dbtrans(`SELECT * FROM user WHERE id = ?`,[who]);
+		if (rv.rows.length) {
+			if (if_verbose) werr(`Using cache: ${who}`);
+			return y(new HNUser(rv.rows[0]));
+		}
+		if (if_verbose) werr(`Fetching: ${who}`);
+		rv = await get_fbase(`user/${who}/created`);
+		if (!rv) {
+			if(!ERRMESS) ERRMESS=`${who}: user not found`;
+			y();
+			return;
+		}
+		let obj = {
+			id: who,
+			created: rv,
+			karma: await get_fbase(`user/${who}/karma`),
+		};
+		rv = await get_fbase(`user/${who}/about`);
+		if (rv){
+			let dv = mkdv();
+			dv.innerHTML = rv;
+			rv = ascii_safe(dv.innerText, 255)
+		}
+		else rv = "";
+		obj.about = rv;
+		rv = await dbtrans("INSERT INTO user VALUES (?,?,?,?)", [obj.id, obj.created, obj.karma||0, obj.about]);
+		if (rv&&rv.rowsAffected) y(new HNUser(obj));
+		else {
+			ERRMESS=`Insert failed: ${who}`;
+			y();
+		}
+	});
+};//»
+const get_user_subs=(who, num, if_recent)=>{//«
+	return new Promise(async(y,n)=>{
+		let ref = get_ref(`/v0/user/${who}/submitted`);
+		if (!ref) return y();
+		if (num) {
+			if (if_recent) ref = ref.limitToFirst(num);
+			else ref = ref.limitToLast(num);
+		}
+		ref.once('value',rv=>{
+			y(rv.val());
+		});		
+	});
+};//»
+const get_num_user_subs = (who)=>{//«
+	return new Promise(async(y,n)=>{
+		let rv = await get_user_subs(who, 1, false);
+		if (!rv) return y();
+		y(Object.keys(rv)[0]);
+	});
+};//»
+const get_item = (id,if_verbose) =>{//«
+
+return new Promise(async(y,n)=>{
+
+let ret = await dbtrans(`SELECT * FROM item WHERE id = ${id}`);
+
+if (ret&&ret.rows.length){//«
+if (if_verbose) werr(`Using cache: ${id}`);
+let item = ret.rows[0];
+if (item.ttyp==2||item.ttyp==4){
+	let rv = await dbtrans(`SELECT val from text WHERE rowid = ${item.text}`);
+	if (rv.rows.length) item.text = rv.rows[0].val;
+	else {
+cerr("Could not get the item text!");
+		item.text="\xbf";
+	}
+}
+else if(item.ttyp==2){
+cwarn("!!!");
+log(item);
+}
+	y(new HNItem(item));
+	return;
+}//»
+
+if (if_verbose) werr(`Fetching: ${id}`);
+let ref = await get_ref(`/v0/item/${id}`);
+if (!ref) return y();
+ref.once('value',async rv=>{
+let obj = rv.val();
+if (!obj) {
+ERRMESS = `Item not found: ${id}`;
+//	return cberr(`Not found: ${id}`);
+y();
+return;
+}
+let ttyp;
+let text;
+let usetext;
+if (usetext=obj.url) {
+	ttyp=1;
+	if (obj.url.length <= 255) {
+		ttyp=1;
+		text = obj.url;
+	}
+	else {
+		let rv = await dbtrans("INSERT INTO text (val) VALUES (?)", [obj.url]);
+		if (!rv.rowsAffected){
+cerr("Error inserting text!");
+			text = "\xbf";
+			ttyp = 0;
+		}
+		else {
+			text=rv.insertId+"";
+			ttyp = 2;
+		}
+	}
+}
+else if (usetext=obj.text){
+	ttyp = 3;
+	if (obj.text.length <= 255) {
+		ttyp=3;
+		text = obj.text;
+	}
+	else {
+		let rv = await dbtrans("INSERT INTO text (val) VALUES (?)", [obj.text]);
+		if (!rv.rowsAffected){
+cerr("Error inserting text!");
+			text = "\xbf";
+			ttyp = 0;
+		}
+		else {
+			text=rv.insertId+"";
+			ttyp = 4;
+		}
+	}
+}
+else {
+	usetext = text = "\xbf";
+	ttyp = 0;
+}
+
+let kids = obj.kids||[];
+let kidstr = JSON.stringify(kids);
+while(kidstr.length>255){
+	kids.pop();
+	kidstr = JSON.stringify(kids);
+}
+let arr = [
+	obj.id,
+	obj.type,
+	obj.title || "",
+	obj.by,
+	obj.time,
+	obj.parent || 0,
+	obj.descendants || 0,
+	obj.score || 0,
+	(obj.dead ? 1 : 0),
+	ttyp,
+	text,
+	kidstr
+];
+ret = await dbtrans("INSERT INTO item VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", arr);
+if (ret.rowsAffected) {
+	y(new HNItem({
+		id:arr[0],
+		type:arr[1],
+		title:arr[2],
+		by:arr[3],
+		time:arr[4],
+		parent:arr[5],
+		descendants:arr[6],
+		score:arr[7],
+		dead:arr[8],
+		ttyp:arr[9],
+		text:usetext,
+		kids:kids
+	}));
+}
+else {
+	ERRMESS=`Insert failed: ${id}`;
+	y();
+}
+
+});
+
+})
+
+}//»
+
+//»
+
+const get_date_obj=(fname)=>{//«
+
+return new Promise(async(y,n)=>{
+if (!fname) return cberr("No file arg!");
+	let dat = await readFile(fname);
+	if (!dat) return cberr(`${fname}: not found`);
+	if (!(isarr(dat) && isstr(dat[0]))) return cberr(`Invalid file data!`);
+	let obj;
+	try{
+		y(JSON.parse(dat.join("\n")));
+	}
+	catch(e){
+		cberr("JSON.parse error");
+		return;
+	}
+});
+
+};//»
+
+const gettime=id=>{//«
+	return new Promise(async(y,n)=>{
+		let ref = get_ref(`/v0/item/${id}/time`);
+		if (!ref) {
+			werr(`Reference error: ${id}`);
+			return y();
+		}
+		ref.once('value',snap=>{
+			let val = snap.val();
+			if (!NUM(val) && val > 0){
+				werr(`Value error: ${id}`);
+				return y();
+			}
+			y(val);
+		});
+	});
+};//»
+
 const coms_help={//«
 hnwalkback:`Walk back from an item number (or the current maxitem), at a certain "step", in order
 to make a mapping between item times and id numbers, as an aid to historical analysis of the Hacker
@@ -1931,16 +1934,20 @@ ${TAB}If the "count" option is not specified, you may specify how many to get. (
 }
 //»
 
-if (!com) return Object.keys(coms)
+
+COMS[comarg](args);
+
+/*
+if (!com) return Object.keys(COMS)
 
 if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in net.hn!");
-if (args===true) return coms[com];
-coms[com](args);
+if (!COMS[com]) return cberr("No com: " + com + " in net.hn!");
+if (args===true) return COMS[com];
+COMS[com](args);
+*/
 
 
-
-
+}
 
 
 

@@ -1,23 +1,13 @@
 
 
-/*//«
-	return new Promise(async(y,n)=>{});
-	return new Promise((y,n)=>{});
-
-
-//rv = await writeCache("some.db", "More squeegeee, slerfikit.",true);
-
-
-//https://news.ycombinator.com/reply?id=22514747&goto=item%3Fid%3D22514004%2322514747
-//												 goto=item ? id = 22514004 # 22514747
-//																  original 
-//																    story
-//»*/
+export const app=function(arg){
 
 //Imports«
+const {Core,Main,Desk,NS}=arg;
 
 const Topwin=Main.top;
-const {log,cwarn,cerr}=Core;
+const {log,cwarn,cerr,globals}=Core;
+//log(Core,Main,Desk);
 //const{fs,util,widgets,dev_env,dev_mode}=globals;
 const{util,dev_env,dev_mode}=globals;
 const{isarr,isobj,isstr,mkdv,mksp}=util;
@@ -37,6 +27,9 @@ const fsapi=NS.api.fs;
 
 //Var«
 
+let is_getting = false;
+let MIN_REGET_MINS = 3;
+
 const DEF_STORY_TYPE = "top";
 
 let cur_elem;
@@ -44,11 +37,9 @@ let cur_elem;
 let time_interval;
 const TIMES=[];
 
-let GET_NUM_STORIES = 10;
+let GET_NUM_STORIES = 30;
 
 let MAX_CACHE_DIFF_MINUTES = 60;
-
-let GET_MAX_KIDS = 5;
 
 let POPUP_WID=window.outerWidth-100;
 let POPUP_HGT=window.outerHeight-100;
@@ -72,8 +63,8 @@ const HN_APPNAME = "hackernews";
 //DOM«
 
 
-Main.bgcol="#000";
-Main.tcol="#CCC";
+Main.bgcol="#030303";
+Main.tcol="#ddd";
 Main.fs=19;
 Main.overy="scroll";
 Main.tabIndex="-1";
@@ -81,6 +72,8 @@ Main.style.outline="none";
 //Main.tab_level = 0;
 
 //»
+
+//Classes«
 
 const Time = function(SECS,par){//«
 const time_arr=(secs)=>{//«
@@ -131,7 +124,13 @@ TIMES.push(this);
 this.update();
 };//»
 
-const Item = function(arg, _num, _par, _tabpar, _storyid) {//«
+const Item = function(arg, _num, _tabpar, _storyid) {//«
+//log(arg, _num, _par, _tabpar, _storyid);
+this.data = arg;
+this.type="item";
+this.id = _storyid;
+this.number = _num;
+this.tabpar = _tabpar;
 
 //DOM«
 
@@ -147,6 +146,7 @@ const main = mkdv();//main
 main.is_active=false;
 
 this.main = main;
+
 main.classList.add("tabbable");
 
 main.onescape=()=>{
@@ -167,20 +167,25 @@ main.bor="1px dotted #aaa";
 
 const head = mkdv();//header
 head.pad=5;
+let tit,host;
+let info;
 if (is_story) {//«
 	thead = mkdv();
+	info = mkdv();
 	thead.dis="flex";
 	thead.jsc="space-between";
-	const sc = mkdv();//score
-	sc.innerHTML = `${_num}\xa0\xa0(${arg.score} points)`;
-	const tit = mkdv();//title
+//	const sc = mkdv();//score
+//	sc.innerHTML = `${_num+1}\xa0\xa0(${arg.score} points)`;
+	tit = mkdv();//title
 	tit.fw="bold";
 	tit.style.whiteSpace="nowrap";
 	tit.innerText = arg.title||"";
-	const host = mkdv();
-	if(arg.url) host.innerText = arg.url.split("//")[1].split("/")[0]
-	else host.innerText = "[self]";
-	thead.add(sc,tit, host);
+//	host = mkdv();
+//	if(arg.url) host.innerText = arg.url.split("//")[1].split("/")[0]
+//	else host.innerText = "[self]";
+	if(arg.url) host  = arg.url.split("//")[1].split("/")[0]
+	else host  = "[self]";
+//	thead.add(sc,tit, host);
 }//»
 const bhead = mkdv();
 bhead.dis="flex";
@@ -193,19 +198,38 @@ time.marr=20;
 new Time(arg.time, time);
 
 if (is_story) {//«
-	ncoms = mkdv();
-	ncoms.innerText =`${arg.descendants} comments`;
-	bhead.add(user,time, ncoms);
-	head.add(thead,bhead);
+//bhead.style.alignItems="end";
+//bhead.style.justifyContent="end";
+//	info.innerText = `(${arg.descendants})\xa0\xa0\xa0${host}`;
+//	info.innerText = `${arg.descendants}`;
+let tcol;
+let n = arg.descendants;
+if (n<10) tcol="#99f";//blue
+else if (n<25) tcol="#7f7";//green
+else if (n < 50) tcol="#ff9";//yellow
+else if (n < 100) tcol="#fa5";//orange
+else tcol = "#f55";//red
+tit.tcol=tcol;
+
+	info.innerText = host;
+	thead.add(tit,info);
+	head.add(thead);
 }//»
-else{//«
+else if(arg.type==="comment"){//«
 	comprev = mkdv();
 	comprev.over="hidden";
 	comprev.style.whiteSpace="nowrap";
-	bhead.add(user,time,comprev);
+//	bhead.add(user,time,comprev);
+	bhead.add(comprev);
 	head.add(bhead);
 	comprev.innerHTML = "\xa0";
 }//»
+else{
+
+//cwarn(`Skipping '${arg.type}'`);
+//return;
+
+}
 
 const cont = mkdv();//content
 cont.pad=5;
@@ -216,7 +240,10 @@ body.classList.add("tabbable","body");
 body.tabIndex="-1";
 body.tab_level = level+1;
 body.pad=5;
-if (!arg.url) body.innerHTML = arg.text||"<i>[none]</i>";
+
+if (!arg.url) {
+	body.innerHTML = arg.text||"<i>[none]</i>";
+}
 else body.innerHTML=`<a href="${arg.url}">${arg.url}</a>`;
 
 body.onenter=()=>{//«
@@ -239,6 +266,9 @@ const combut = mkbut("Comment",cont,()=>{//«
 	}   
 	comwin = window.open(url, url,`width=${POPUP_WID},height=${POPUP_HGT}`)
 });//»
+this.comment=()=>{
+	combut.click();
+};
 combut.mart=10;
 combut.classList.add("tabbable","button");
 combut.tabIndex="-1";
@@ -248,19 +278,22 @@ const foot = mkdv();//footer
 cont.add(foot);
 main.add(head,cont);
 
-_par.add(main);
+//_par.add(main);
 if (comprev){//«
-	comprev.h = comprev.clientHeight;
+//log(comprev);
+//log(comprev.clientHeight);
+//	comprev.h = comprev.clientHeight;
+	comprev.h = 23;
 	comprev.innerHTML = arg.text||"<i>[none]</i>";
 	comprev.flg=1;
-	comprev.ta="right";
+//	comprev.ta="right";
 }//»
 
 do_links(main);
 
 //»
 
-this.toggle=async()=>{//«
+this.toggle = async()=>{//«
 	if (cont.dis==="none") {
 		cont.dis="";
 		main.is_active=true;
@@ -286,6 +319,8 @@ this.toggle=async()=>{//«
 	let len = kids.length;
 
 	let list = new List(`Comments\x20(${len})`, coms, level+1, 19, _storyid);
+	this.list = list;
+	list.item = this;
 	for (let i=0; i < len;i++){
 		let id=kids[i];
 		let item = await get_item(id);
@@ -293,16 +328,20 @@ this.toggle=async()=>{//«
 			poperr(`Error getting item: ${id}`);
 			return;
 		}
-		list.add(i+1, item);
+		list.add(i, item);
 	}
 };//»
 
 this.onenter=()=>{body.focus();};
 
 
+
 };//»
 
 const List = function( _tit, _par, _level, _fs, _storyid) {//«
+
+this.type = "list";
+this.id = _storyid;
 
 	const ALL = [];
 
@@ -325,8 +364,23 @@ const List = function( _tit, _par, _level, _fs, _storyid) {//«
 		if (ALL[0]) ALL[0].main.focus();
 	};
 
-	this.add=(num, item)=>{
-		ALL.push(new Item(item, num, l, m, _storyid||item.id));
+	this.add = (num, item)=>{
+		let rv = new Item(item, num, m, item.id||_storyid)
+		rv.list = this;
+//log(rv.main);
+		m.add(rv.main);
+		ALL.push(rv);
+	};
+	this.replace=(old, nw)=>{
+
+//let which = ALL.indexOf(old);
+
+//if (which < 0) return cerr("REPLACE!?!?!?!");
+nw.list = this;
+ALL.splice(old.number, 1, nw);
+old.main.replaceWith(nw.main);
+nw.main.focus();
+
 	};
 	m.onfocus=()=>{
 		cur_elem = this;
@@ -340,6 +394,8 @@ const List = function( _tit, _par, _level, _fs, _storyid) {//«
 const User =function() {//«
 
 };//»
+
+//»
 
 //Funcs«
 
@@ -389,7 +445,7 @@ const mkbut = (str, par, fn, opts={})=>{//«
 			stat();
 		}, 200);
 	};
-	if (par) par.add(d);
+//	if (par) par.add(d);
 	d.disable=()=>{
 		disabled=true;
 		d.tcol="#777";
@@ -400,7 +456,6 @@ const mkbut = (str, par, fn, opts={})=>{//«
 
 	return d;
 }//»
-
 const focus_parent=elm=>{//«
 	while (elm!==Main){
 		if (elm.classList.contains("tabbable")) {
@@ -411,7 +466,6 @@ const focus_parent=elm=>{//«
 	}
 	return false;
 };//»
-
 const do_links=elm=>{//«
 	let lns = Array.from(elm.getElementsByTagName("a"));
 	for (let ln of lns){
@@ -435,7 +489,6 @@ const do_links=elm=>{//«
 		};
 	}
 };//»
-
 const is_visible = which => {//«
 	let mr = Main.getBoundingClientRect();
 	let r = which.getBoundingClientRect();
@@ -446,7 +499,6 @@ const is_visible = which => {//«
 
 	return (r.top >= mr.top-5 && r.bottom <= mr.bottom+5);
 };//»
-
 const open_db=()=>{//«
 	return new Promise(async(y,n)=>{
 		let req = indexedDB.open(HN_DB_NAME, HN_DB_VERS);
@@ -468,20 +520,19 @@ log("openDb.onupgradeneeded");
 		};
 	});
 }//»
-
 const get_object_store=(store_name, mode)=>{//«
 //   * @param {string} store_name
 //   * @param {string} mode either "readonly" or "readwrite"
 	let tx = db.transaction(store_name, mode);
 	return tx.objectStore(store_name);
 }//»
-
 const add_db_item=(obj)=>{//«
 	return new Promise(async(y,n)=>{
 		let store = get_object_store(HN_ITEM_STORE_NAME, 'readwrite');
 		let req;
 		try {
-		  req = store.add(obj);
+//		  req = store.add(obj);
+		  req = store.put(obj);
 		}
 		catch (e) {
 cerr(e);
@@ -489,7 +540,7 @@ cerr(e);
 			return;
 		}
 		req.onsuccess = function (evt) {
-log("Insertion in DB successful");
+//log("Insertion in DB successful");
 			y(true);
 		};
 		req.onerror = function() {
@@ -498,7 +549,6 @@ cerr("addPublication error", this.error);
 		};
 	});
 }//»
-
 const get_db_item=(id)=>{//«
 	return new Promise(async(y,n)=>{
 		let store = get_object_store(HN_ITEM_STORE_NAME, 'readonly');
@@ -513,7 +563,6 @@ const get_db_item=(id)=>{//«
 		};
 	});
 }//»
-
 const writeCache=(path,val, if_append)=>{//«
 	return new Promise(async(y,n)=>{
 		let opts={isSys:true, reject:true};
@@ -529,7 +578,12 @@ cerr(e);
 	});
 };
 //»
-
+const get_ref = (path) =>{//«
+	let app = get_hn();
+	if (!app) return nofb();
+	let dbref = firebase.database(app);
+	return dbref.ref(path);
+};//»
 const get_fbase=(path)=>{//«
 	return new Promise(async(y,n)=>{
 		let ref = get_ref(`/v0/${path}`);
@@ -540,32 +594,30 @@ const get_fbase=(path)=>{//«
 
 	});
 };//»
-
 const get_fbase_stories=which=>{return get_fbase(`${which}stories`);}
-
 const get_fbase_item=id=>{return get_fbase(`item/${id}`);};
-
-const get_item=(id)=>{//«
+const get_item=(id, if_reget)=>{//«
 	return new Promise(async(y,n)=>{
-		let item = await get_db_item(id);
-		if (!item){
+		let item;
+		if (!if_reget) item = await get_db_item(id);
+		if (if_reget || !item){
 			item = await get_fbase_item(id);
 			if (!item) {
 cerr(`Could not get item: ${id}`);
 				y();
 				return;
 			}
+			item.fetched = new Date().getTime();
 			if (!await add_db_item(item)) {
 cerr(`Could not add item(${id}) to data store!`);
 			}
 			else {
-log(`Added item ${id}`);
+//log(`Added item ${id}`);
 			}
 		}
 		y(item)
 	});
 }//»
-
 const get_stories = which =>{//«
 	return new Promise(async(y,n)=>{
 		let arr = await get_fbase_stories(which);
@@ -580,7 +632,6 @@ cwarn(`Could not cache ${which}stories!`);
 		y(arr);		
 	});
 };//»
-
 const get_hn=()=>{//«
 	if (!window.firebase) return false;
 	for (let app of firebase.apps){
@@ -590,16 +641,7 @@ const get_hn=()=>{//«
 	}
 	return false;
 };//»   
-
 const nofb=()=>{poperr("The 'hackernews' firebase module is not running\x20(call 'hnfbup' first)");};
-
-const get_ref = (path) =>{//«
-	let app = get_hn();
-	if (!app) return nofb();
-	let dbref = firebase.database(app);
-	return dbref.ref(path);
-};//»
-
 const load_iface=()=>{//«
 	return new Promise(async(Y,N)=>{
 		let rv = await fsapi.loadMod("iface.iface",{STATIC:true});
@@ -633,7 +675,6 @@ cwarn("firebase is disconnected: "+HN_APPNAME);
 		});
 	});
 };//»
-
 const cache_file=path=>{//«
 	return new Promise(async(y,n)=>{
 		let ent = await fsapi.getFsEntryByPath(`${CACHE_PATH}/${path}`);
@@ -655,29 +696,29 @@ const file_to_ints = (file)=>{//«
 		y(new Uint32Array(await file_to_buf(file)));
 	});
 };//»
-
 const init_stories=async(which)=>{//«
 	let file = await cache_file(`${which}stories`);
 	let arr;
 	if (file){
 		let dm = Math.floor((Date.now() - file.lastModified)/60000);
 		if (dm < MAX_CACHE_DIFF_MINUTES){
-cwarn(`Use cache: ${dm} < ${MAX_CACHE_DIFF_MINUTES}`);
+//cwarn(`Use cache: ${dm} < ${MAX_CACHE_DIFF_MINUTES}`);
+cwarn(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
 			arr = await file_to_ints(file);
 		}
 		else{
-cerr("Cache expired... reget!");
+cerr("Expired!");
 			arr = await get_stories(which);
 		}
 	}
 	else{
-cwarn(`First get: ${which}stories`);
+cwarn(`GET: ${which}stories`);
 		arr = await get_stories(which);
 	}
 
 	if (!(arr&&arr.length)) return;
 
-cwarn(`Getting ${GET_NUM_STORIES} stories`);
+//cwarn(`Found: ${GET_NUM_STORIES} stories`);
 //	let items = [];
 
 	let list = new List(`${which.firstup()}stories`, Main, 0, 23);
@@ -688,14 +729,13 @@ cwarn(`Getting ${GET_NUM_STORIES} stories`);
 			poperr(`Error getting item: ${id}`);
 			return;
 		}
-		list.add(i+1, item);
+//if (item.type)
+		if (item.type=="story"||item.type=="comment") list.add(i, item);
 	}
 	list.focus();
 
 }//»
-
 const update_times=()=>{for(let t of TIMES)t.update();}
-
 const init = async()=>{//«
 
 	if (!await open_db()) return poperr("Could not open the database!");
@@ -713,17 +753,52 @@ const init = async()=>{//«
 
 };//»
 
+const reget_item = async item=>{
+
+//log(item);
+//return;
+if (item.data.fetched) {
+let then = new Date(item.data.fetched).getTime();
+let now = new Date().getTime();
+
+let diff_mins = (now-then)/60000;
+if (diff_mins< MIN_REGET_MINS) {
+//cwarn();
+await popup(`${diff_mins.toFixed(1)} < MIN_REGET_MINS(${MIN_REGET_MINS})`);
+//log("DONE");
+item.main.focus();
+return;
+}
+
+}
+//return;
+///*
+	if (is_getting){
+cwarn("is_getting == true");
+		return;
+	}
+	is_getting = true;
+	let got = await get_item(item.id, true);
+	let rv = new Item(got, item.number, item.tabpar, item.id)
+log("RV", rv);
+	item.list.replace(item, rv);
+	is_getting = false;
+
+//*/
+
+
+};
+
 //»
 
 //Obj/CB«
 
-this.onkill=()=>{clearInterval(time_interval);};
 
 this.onkeydown=(e,s)=>{//«
 
 let act=document.activeElement;
+
 if (s=="TAB_"||s=="TAB_S"){//«
-//log(act);
 	e.preventDefault();
 	if (!Main.contains(act)) {
 		if(cur_elem){
@@ -741,6 +816,10 @@ if (s=="TAB_"||s=="TAB_S"){//«
 	else {
 		act_is_vis = is_visible(act);
 		arr = act.parentNode.getElementsByClassName("tabbable");
+//if (cur_elem && cur_elem.main && cur_elem.main.is_active && cur_elem.onenter){
+//	cur_elem.onenter();
+//	return;
+//}
 	}
 	arr = Array.from(arr);
 	if (act_is_vis){
@@ -754,13 +833,10 @@ if (s=="TAB_"||s=="TAB_S"){//«
 
 	if (is_list||!act_is_vis){
 		if (s=="TAB_S") arr.reverse();
-		for (let elm of arr){
-			if (is_visible(elm)){
-				act.onescape&&act.onescape();
-				elm.focus();
-				return;
-			}
-		}
+		let elm = arr[0];
+		if (!is_visible(elm)) elm.scrollIntoView();
+		act.onescape&&act.onescape();
+		elm.focus();
 		return;
 	}
 	for (let elm of arr){
@@ -772,7 +848,8 @@ if (s=="TAB_"||s=="TAB_S"){//«
 			}
 			else {
 				act.onescape&&act.onescape();
-				focus_parent(act.parentNode);
+				focus_parent(act.parentNode);	
+//				if (act.parentNode.parentNode.parentNode === Main) Main.scrollTop = 0;
 				return 
 			}
 		}
@@ -790,35 +867,38 @@ if (s=="TAB_"||s=="TAB_S"){//«
 		}
 	}
 }//»
-else if(s=="SPACE_"){
-
+else if(s=="SPACE_"){//«
 	e.preventDefault();
-
-if (!Main.contains(act)) {
-	if(cur_elem) cur_elem.focus();
-	return;
-}
-
+	if (!Main.contains(act)) {
+		if(cur_elem) cur_elem.focus();
+		return;
+	}
 	if (cur_elem.toggle) cur_elem.toggle();
+}//»
+else if(s=="ENTER_"){//«
+
+	if (!Main.contains(act)) {
+		if(cur_elem) cur_elem.focus();
+		return;
+	}
+
+	if (cur_elem.onenter) cur_elem.onenter();
+	else if (cur_elem.onclick) cur_elem.click();
+	else {
+cwarn("What is this cur_elem", cur_elem);
+	}
+
+}//»
+else if (s=="r_") {
+
+if (cur_elem.type==="item") reget_item(cur_elem);
 
 }
-else if(s=="ENTER_"){
-
-if (!Main.contains(act)) {
-	if(cur_elem) cur_elem.focus();
-	return;
+else if (s=="c_"){
+if (cur_elem.comment) cur_elem.comment();
 }
-
-if (cur_elem.onenter) cur_elem.onenter();
-else if (cur_elem.onclick) cur_elem.click();
-else cwarn("What is this cur_elem", cur_elem);
-//act.toggle();
-
-}
-
 
 };//»
-
 this.onescape=()=>{//«
 
 	let act=document.activeElement;
@@ -829,26 +909,40 @@ this.onescape=()=>{//«
 	return focus_parent(act.parentNode);
 
 };//»
-
-this.onresize=()=>{
-};
-this.onfocus=()=>{
+this.onkill=()=>{clearInterval(time_interval);};
+this.onresize=()=>{};
+this.onfocus=()=>{//«
 	if(cur_elem&&cur_elem.focus) cur_elem.focus();
 	else{
-cwarn("NOFOCUS", cur_elem);
+//cwarn("NOFOCUS", cur_elem);
 	}
 //log(cur_elem);
 //	Main.focus();
-}
-this.onblur=()=>{
-//	if(cur_elem) cur_elem.blur();
-}
+};//»
+this.onblur=()=>{}
 
 //»
 
 init();
 
+}
 
 
+
+/*
+//«
+	return new Promise(async(y,n)=>{});
+	return new Promise((y,n)=>{});
+
+
+//rv = await writeCache("some.db", "More squeegeee, slerfikit.",true);
+
+
+//https://news.ycombinator.com/reply?id=22514747&goto=item%3Fid%3D22514004%2322514747
+//												 goto=item ? id = 22514004 # 22514747
+//																  original 
+//																    story
+//»
+*/
 
 

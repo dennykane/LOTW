@@ -4180,6 +4180,64 @@ cbok();
 },
 //»*/
 
+'get':async(args)=>{
+
+	let opts = failopts(args, {
+		LONG: {
+			port: 3
+		},
+		SHORT: {
+			p: 3
+		}
+	});
+
+	let port = opts.port||opts.p;
+	if (!port) return cberr("No port was given");
+	let portnum = port.pi({MIN:1024, MAX: 65535});
+	if (!Number.isFinite(portnum)) return cberr("Invalid port");
+	let which = args.shift();
+	if (!which) return cberr("No url given");
+	let loc = window.location;
+	let rv = await fetch(`${loc.protocol}//${loc.hostname}:${portnum}/get?url=${encodeURIComponent(which)}`)
+	if (!rv.ok) {
+		werr("Not 'ok' response");
+		cberr();
+		return;
+	}
+	let str = await rv.text();
+    let parser = new DOMParser();
+    let doc = parser.parseFromString(str, "text/html");
+log(doc);
+	wout(str);
+	cbok();
+
+},
+'hncomments':async()=>{
+const kid = (elem, ...arr)=>{
+let cur = elem;
+for (let num of arr){
+cur = cur.children[num];
+}
+return cur;
+
+};
+let str = await fsapi.readFile("/home/me/Desktop/snayderr.html");
+if (!str) return cberr("Got nada");
+
+let parser = new DOMParser();
+let doc = parser.parseFromString(str, "text/html");
+let coms = doc.getElementsByClassName("comment-tree")[0].children[0].childNodes;
+for (let com of coms){
+let got = kid(com,0,0,0,0,2);
+//log(got);
+//let got = com.children[0].children[0].children[0].children[0].children[2];
+let user = kid(got, 0, 0, 0);
+log(user.innerText);
+//log(got);
+}
+//log(coms);
+cbok();
+},
 'midiup':async()=>{
 	if (await capi.initMidi()) return cbok();
 	return cberr("Midi could not be enabled!");

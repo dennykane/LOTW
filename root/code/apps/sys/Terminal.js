@@ -74,7 +74,8 @@ const DEL_LIBS=[
 //	"wasm"
 //	"synth",
 //	"net",
-	"fs",
+//	"fs",
+	"net.hn"
 //	"js",
 //	"iface",
 //	"av"
@@ -85,7 +86,6 @@ const DEL_MODS=[
 //	"math.trading",
 //	"sys.idb",
 //	"iface.net",
-	"av.voice.pinktrombone",
 	"sys.fs",
 	"util.shell",
 //	"util.esmangle",
@@ -141,13 +141,15 @@ termobj.num_prompts=0;
 //»
 //Var«
 
+let is_scrolling = false;
+let wheel_iter;
 let dblclick_timeout;
 let downevt=null;
 
 let MAX_TAB_SIZE=256;
 let awaiting_remote_tab_completion = false;
 //const com_completers = ["help","man", "examples"];
-const com_completers = ["example", "app"];
+const com_completers = ["app"];
 const STAT_OK=1;
 const STAT_WARNING=2;
 const STAT_ERROR=3;
@@ -420,8 +422,6 @@ main.onscroll=e=>{
 };
 
 
-let is_scrolling = false;
-let wheel_iter;
 main.onwheel=e=>{
 	if (term_mode=="shell" && !sleeping){
 		let dy = e.deltaY;
@@ -429,14 +429,24 @@ main.onwheel=e=>{
 			if (!scroll_num) return;
 			if (dy > 0) return;
 			scrollnum_hold = scroll_num;
-//			yhold = y;
 			is_scrolling = true;
 			wheel_iter = 0;
 		}
+let skip_factor = 10;
+if (ENV.SCROLL_SKIP_FACTOR){
+let got = ENV.SCROLL_SKIP_FACTOR.ppi();
+if (!Number.isFinite(got)) cwarn(`Invalid SCROLL_SKIP_FACTOR: ${ENV.SCROLL_SKIP_FACTOR}`);
+else skip_factor = got;
+}
+
 		wheel_iter++;
-		if (wheel_iter%7) return;
-		if (dy < 0) dy = Math.ceil(dy);
-		else dy = Math.floor(dy);
+		if (wheel_iter%skip_factor) return;
+		if (dy < 0) dy = Math.ceil(4*dy);
+		else dy = Math.floor(4*dy);
+if (!dy) {
+cwarn("SKIP", dy);
+	return;
+}
 		scroll_num += dy;
 		if (scroll_num < 0) scroll_num = 0;
 		else if (scroll_num >= scrollnum_hold) {
@@ -2418,34 +2428,23 @@ log("YARR WHAT MAN OPTIONS????");
 			});
 		}
 		else {
-		if (tok0==="example"){
-let rv = await fetch(`/_getexamples`)
-let arr = await rv.json();
-let all = [];
-let re = new RegExp("^" + tok.replace(/\./g,"\\."));
-for (let n of arr){
-	if (re.test(n)) all.push([n,"File"]);
-}
-contents = all;
-docontents();
-		}
-		else if (tok0==="app"){
-let path="";
-if (tok) path=`?path=${tok}`;
-let rv = await fetch(`/_getapp${path}`);
-let arr = await rv.json();
-let all = [];
-for (let n of arr) {
-	if (n.match(/\.js$/)) all.push([n.replace(/\.js$/,""),"File"]);
-	else all.push([n,"AppDir"]);
-}
-contents = all;
-if (tok.match(/\./)){
-let arr = tok.split(".");
-tok = arr.pop();
-}
-docontents();
-		}
+			if (tok0==="app"){
+				let path="";
+				if (tok) path=`?path=${tok}`;
+				let rv = await fetch(`/_getapp${path}`);
+				let arr = await rv.json();
+				let all = [];
+				for (let n of arr) {
+					if (n.match(/\.js$/)) all.push([n.replace(/\.js$/,""),"File"]);
+					else all.push([n,"AppDir"]);
+				}
+				contents = all;
+				if (tok.match(/\./)){
+					let arr = tok.split(".");
+					tok = arr.pop();
+				}
+				docontents();
+			}
 		}
 	}
 	else {

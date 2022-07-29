@@ -2748,7 +2748,10 @@ const make_app_window = (arg) => {//«
 		set_win_defs(win);
 		icon.ready.state = "Awaiting application onload event";
 		await win.obj.onload();
-		if (arg.APPMODE) win.obj.onappinit(arg.APPARGS);
+		if (arg.APPMODE) {
+win.title = winapp;
+			win.obj.onappinit(arg.APPARGS);
+		}
 		icon.ready.state = true;
 		cb(win);
 	};//»

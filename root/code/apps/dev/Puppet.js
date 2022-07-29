@@ -78,8 +78,6 @@ let get_messages = false;
 const parse_nav_page = s => {//«
 	let parser = new DOMParser();
 	let doc = parser.parseFromString(s, "text/html");
-//log(doc.getElementsByClassName("keywords-poker-wrapper")[0]);
-//log(doc);
 	let navs = Array.from(doc.getElementsByClassName("keywords-poker-wrapper")[0].children);
 	let iter=0;
 	for (let nav of navs){
