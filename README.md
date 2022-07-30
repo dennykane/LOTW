@@ -41,6 +41,28 @@ many tiny glitches that degrade the user experience in other browsers and/or ope
 
 # Desktop usage
 
+## Applications
+
+There are several ways to open applications. The first two methods are used for
+opening files and the last two are for opening applications in a new/untitled
+state.
+
+1) Double-clicking - or pressing Alt+Enter with the icon cursor over - a file's
+icon. If the file does not have an extension that is recognized by the system,
+a default application will be invoked as the handler. The default application
+is currently util.BinView (code at 
+[root/code/apps/util/BinView.js](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/util/BinView.js)).
+
+2) Using the command $ `open path/to/somefile.ext` in the Terminal. 
+
+3) Create an application icon via the Terminal like this: $ `mkappicon
+audio.Synth > ~/Desktop/MyAppIcon.app`. Then you can use either of the above
+methods to open the application.
+
+4) Opening the application directly with the 'app' command like such: $ `app audio.Synth`. This method allows for tab
+completion of the command's argument (this is the poor man's way of performing online application search).
+
+
 ## Taskbar
 
 The visibility of the taskbar at the bottom of the screen can only be toggled
