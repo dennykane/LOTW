@@ -47,27 +47,26 @@ There are several ways to open applications. The first two methods are used for
 opening files and the last two are for opening applications in a new/untitled
 state.
 
-1) Double-clicking - or pressing Alt+Enter with the icon cursor over - a file's
-icon. If the file does not have an extension that is recognized by the system,
+1) Double-clicking—or pressing the **Open icon under cursor** shortcut  (shortcuts are shown
+below) with the icon cursor over—a file' s icon. If the file does not have an extension that is recognized by the system,
 a default application will be invoked as the handler. The default application
-is currently util.BinView (code at 
+is currently 'util.BinView' (code at 
 [root/code/apps/util/BinView.js](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/util/BinView.js)).
 
-2) Using the command $ `open path/to/somefile.ext` in the Terminal. 
+2) Using the command `$ open path/to/somefile.ext` in the Terminal. 
 
-3) Create an application icon via the Terminal like this: $ `mkappicon
+3) Create an application icon via the Terminal like this: `$ mkappicon
 audio.Synth > ~/Desktop/MyAppIcon.app`. Then you can use either of the above
 methods to open the application.
 
-4) Opening the application directly with the 'app' command like such: $ `app audio.Synth`. This method allows for tab
+4) Opening the application directly with the 'app' command like such: `$ app audio.Synth`. This method allows for tab
 completion of the command's argument (this is the poor man's way of performing online application search).
 
 
 ## Taskbar
 
 The visibility of the taskbar at the bottom of the screen can only be toggled
-via the keyboard shortcut, **Toggle taskbar visibility** (shortcuts are shown
-below). The taskbar simply exists as a placeholder for minimized windows. If
+via the keyboard shortcut, **Toggle taskbar visibility**. The taskbar simply exists as a placeholder for minimized windows. If
 the taskbar is visible, then the windows held by it are kept in the window
 stack, and can therefore be accessed by the **Cycle window stack** keyboard
 shortcut. If the taskbar is not visible, the windows held by it are considered
