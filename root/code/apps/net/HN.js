@@ -10,7 +10,7 @@ const {log,cwarn,cerr,globals}=Core;
 //log(Core,Main,Desk);
 //const{fs,util,widgets,dev_env,dev_mode}=globals;
 const{util,dev_env,dev_mode}=globals;
-const{isarr,isobj,isstr,mkdv,mksp}=util;
+const{isarr,isobj,isstr,mkdv,mksp,mk}=util;
 const {popup:_popup,popok:_popok,poperr:_poperr,popyesno:_popyesno, popin:_popin,popinarea:_popinarea}=NS.api.widgets;
 const popup=(s)=>{return new Promise((y,n)=>{_popup(s,{win:Topwin,cb:y});});};
 const popin=(s)=>{return _popin(s,{win:Topwin});};
@@ -149,7 +149,7 @@ this.main = main;
 
 main.classList.add("tabbable");
 
-main.onescape=()=>{
+main.onescape = ()=>{
 	if (cont.dis!=="none") {
 		this.toggle();
 		return true;
@@ -217,6 +217,8 @@ tit.tcol=tcol;
 }//»
 else if(arg.type==="comment"){//«
 	comprev = mkdv();
+
+	comprev.style.userSelect="text";
 	comprev.over="hidden";
 	comprev.style.whiteSpace="nowrap";
 //	bhead.add(user,time,comprev);
@@ -236,15 +238,26 @@ cont.pad=5;
 cont.dis="none";
 const body = mkdv();//body
 cont.add(body);
-body.classList.add("tabbable","body");
+body.classList.add("body");
 body.tabIndex="-1";
 body.tab_level = level+1;
 body.pad=5;
 
 if (!arg.url) {
 	body.innerHTML = arg.text||"<i>[none]</i>";
+	body.style.userSelect="text";
 }
-else body.innerHTML=`<a href="${arg.url}">${arg.url}</a>`;
+else {
+let a = mk('a');
+a.href = arg.url;
+a.tabIndex="-1";
+a.innerHTML = arg.url;
+body.add(a);
+	this.gotolink=()=>{
+		a.click();
+	};
+}
+//else body.innerHTML=`<span><u>${arg.url}</u></span>`;
 
 body.onenter=()=>{//«
 	if (arg.url){
@@ -255,7 +268,9 @@ body.onenter=()=>{//«
 		win = window.open(arg.url, arg.url,`width=${POPUP_WID},height=${POPUP_HGT}`)
 	}
 };//»
-body.onfocus=()=>{cur_elem = body;};
+body.onfocus=()=>{
+	cur_elem = body;
+};
 const combut = mkbut("Comment",cont,()=>{//«
 	let url;
 	if (arg.id===_storyid) url=`https://news.ycombinator.com/item?id=${_storyid}`;
@@ -332,7 +347,15 @@ this.toggle = async()=>{//«
 	}
 };//»
 
-this.onenter=()=>{body.focus();};
+this.onenter=()=>{
+if (cont.dis==="none") return;
+this.list.onenter();
+//log(this.list);
+//log(cont.dis);
+//log(body);
+//	body.focus();
+
+};
 
 
 
@@ -347,7 +370,8 @@ this.id = _storyid;
 
 	const m = mkdv();//main
 	_par.add(m);
-	m.classList.add("tabbable","list");
+//	m.classList.add("tabbable","list");
+	m.classList.add("list");
 	m.tabIndex="-1";
 	m.tab_level=_level;
 	const n = mkdv();//name
@@ -815,10 +839,10 @@ if (s=="TAB_"||s=="TAB_S"){//«
 	else {
 		act_is_vis = is_visible(act);
 		arr = act.parentNode.getElementsByClassName("tabbable");
-//if (cur_elem && cur_elem.main && cur_elem.main.is_active && cur_elem.onenter){
-//	cur_elem.onenter();
-//	return;
-//}
+if (cur_elem && cur_elem.main && cur_elem.main.is_active && cur_elem.onenter){
+	cur_elem.onenter();
+	return;
+}
 	}
 	arr = Array.from(arr);
 	if (act_is_vis){
@@ -895,18 +919,14 @@ else if (s=="c_"){
 	if (cur_elem.comment) cur_elem.comment();
 }
 else if (s=="k_"){
-
-//*
 if (!cur_elem.id) return;
 //const get_fbase_item_kids=id=>{return get_fbase(`item/${id}/kids`,"child_added");};
 let got = await get_fbase(`item/${cur_elem.id}/kids`);
-log(got);
-//*/
-
 }
+else if (s=="g_") cur_elem.gotolink&&cur_elem.gotolink();
 
 };//»
-this.onescape=()=>{//«
+this.onescape = ()=>{//«
 
 	let act=document.activeElement;
 	if (!Main.contains(act)) return false;
