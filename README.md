@@ -126,7 +126,7 @@ capabilities of the LOTW system. Those are forthcoming.
 
 First, clone this repo!
 
-Then, start the site server with nodejs (uses the default port, 8080):
+Then, start the site server with [Node.js](https://nodejs.org/) (uses the default port, 8080):
 
 `$ node site.js`
 
@@ -148,7 +148,7 @@ Then, assuming that your SSL setup is working, go to: https://yourdomain.ext
 
 ## Project structure
 
-[site.js](https://github.com/linuxontheweb/lotw/tree/main/site.js): The main nodejs service for sending core system files (in [root](https://github.com/linuxontheweb/lotw/tree/main/root)) to the client.
+[site.js](https://github.com/linuxontheweb/lotw/tree/main/site.js): The main Node.js service for sending core system files (in [root](https://github.com/linuxontheweb/lotw/tree/main/root)) to the client.
 
 [bin](https://github.com/linuxontheweb/lotw/tree/main/bin): Folder where scripts related to the development and maintenance of the project are kept.
 
@@ -157,7 +157,7 @@ Then, assuming that your SSL setup is working, go to: https://yourdomain.ext
 [root](https://github.com/linuxontheweb/lotw/tree/main/root): Folder where essential client-side files of the core system are kept.
 
 [svcs](https://github.com/linuxontheweb/lotw/tree/main/svcs): Folder where any service that extends the system's core functionality (such as
-sending and receiving email) are kept. Each service is to be run as an independent nodejs server
+sending and receiving email) are kept. Each service is to be run as an independent Node.js server
 on an available port.
 
 [www](https://github.com/linuxontheweb/lotw/tree/main/www): Folder where static assets to be used in the website (external to the LOTW system) and documentation are kept.
