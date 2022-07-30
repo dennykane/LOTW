@@ -27,6 +27,9 @@ const fsapi=NS.api.fs;
 
 //Var«
 
+let FS = 24;
+
+let last_get;
 let is_getting = false;
 let MIN_REGET_MINS = 3;
 
@@ -39,7 +42,7 @@ const TIMES=[];
 
 let GET_NUM_STORIES = 30;
 
-let MAX_CACHE_DIFF_MINUTES = 60;
+let MAX_CACHE_DIFF_MINUTES = 10;
 
 let POPUP_WID=window.outerWidth-100;
 let POPUP_HGT=window.outerHeight-100;
@@ -179,7 +182,8 @@ if (is_story) {//«
 	tit = mkdv();//title
 	tit.fw="bold";
 	tit.style.whiteSpace="nowrap";
-	tit.innerText = arg.title||"";
+//	tit.innerText = `${_num+1})\xa0\xa0${arg.title}||""`;
+	tit.innerText = (_num+1)+")\xa0\xa0"+(arg.title||"");
 //	host = mkdv();
 //	if(arg.url) host.innerText = arg.url.split("//")[1].split("/")[0]
 //	else host.innerText = "[self]";
@@ -204,11 +208,13 @@ if (is_story) {//«
 //	info.innerText = `${arg.descendants}`;
 let tcol;
 let n = arg.descendants;
-if (n<10) tcol="#99f";//blue
-else if (n<25) tcol="#7f7";//green
-else if (n < 50) tcol="#ff9";//yellow
-else if (n < 100) tcol="#fa5";//orange
-else tcol = "#f55";//red
+if (n<6) tcol="#77d";//blue
+else if (n<12) tcol="#aaf";//light blue
+else if (n<25) tcol="#7ff";//turquoise
+else if (n<50) tcol="#8f8";//green
+else if (n < 100) tcol="#ff9";//yellow
+else if (n < 200) tcol="#fa5";//orange
+else tcol = "#f77";//red
 tit.tcol=tcol;
 
 	info.innerText = host;
@@ -221,6 +227,7 @@ else if(arg.type==="comment"){//«
 	comprev.style.userSelect="text";
 	comprev.over="hidden";
 	comprev.style.whiteSpace="nowrap";
+//	comprev.fs = FS;
 //	bhead.add(user,time,comprev);
 	bhead.add(comprev);
 	head.add(bhead);
@@ -235,6 +242,7 @@ else{
 
 const cont = mkdv();//content
 cont.pad=5;
+cont.fs=FS;
 cont.dis="none";
 const body = mkdv();//body
 cont.add(body);
@@ -299,6 +307,7 @@ if (comprev){//«
 //log(comprev.clientHeight);
 //	comprev.h = comprev.clientHeight;
 	comprev.h = 23;
+
 	comprev.innerHTML = arg.text||"<i>[none]</i>";
 	comprev.flg=1;
 //	comprev.ta="right";
@@ -370,7 +379,8 @@ this.id = _storyid;
 
 	const m = mkdv();//main
 	_par.add(m);
-//	m.classList.add("tabbable","list");
+//log(_storyid);
+	if (!_storyid) m.classList.add("tabbable","list");
 	m.classList.add("list");
 	m.tabIndex="-1";
 	m.tab_level=_level;
@@ -719,19 +729,29 @@ const file_to_ints = (file)=>{//«
 		y(new Uint32Array(await file_to_buf(file)));
 	});
 };//»
+
+
 const init_stories=async(which)=>{//«
+
+	if (is_getting){
+cwarn("is_getting == true");
+		return;
+	}
+is_getting = true;
 	let file = await cache_file(`${which}stories`);
 	let arr;
 	if (file){
 		let dm = Math.floor((Date.now() - file.lastModified)/60000);
 		if (dm < MAX_CACHE_DIFF_MINUTES){
 //cwarn(`Use cache: ${dm} < ${MAX_CACHE_DIFF_MINUTES}`);
-cwarn(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
+log(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
 			arr = await file_to_ints(file);
+			last_get = file.lastModified;
 		}
 		else{
 cerr("Expired!");
 			arr = await get_stories(which);
+			last_get = Date.now();
 		}
 	}
 	else{
@@ -739,7 +759,10 @@ cwarn(`GET: ${which}stories`);
 		arr = await get_stories(which);
 	}
 
-	if (!(arr&&arr.length)) return;
+	if (!(arr&&arr.length)) {
+		is_getting = false;
+		return;
+	}
 
 //cwarn(`Found: ${GET_NUM_STORIES} stories`);
 //	let items = [];
@@ -750,12 +773,14 @@ cwarn(`GET: ${which}stories`);
 		let item = await get_item(id);
 		if (!item){
 			poperr(`Error getting item: ${id}`);
+			is_getting = false;
 			return;
 		}
 //if (item.type)
 		if (item.type=="story"||item.type=="comment") list.add(i, item);
 	}
 	list.focus();
+	is_getting = false;
 
 }//»
 const update_times=()=>{for(let t of TIMES)t.update();}
@@ -771,12 +796,12 @@ const init = async()=>{//«
 	}
 //	Main.focus();
 	init_stories(DEF_STORY_TYPE);
-	update_times();
-	time_interval = setInterval(update_times,1000);
+//	update_times();
+//	time_interval = setInterval(update_times,1000);
 
 };//»
 
-const reget_item = async item=>{
+const reget_item = async item=>{//«
 
 //log(item);
 //return;
@@ -810,7 +835,7 @@ log("RV", rv);
 //*/
 
 
-};
+};//»
 
 //»
 
@@ -839,10 +864,10 @@ if (s=="TAB_"||s=="TAB_S"){//«
 	else {
 		act_is_vis = is_visible(act);
 		arr = act.parentNode.getElementsByClassName("tabbable");
-if (cur_elem && cur_elem.main && cur_elem.main.is_active && cur_elem.onenter){
-	cur_elem.onenter();
-	return;
-}
+		if (cur_elem && cur_elem.main && cur_elem.main.is_active && cur_elem.onenter){
+			cur_elem.onenter();
+			return;
+		}
 	}
 	arr = Array.from(arr);
 	if (act_is_vis){
@@ -862,32 +887,15 @@ if (cur_elem && cur_elem.main && cur_elem.main.is_active && cur_elem.onenter){
 		elm.focus();
 		return;
 	}
-	for (let elm of arr){
-		if (s=="TAB_"){
-			if (arr[next_ind]){
-				act.onescape&&act.onescape();
-				arr[next_ind].focus();
-				return;
-			}
-			else {
-				act.onescape&&act.onescape();
-				focus_parent(act.parentNode);	
-//				if (act.parentNode.parentNode.parentNode === Main) Main.scrollTop = 0;
-				return 
-			}
-		}
-		else{
-			if (prev_ind >= 0){
-				act.onescape&&act.onescape();
-				arr[prev_ind].focus();
-				return;
-			}
-			else {
-				act.onescape&&act.onescape();
-				focus_parent(act.parentNode);
-				return;
-			}
-		}
+	if (s=="TAB_"){
+		if (!arr[next_ind]) next_ind = 0;
+		act.onescape&&act.onescape();
+		arr[next_ind].focus();
+	}
+	else{
+		if (prev_ind < 0) prev_ind = arr.length - 1;
+		act.onescape&&act.onescape();
+		arr[prev_ind].focus();
 	}
 }//»
 else if(s=="SPACE_"){//«
@@ -913,7 +921,20 @@ cwarn("What is this cur_elem", cur_elem);
 
 }//»
 else if (s=="r_") {
+//log(cur_elem);
 	if (cur_elem.type==="item") reget_item(cur_elem);
+	else if (cur_elem.type=="list" && !cur_elem.id){
+		let dm = Math.floor((Date.now() - last_get)/60000);
+		if (dm < MAX_CACHE_DIFF_MINUTES) {
+log(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
+return;
+		}
+
+Main.innerHTML="";	
+init_stories(DEF_STORY_TYPE);
+
+	}
+
 }
 else if (s=="c_"){
 	if (cur_elem.comment) cur_elem.comment();
