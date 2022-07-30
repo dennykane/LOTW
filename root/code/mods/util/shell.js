@@ -123,6 +123,7 @@ $ bcat
 //5 minutes before "secret" strings get undefined in memory
 const MAX_MS_FOR_SECRET_VAR=5*60*1000;
 //const MAX_MS_FOR_SECRET_VAR=5*1000;
+const FS_COMS=[ 'ln','zip','unzip','vim','less','gzip','gunzip','grep','tar','tee','touch' ];
 
 export const mod = function(Core, termobj) {
 
@@ -3693,11 +3694,17 @@ shell_obj.run_command=run_command;
 
 const lookup_file = async () => {
 	const notfound = () => {
+if (FS_COMS.includes(comword)){
+wout(fmt_lines(`\nThe '${comword}' command is not a shell builtin! It exists in the 'fs' command library. You can import it into the shell's execution context like this:\n\n$ import fs\n\nAlternatively, run the following command to automate the import process:\n\n$ echo 'import fs' >> ~/.bashrc\n\xa0`));
+cberr();
+return;
+}
 		sh_error(comword + ":\x20command not found", null, get_redir(redir, 2), 127);
 		wout(EOF);
 		cb(ret_false(127));
 	};
 	const runit = async (path, obj) => {
+		if (obj.APP === FOLDER_APP) throw new Error();
 		let typ = obj.root.TYPE;
 		if (typ=="bin") run_bin(obj);
 		else if (typ == "fs") {

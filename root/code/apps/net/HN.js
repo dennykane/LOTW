@@ -584,14 +584,13 @@ const get_ref = (path) =>{//«
 	let dbref = firebase.database(app);
 	return dbref.ref(path);
 };//»
-const get_fbase=(path)=>{//«
+const get_fbase=(path, type)=>{//«
 	return new Promise(async(y,n)=>{
 		let ref = get_ref(`/v0/${path}`);
 		if (!ref) return y();
-		ref.once('value',snap=>{
+		ref.once(type||'value',snap=>{
 			y(snap.val());
 		});
-
 	});
 };//»
 const get_fbase_stories=which=>{return get_fbase(`${which}stories`);}
@@ -794,7 +793,7 @@ log("RV", rv);
 //Obj/CB«
 
 
-this.onkeydown=(e,s)=>{//«
+this.onkeydown=async(e,s)=>{//«
 
 let act=document.activeElement;
 
@@ -890,12 +889,20 @@ cwarn("What is this cur_elem", cur_elem);
 
 }//»
 else if (s=="r_") {
-
-if (cur_elem.type==="item") reget_item(cur_elem);
-
+	if (cur_elem.type==="item") reget_item(cur_elem);
 }
 else if (s=="c_"){
-if (cur_elem.comment) cur_elem.comment();
+	if (cur_elem.comment) cur_elem.comment();
+}
+else if (s=="k_"){
+
+//*
+if (!cur_elem.id) return;
+//const get_fbase_item_kids=id=>{return get_fbase(`item/${id}/kids`,"child_added");};
+let got = await get_fbase(`item/${cur_elem.id}/kids`);
+log(got);
+//*/
+
 }
 
 };//»
