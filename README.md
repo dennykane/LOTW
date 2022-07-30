@@ -55,8 +55,8 @@ is currently 'util.BinView' (code at
 
 2) Using the command `$ open path/to/somefile.ext` in the Terminal. 
 
-3) Create an application icon via the Terminal like this: `$ mkappicon
-audio.Synth > ~/Desktop/MyAppIcon.app`. Then you can use either of the above
+3) Creating an application icon via the Terminal like this: `$ mkappicon
+audio.Synth > ~/Desktop/MyAppIcon.app`, and then using either of the above
 methods to open the application.
 
 4) Opening the application directly with the 'app' command like such: `$ app audio.Synth`. This method allows for tab
