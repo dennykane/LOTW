@@ -28,7 +28,7 @@ example, performing the following simple operation in the terminal application
 indeed creates an entry at `~/file.txt`, held in the browser's sandboxed local
 storage, accessible regardless of network status.
 
-	$&nbsp;echo "A bunch of interesting thoughts" > file.txt
+	$ echo "A bunch of interesting thoughts" > file.txt
 
 ## Disclaimer (YMMV)
 
@@ -53,13 +53,13 @@ a default application will be invoked as the handler. The default application
 is currently 'util.BinView' (code at 
 [root/code/apps/util/BinView.js](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/util/BinView.js)).
 
-2) Using the command `$&nbsp;open path/to/somefile.ext` in the terminal. 
+2) Using the command `$ open path/to/somefile.ext` in the terminal. 
 
-3) Creating an application icon via the terminal like this: `$&nbsp;mkappicon
+3) Creating an application icon via the terminal like this: `$ mkappicon
 audio.Synth > ~/Desktop/MyAppIcon.app`, and then using either of the above
 methods to open the application.
 
-4) Opening the application directly with the `app` command like such: `$&nbsp;app audio.Synth`. This method allows for tab
+4) Opening the application directly with the `app` command like such: `$ app audio.Synth`. This method allows for tab
 completion of the command's argument, making it a *very* simple way to search for available applications.
 
 
@@ -137,10 +137,10 @@ tapping the Tab key in the terminal with nothing at the prompt.  Since, however,
 there may be an arbitrary number of commands (1,000+) in a given LOTW installation,
 an early design decision was to work out a concept of "command libraries", such that
 the commands in a given library may be imported into the current shell's execution context;
-so, to import all of the commands in the 'fs' command library, run: `$&nbsp;import
+so, to import all of the commands in the 'fs' command library, run: `$ import
 fs`. 
 
-Here is the way that you can see which commands are in a given library: `$&nbsp;lib <libname>`.
+Here is the way that you can see which commands are in a given library: `$ lib <libname>`.
 Also, since the `lib` command supports autocompletion for its argument, you can 
 use it as a quick way to search for the available libraries in the LOTW system. 
 Other than certain commands in certain libraries (like `vim` in 'fs'), though, 
@@ -153,7 +153,7 @@ Most Linux power users put their shell's runtime configuration file to great use
 standard one exists with the name '.bashrc' in the user's home directory (abbreviated as '~/').
 Using this method, environment variables and command aliases can be created and arbitrary commands 
 can be executed upon loading the terminal application. So, to automatically import the 'fs'
-command library into you shell's execution context, you can run: `$&nbsp;echo 'import fs;' >> ~/.bashrc`.
+command library into you shell's execution context, you can run: `$ echo 'import fs;' >> ~/.bashrc`.
 Then the next time the terminal is loaded (you can use the **Reload** shortcut), the commands
 in the 'fs' library will be automatically imported and available for use.
 
@@ -163,13 +163,13 @@ in the 'fs' library will be automatically imported and available for use.
 
 Filter out whitespace-only lines in file.txt and send the output into `less`.
 
-`$&nbsp;cat file.txt | grep '^[^\s]+$' | less`
+`$ cat file.txt | grep '^[^\s]+$' | less`
 
 * * *
 
 Attempt to create a new file from two files, then delete the originals. Print a message upon failure.
 
-`$&nbsp;cat file1.txt file2.txt > newfile.txt && rm file1.txt file2.txt || echo "The operation failed!"`
+`$ cat file1.txt file2.txt > newfile.txt && rm file1.txt file2.txt || echo "The operation failed!"`
 
 
 # Development
@@ -180,21 +180,21 @@ First, clone this repo!
 
 Then, start the site server with [Node.js](https://nodejs.org/) (uses the default port, 8080):
 
-`$&nbsp;node site.js`
+`$ node site.js`
 
 Finally, in your browser, go to: http://localhost:8080
 
 
 Or if you want to use another port (e.g. 12345), start it like so:
 
-`$&nbsp;LOTW_PORT=12345 node site.js`
+`$ LOTW_PORT=12345 node site.js`
 
 Then, go to: http://localhost:12345
 
 To make it a "live" site, do something this (you must use sudo here because the live site
 binds to priviledged ports 80/http and 443/https):
 
-`$&nbsp;sudo LOTW_LIVE=1 node site.js`
+`$ sudo LOTW_LIVE=1 node site.js`
 
 Then, assuming that your SSL setup is working, you should be able to see it at: https://yourdomain.ext
 
