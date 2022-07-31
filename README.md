@@ -144,8 +144,8 @@ Here is the way that you can see which commands are in a given library: `$ lib <
 Also, since the `lib` command supports autocompletion for its argument, you can 
 use it as a quick way to search for the available libraries in the LOTW system. 
 Other than certain commands in certain libraries (like `vim` in 'fs'), though, 
-most commands are fairly old and likely not to work in the current LOTW system.
-These can either be updated to work or simply deleted from the given command library.
+many commands are fairly old/experimental and not likely to work in the current LOTW system.
+If useful, they can be updated to work or simply deleted from the given command library if not.
 
 ## ~/.bashrc
 
