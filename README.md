@@ -145,7 +145,7 @@ Also, since the `lib` command supports autocompletion for its argument, you can
 use it as a quick way to search for the available libraries in the LOTW system. 
 Other than certain commands in certain libraries (like `vim` in 'fs'), though, 
 many commands are fairly old/experimental and not likely to work in the current LOTW system.
-If useful, they can be updated to work or simply deleted from the given command library if not.
+If useful, they can be updated to work; if not, then simply deleted from the given library's source code.
 
 ## ~/.bashrc
 
