@@ -2,10 +2,56 @@
 /*xTODOx
 
 
+We need 3 screens (at least);
+
+1) Online forum (for browsing currently updating lists of story items)
+
+2) Offline forum (for displaying the items that the user is actively engaged
+with, that are not listed in the online forum)
+
+3) Notification area for updates to the messages (eg new comments) that the
+user is actively listening for. These will have , eg., buttons/links that will
+invoke goto_item(path).
+
+
+
 Wait on the number of kids for a given item to increase from current amount...
 
 
+Every item is located by a fullpath from the toplevel item, accessible via item.path()
+
+
+Create a directory in ~/.data in which to store the fullpaths of the items that we are
+waiting on. Make a file in this directory called, eg, "update_items"
+
+let dirpath =`${globals.home_path}/.data/apps/net/HN`
+if (!await fs.mkDir(dirpath)){
+	poperr(`Could not get/make directory: ${dirpath}!`);
+	return;
+}
+
+
+We have goto_item, which, given a fullpath, goes to (toggling all the parent
+items to open) and focuses the item.
+
+The only problem is that goto_item fails if it is not on the current toplist
+(resident in memory and showing in the app).  To fix this, we need another kind
+of list screen on which we can put all of the toplevel (story) items that we
+get from the database.
+
+We are going to wait on items for when they get a child_added event on their 'kids' array
+field. Then we can just retrieve the new kids list from firebase, and add this to the item object,
+and then save this to the datastore.
+
+
 */
+
+
+//https://news.ycombinator.com/reply?id=22514747&goto=item%3Fid%3D22514004%2322514747
+//												 goto=item ? id = 22514004 # 22514747
+//																  original 
+//																    story
+
 export const app=function(arg){
 
 //Imports«
@@ -53,7 +99,8 @@ let cur_elem;
 let time_interval;
 const TIMES=[];
 
-let GET_NUM_STORIES = 30;
+//let GET_NUM_STORIES = 30;
+let GET_NUM_STORIES = 1;
 
 let MAX_CACHE_DIFF_MINUTES = 10;
 
@@ -140,15 +187,16 @@ TIMES.push(this);
 this.update();
 };//»
 
-const Item = function(arg, _num, _tabpar, _storyid) {//«
+const Item = function(arg, _num, _tabpar, _storyid, _paritem) {//«
 //log(arg, _num, _par, _tabpar, _storyid);
 this.data = arg;
 this.type="item";
 this.id = _storyid;
+this.parent = _paritem;
 this.number = _num;
 this.tabpar = _tabpar;
 this.user = arg.by;
-//log(arg);
+let _path;
 
 //DOM«
 
@@ -321,7 +369,7 @@ if (comprev){//«
 //log(comprev);
 //log(comprev.clientHeight);
 //	comprev.h = comprev.clientHeight;
-	comprev.h = 23;
+	comprev.h = FS+1;
 
 	comprev.innerHTML = arg.text||"<i>[none]</i>";
 	comprev.flg=1;
@@ -357,7 +405,7 @@ this.toggle = async()=>{//«
 	let kids = arg.kids||[];
 	let len = kids.length;
 
-	let list = new List(`Comments\x20(${len})`, coms, level+1, 19, _storyid);
+	let list = new List(`Comments\x20(${len})`, coms, level+1, 19, _storyid, this);
 	this.list = list;
 	list.item = this;
 	for (let i=0; i < len;i++){
@@ -371,24 +419,43 @@ this.toggle = async()=>{//«
 	}
 };//»
 
+this.open=()=>{
+
+if (cont.dis==="none") this.toggle();
+
+}
+
+this.path=()=>{
+	if (_path) return _path;
+	let cur = _paritem;
+	let arr = [arg.id];
+	while(cur){
+		arr.unshift(cur.data.id);
+		cur = cur.parent;
+	}
+	_path = arr;
+	return _path;
+};
+
 this.onenter=()=>{
-if (cont.dis==="none") return;
-this.list.onenter();
+	if (cont.dis==="none") return;
+	this.list.onenter();
 };
 
 this.focus =()=>{
-main.focus();
+	main.focus();
 };
 
 };//»
 
-const List = function( _tit, _par, _level, _fs, _storyid) {//«
+const List = function( _tit, _par, _level, _fs, _storyid, _paritem) {//«
 
 this.type = "list";
 this.id = _storyid;
+this.parent = _paritem;
 
 	const ALL = [];
-
+this.kids = ALL;
 	const m = mkdv();//main
 
 	_par.add(m);
@@ -415,7 +482,7 @@ this.id = _storyid;
 	};
 
 	this.add = (num, item)=>{
-		let rv = new Item(item, num, m, item.id||_storyid)
+		let rv = new Item(item, num, m, item.id||_storyid, _paritem)
 		rv.list = this;
 //log(rv.main);
 		m.add(rv.main);
@@ -435,7 +502,7 @@ nw.main.focus();
 	m.onfocus=()=>{
 		cur_elem = this;
 if (!_storyid){
-m.bor="1px dotted #ff0";
+m.bor="1px solid #fff";
 }
 
 	};
@@ -811,7 +878,7 @@ log(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
 			last_get = file.lastModified;
 		}
 		else{
-cerr("Expired!");
+cwarn("Expired!");
 			arr = await get_stories(which);
 			last_get = Date.now();
 		}
@@ -890,7 +957,7 @@ cwarn("is_getting == true");
 	}
 	is_getting = true;
 	let got = await get_item(item.id, true);
-	let rv = new Item(got, item.number, item.tabpar, item.id)
+	let rv = new Item(got, item.number, item.tabpar, item.id, item.parent)
 log("RV", rv);
 	item.list.replace(item, rv);
 	rv.toggle();	
@@ -902,10 +969,41 @@ log("RV", rv);
 
 };//»
 
+const goto_item=(path)=>{//«
+
+const getitem=(list, id)=>{
+
+for (let itm of list.kids){
+	if (itm.data.id == id) return itm;
+}
+
+};
+
+let parid = path.shift();
+
+let par = getitem(toplist, parid);
+if (!par){
+	cwarn("Parent not in 'toplist'");
+	return;
+}
+
+let cur = par;
+let id = path.shift();
+cur.open();
+while(id){
+	cur = getitem(cur.list, id);
+	cur.open();
+	cur.focus();
+	id = path.shift();
+}
+
+}//»
+
 //»
 
 //Obj/CB«
 
+let last_path;
 
 this.onkeydown=async(e,s)=>{//«
 
@@ -988,6 +1086,11 @@ cwarn("What is this cur_elem", cur_elem);
 	return;
 }//»
 
+else if (s=="i_"){
+if (!last_path) return;
+goto_item(last_path);
+}
+
 if (!cur_elem) return;
 
 if (s=="r_") {
@@ -1013,21 +1116,17 @@ if (s=="c_"){
 }
 else if (s=="k_"){
 if (!cur_elem.id) return;
-//const get_fbase_item_kids=id=>{return get_fbase(`item/${id}/kids`,"child_added");};
 let got = await get_fbase(`item/${cur_elem.id}/kids`);
 }
 else if (s=="g_") cur_elem.gotolink&&cur_elem.gotolink();
-else if (s=="u_"){
+else if (s=="u_") get_user();
+else if (s=="p_"){
 
-//let user = await get_fbase_user(cur_elem.user);
-
-get_user();
-//setTimeout(()=>{
-//log(cur_elem);
-//cur_elem.focus();
-//},0);
+last_path = cur_elem.path();
+log(last_path);
 
 }
+
 
 };//»
 this.onescape = ()=>{//«
@@ -1063,19 +1162,6 @@ init();
 
 
 /*
-//«
-	return new Promise(async(y,n)=>{});
-	return new Promise((y,n)=>{});
-
-
-//rv = await writeCache("some.db", "More squeegeee, slerfikit.",true);
-
-
-//https://news.ycombinator.com/reply?id=22514747&goto=item%3Fid%3D22514004%2322514747
-//												 goto=item ? id = 22514004 # 22514747
-//																  original 
-//																    story
-//»
 */
 
 

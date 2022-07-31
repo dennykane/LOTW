@@ -75,7 +75,8 @@ const DEL_LIBS=[
 //	"synth",
 //	"net",
 //	"fs",
-	"net.hn"
+	"net.hn",
+	"dev.testing"
 //	"js",
 //	"iface",
 //	"av"
@@ -149,7 +150,7 @@ let downevt=null;
 let MAX_TAB_SIZE=256;
 let awaiting_remote_tab_completion = false;
 //const com_completers = ["help","man", "examples"];
-const com_completers = ["app","lib"];
+const com_completers = ["app","lib","import"];
 const STAT_OK=1;
 const STAT_WARNING=2;
 const STAT_ERROR=3;
@@ -2428,7 +2429,8 @@ log("YARR WHAT MAN OPTIONS????");
 			});
 		}
 		else {
-			if (tok0==="app"||tok0=="lib"){
+			if (tok0==="app"||tok0=="lib"||tok0=="import"){
+				if (tok0=="import") tok0="lib";
 				let path="";
 				if (tok) path=`?path=${tok}`;
 				let rv = await fetch(`/_get${tok0}${path}`);

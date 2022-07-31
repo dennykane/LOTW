@@ -3334,6 +3334,7 @@ const api_funcs = [//«
 
 	"getUniquePath", getUniquePath,
 	"touchHtml5Dirs", touchDirsProm,
+	"mkDir", touchDirProm,
 	"touchHtml5Dir", touchDirProm,
 	"mkHtml5Dir",touchDirProm,
 	"touchHtml5File",touchHtml5File,
