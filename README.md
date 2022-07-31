@@ -60,7 +60,7 @@ audio.Synth > ~/Desktop/MyAppIcon.app`, and then using either of the above
 methods to open the application.
 
 4) Opening the application directly with the 'app' command like such: `$ app audio.Synth`. This method allows for tab
-completion of the command's argument (this is the poor man's way of performing online application search).
+completion of the command's argument, making it a *very* simple way to search for available applications.
 
 
 ## Taskbar
