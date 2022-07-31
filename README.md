@@ -131,7 +131,7 @@ The
 application automatically loads the
 [shell](https://github.com/linuxontheweb/lotw/tree/main/root/code/mods/sys/shell.js)
 module upon invocation. Located inside the shell's source code are a number of builtin
-commands (like ls, cat, echo and pwd).  You can see which these are by double
+commands (like `ls`, `cat`, `echo` and `pwd`).  You can see which these are by double
 tapping the Tab key in the Terminal with nothing at the prompt.  Since, however, 
 there may be an arbitrary number of commands (1,000+) in a given LOTW installation,
 an early design decision was to work out a concept of "command libraries", such that
