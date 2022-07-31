@@ -1,348 +1,7 @@
-//Imports«
-const{NS,xgetobj,globals,}=Core;
-const{fs,util,widgets,dev_env,dev_mode}=globals;
-const{strnum,isarr,isobj,isstr,mkdv}=util;
-const{fmt,read_stdin, woutobj,get_path_of_object,pathToNode,read_file_args_or_stdin,serr,normpath,cur_dir,respbr,get_var_str,refresh,failopts,cbok,cberr,wout,werr,termobj,wrap_line,kill_register,EOF,ENV}=shell_exports;
-const fsapi=NS.api.fs;
-const capi = Core.api;
-const fileorin = read_file_args_or_stdin;
-const stdin = read_stdin;
-const NUM = Number.isFinite;
-//»
-//Var«
 
-const MAILPORT=20002;
+export const lib = (comarg, args, Core, Shell)=>{
 
-const locport = globals.local_port;
-const LOCURL = `http://${window.location.hostname}:${locport}`
-const MAILURL = `http://${window.location.hostname}:${MAILPORT}`
-const log = (...args)=>console.log(...args);
-const cwarn = (...args)=>console.warn(...args);
-const cerr = (...args)=>console.error(...args);
-const wrap = fmt;
-const ok_attrs=["style","href"];
-
-let links;
-//»
-//Funcs«
-
-/*
-//This does into some kind of net/iface.lib
-const do_call_or_ans=async(args, if_call)=>{//«
-	const get_time=()=>{
-		let arr = new Date().toString().split(" ");
-		let mon = arr[1];
-		let d = arr[2].replace(/^0/,"");
-		let tmarr = arr[4].split(":");
-		let ampm="a";
-		let hr = parseInt(tmarr[0]);
-		if (hr >= 12){
-			ampm = "p";
-			if (hr >= 13) hr-=12;
-			return `${mon} ${d} @${hr}:${tmarr[1]}${ampm}`;
-		}
-	};
-	let chan;
-	let win;
-	let killed = false;
-	kill_register(cb=>{
-		killed=true;
-		if (chan) chan.close();
-		cb();
-	});
-	let name = args.shift();
-	if (!name) return cberr("No name given!");
-	let mod = await fsapi.getMod("iface.net",{STATIC:true});
-	if (!mod) return cberr("No iface.net mod!");
-	let api = mod.api;
-	let myname = await api.getMyName();
-	if (!myname) return cberr("You are not logged in!");
-
-	if (if_call) {
-		wout(`Calling as: ${myname}...`);
-		chan = api.makeCall(myname, name);
-	}
-	else {
-		wout(`Answering as: ${myname}...`);
-		chan = api.answerCall(myname, name);
-	}
-
-	await chan.init();
-	wout("Connected");
-	chan.set_close(()=>{
-		if (win){
-			let d = mkdv();
-			d.mar=5;
-			d.pad=5;
-			d.bgcol="#500";
-			d.tcol="#fff";
-			d.innerText=`Peer connection ended @${get_time()}`;
-			win.main.insertBefore(d, win.main.childNodes[0]);
-		}
-		killed=true;
-		wout("Closed");
-		cbok();
-	});
-	chan.set_recv(obj=>{
-		if (!(obj&&obj.text)) return;
-		let s = `${name} (${get_time()}): ${obj.text}`;
-		if (win){
-			let d = mkdv();
-			d.innerText = s;
-			d.mar = 5;
-			d.pad = 5;
-			d.bor = "1px solid black";
-			win.main.insertBefore(d, win.main.childNodes[0]);
-		}
-		else {
-console.log(s);
-		}
-	});
-	if (_Desk) {
-		win = await Desk.openApp("None",true,{LETS:"CC"});
-		win.main.add(make('br'));
-		win.main.over="auto";
-		win.main.style.userSelect="text";
-		win.title="Call\xa0Center";
-	}
-	while (!killed) {
-		let rv = await getLineInput(">\x20")
-		rv = rv.regstr();
-		if (rv) chan.send(JSON.stringify({text:rv}));
-	}
-};
-'call':async(args)=>{do_call_or_ans(args, true);},
-'answer':async(args)=>{do_call_or_ans(args);},
-//»
-*/
-
-const getcache = (val)=>{//«
-	if (val) {
-		Core.set_appvar(termobj.topwin, "BROWSERCACHE", val);
-		return;
-	}
-	return Core.get_appvar(termobj.topwin, "BROWSERCACHE")
-}//»
-
-const canget=()=>{//«
-	if (!locport) return cberr("No local port");
-	return true;
-};//»
-
-const run_cli = (comarg)=>{//«
-	return new Promise(async(y,n)=>{
-		let url = `${LOCURL}/_com?arg=${encodeURIComponent(comarg)}`;
-		let body;
-		try{
-			let rv = await fetch(url);
-			y(await rv.text());
-		}
-		catch(e){
-console.log(e);
-			y();
-		}
-	})
-};//»
-
-const get = (path)=>{//«
-	return new Promise(async(y,n)=>{
-		let url = `${LOCURL}/_wget?path=${encodeURIComponent(path)}`;
-		let body;
-		try{
-			let rv = await fetch(url);
-			y(await rv.text());
-		}
-		catch(e){
-console.log(e);
-			y();
-		}
-	})
-};//»
-
-const get_doc = (str)=>{//«
-	let parser = new DOMParser()
-	let doc = parser.parseFromString(str, "text/html");
-	let scripts = doc.getElementsByTagName("SCRIPT");
-	for (let s of scripts) s.innerHTML="";
-	let styles = doc.getElementsByTagName("STYLE");
-	for (let s of styles) s.innerHTML="";
-	let tit = doc.getElementsByTagName("TITLE")[0];
-	return {
-		title:(tit&&tit.innerText||""),
-		doc:doc,
-		body: doc.body
-	};
-}//»
-
-const clean_tags=(elm)=>{//«
-	if (elm.style){
-		let pos = elm.style.position;
-		if (pos=="absolute"||pos=="fixed") elm.parentNode.removeChild(elm);
-	}
-	let atts = elm.attributes;
-	if (atts && atts.length){
-		let arr = [];
-		for (let att of atts){
-			let nm = att.name;
-			let val = att.value;
-			if (!ok_attrs.includes(nm)) arr.push(nm);
-		}
-		for (let nm of arr) elm.removeAttribute(nm);
-	}
-	let kids = elm.childNodes;
-	for (let kid of kids) clean_tags(kid);
-};//»
-const breaker=()=>{werr("#".repeat(termobj.w));};
-const render_content=(hostname, art, keep_breaks, wraplen)=>{//«
-	let txt = art.innerText;
-	let txtarr = txt.split("\n");
-	let out='';
-	let last_break=false;
-	for (let i=0; i < txtarr.length; i++){
-		let s = txtarr[i];
-		if (!s.length || s.match(/^[ \t]+$/)){
-			last_break=true;
-			continue;
-		}
-		else {
-			let marr;
-			if (marr = s.match(/^( +)/)) {
-				s = s.replace(/^ +/,"\xa0".repeat(marr[1].length));
-			}
-			if (keep_breaks && last_break) out+="\n"
-			out+=s+"\n"
-			last_break=false;
-		}
-	}
-
-	let arr = out.split("\n");
-	for (let i=0; i < arr.length; i++){
-		let str = arr[i];
-		arr[i] = wrap(str,{maxlen:wraplen});
-	}
-	wout(arr.join("\n"));
-//for (let ln of arr){
-//wout(ln);
-//}
-	breaker();
-	links=[];
-	let iter=0;
-	for (let ln of art.getElementsByTagName("A")){
-		let use_ln;
-		if(ln.origin==window.location.origin){
-			if (ln.hash.match(/^#/) || ln.pathname == window.location.pathname) continue;
-			let usehost = hostname;
-			if (ln.pathname.match(/\.md$/)) usehost = "https://github.com";
-			use_ln = usehost+ln.pathname;
-		}
-		if (!use_ln) use_ln = ln.href;
-		if (!use_ln) continue;
-
-		let desc = ln.innerText.replace(/\n/g," ").regstr();
-		if (!(!desc||desc.match(/^[ \t]$/))) {
-			werr(`${iter}) ${desc}`);
-			iter++;
-			links.push(use_ln);
-		}
-	}
-	breaker();
-}//»
-
-const getmailrc=()=>{//«
-
-return new Promise(async(y,n)=>{
-
-const perr=s=>{
-	y(`Parse error: ${s}`);
-	return false;
-}
-const err=(s)=>{
-	y(s);
-};
-let cursec;
-let is_alias;
-let obj={
-	to:{aliases:{}},
-	sub:{}
-};
-let user = ENV.USER;
-if (!(user && user!="user")) return err("No valid user");
-let rv =await fsapi.readFile(`/home/${user}/.mailrc`,{FORCETEXT:true});
-if (rv===false) return err(`~/.mailrc not found`);
-if (!(isarr(rv)&&isstr(rv[0]))) return err("Unknown value returned from fs.readFile");
-
-const parse_field=str=>{
-	let sec = obj[cursec];
-
-	let arr = str.split("=");
-
-	if (arr.length!=2) return perr("87rSj");
-	let k = arr[0];
-	if (!k.length) return perr("79gJn");
-	let v = arr[1];
-	if (!v.length) return perr("33yHH");
-	if (cursec=="to"){
-		if (is_alias){
-			if (!sec[v]) return perr("28HGT");
-			sec.aliases[k]=v;
-			return true;
-		}
-		else if (!v.match(/^[a-z]+[a-z.]?[a-z0-9]+@[a-z]+\.(com|net|org|gov)+$/)) return perr("98hTh");
-	}
-	sec[k]=v;
-	return true;
-};
-for (let ln of rv){
-	is_alias=false;
-	ln = ln.regstr();
-	if (!ln.length) continue;
-	if (ln.match(/^#FROM /)){
-		let arr = ln.split(" ");
-		arr.shift();
-		obj.from = arr.join(" ");
-		continue;
-	}
-	if (ln=="#TO") {
-		cursec="to";
-		continue;
-	}
-	else if (ln=="#SUBJECT") {
-		cursec="sub";
-		continue;
-	}
-	let parts = ln.split(" ");
-	if (parts.length==1){
-		if (!parse_field(parts[0])) return;
-	}
-	else if (parts.length==2){
-		if (!parts[0]=="alias") return perr("674YI");
-		is_alias=true;
-		if (!parse_field(parts[1])) return;
-	}
-	else{
-		return perr("485SA");
-	}
-	//let arr = ln.split("=");
-}
-y(obj);
-});
-
-}//»
-
-/*
-const get_store=(name)=>{//«
-	return new Promise(async(Y,N)=>{
-		if (!await fsapi.loadMod("sys.idb")) return N("Cannot load module: sys.idb!");
-		let mod = new NS.mods["sys.idb"](Core);
-		mod.init("storage", name);
-		Y(mod.tx());
-	});
-};//»
-*/
-
-//»
-
-const coms={
+const COMS={
 
 gcloud:async()=>{//«
 
@@ -353,7 +12,7 @@ gcloud:async()=>{//«
 			cbok();
 			return;
 		}
-		let pager = new mod(Core, shell_exports);
+		let pager = new mod(Core, Shell);
 		pager.init(str,`gcloud(${argstr})`,cbok, "termdump");
 	};
 	if (!canget()) return;
@@ -1024,16 +683,354 @@ the infinite loop):
 
 }
 
-const coms_help={
-ggl:"Just google stuff!"
+if (!comarg) return Object.keys(COMS);
+
+//Imports«
+//const{NS,xgetobj,globals,}=Core;
+const{fs,util,widgets,dev_env,dev_mode}=globals;
+const{strnum,isarr,isobj,isstr,mkdv}=util;
+const{fmt,read_stdin, woutobj,get_path_of_object,pathToNode,read_file_args_or_stdin,serr,normpath,cur_dir,respbr,get_var_str,refresh,failopts,cbok,cberr,wout,werr,termobj,wrap_line,kill_register,EOF,ENV}=Shell;
+const fsapi=NS.api.fs;
+const capi = Core.api;
+const fileorin = read_file_args_or_stdin;
+const stdin = read_stdin;
+const NUM = Number.isFinite;
+//»
+//Var«
+
+const MAILPORT=20002;
+
+const locport = globals.local_port;
+const LOCURL = `http://${window.location.hostname}:${locport}`
+const MAILURL = `http://${window.location.hostname}:${MAILPORT}`
+const log = (...args)=>console.log(...args);
+const cwarn = (...args)=>console.warn(...args);
+const cerr = (...args)=>console.error(...args);
+const wrap = fmt;
+const ok_attrs=["style","href"];
+
+let links;
+//»
+//Funcs«
+
+/*
+//This does into some kind of net/iface.lib
+const do_call_or_ans=async(args, if_call)=>{//«
+	const get_time=()=>{
+		let arr = new Date().toString().split(" ");
+		let mon = arr[1];
+		let d = arr[2].replace(/^0/,"");
+		let tmarr = arr[4].split(":");
+		let ampm="a";
+		let hr = parseInt(tmarr[0]);
+		if (hr >= 12){
+			ampm = "p";
+			if (hr >= 13) hr-=12;
+			return `${mon} ${d} @${hr}:${tmarr[1]}${ampm}`;
+		}
+	};
+	let chan;
+	let win;
+	let killed = false;
+	kill_register(cb=>{
+		killed=true;
+		if (chan) chan.close();
+		cb();
+	});
+	let name = args.shift();
+	if (!name) return cberr("No name given!");
+	let mod = await fsapi.getMod("iface.net",{STATIC:true});
+	if (!mod) return cberr("No iface.net mod!");
+	let api = mod.api;
+	let myname = await api.getMyName();
+	if (!myname) return cberr("You are not logged in!");
+
+	if (if_call) {
+		wout(`Calling as: ${myname}...`);
+		chan = api.makeCall(myname, name);
+	}
+	else {
+		wout(`Answering as: ${myname}...`);
+		chan = api.answerCall(myname, name);
+	}
+
+	await chan.init();
+	wout("Connected");
+	chan.set_close(()=>{
+		if (win){
+			let d = mkdv();
+			d.mar=5;
+			d.pad=5;
+			d.bgcol="#500";
+			d.tcol="#fff";
+			d.innerText=`Peer connection ended @${get_time()}`;
+			win.main.insertBefore(d, win.main.childNodes[0]);
+		}
+		killed=true;
+		wout("Closed");
+		cbok();
+	});
+	chan.set_recv(obj=>{
+		if (!(obj&&obj.text)) return;
+		let s = `${name} (${get_time()}): ${obj.text}`;
+		if (win){
+			let d = mkdv();
+			d.innerText = s;
+			d.mar = 5;
+			d.pad = 5;
+			d.bor = "1px solid black";
+			win.main.insertBefore(d, win.main.childNodes[0]);
+		}
+		else {
+console.log(s);
+		}
+	});
+	if (_Desk) {
+		win = await Desk.openApp("None",true,{LETS:"CC"});
+		win.main.add(make('br'));
+		win.main.over="auto";
+		win.main.style.userSelect="text";
+		win.title="Call\xa0Center";
+	}
+	while (!killed) {
+		let rv = await getLineInput(">\x20")
+		rv = rv.regstr();
+		if (rv) chan.send(JSON.stringify({text:rv}));
+	}
+};
+'call':async(args)=>{do_call_or_ans(args, true);},
+'answer':async(args)=>{do_call_or_ans(args);},
+//»
+*/
+
+const getcache = (val)=>{//«
+	if (val) {
+		Core.set_appvar(termobj.topwin, "BROWSERCACHE", val);
+		return;
+	}
+	return Core.get_appvar(termobj.topwin, "BROWSERCACHE")
+}//»
+
+const canget=()=>{//«
+	if (!locport) return cberr("No local port");
+	return true;
+};//»
+
+const run_cli = (comarg)=>{//«
+	return new Promise(async(y,n)=>{
+		let url = `${LOCURL}/_com?arg=${encodeURIComponent(comarg)}`;
+		let body;
+		try{
+			let rv = await fetch(url);
+			y(await rv.text());
+		}
+		catch(e){
+console.log(e);
+			y();
+		}
+	})
+};//»
+
+const get = (path)=>{//«
+	return new Promise(async(y,n)=>{
+		let url = `${LOCURL}/_wget?path=${encodeURIComponent(path)}`;
+		let body;
+		try{
+			let rv = await fetch(url);
+			y(await rv.text());
+		}
+		catch(e){
+console.log(e);
+			y();
+		}
+	})
+};//»
+
+const get_doc = (str)=>{//«
+	let parser = new DOMParser()
+	let doc = parser.parseFromString(str, "text/html");
+	let scripts = doc.getElementsByTagName("SCRIPT");
+	for (let s of scripts) s.innerHTML="";
+	let styles = doc.getElementsByTagName("STYLE");
+	for (let s of styles) s.innerHTML="";
+	let tit = doc.getElementsByTagName("TITLE")[0];
+	return {
+		title:(tit&&tit.innerText||""),
+		doc:doc,
+		body: doc.body
+	};
+}//»
+
+const clean_tags=(elm)=>{//«
+	if (elm.style){
+		let pos = elm.style.position;
+		if (pos=="absolute"||pos=="fixed") elm.parentNode.removeChild(elm);
+	}
+	let atts = elm.attributes;
+	if (atts && atts.length){
+		let arr = [];
+		for (let att of atts){
+			let nm = att.name;
+			let val = att.value;
+			if (!ok_attrs.includes(nm)) arr.push(nm);
+		}
+		for (let nm of arr) elm.removeAttribute(nm);
+	}
+	let kids = elm.childNodes;
+	for (let kid of kids) clean_tags(kid);
+};//»
+const breaker=()=>{werr("#".repeat(termobj.w));};
+const render_content=(hostname, art, keep_breaks, wraplen)=>{//«
+	let txt = art.innerText;
+	let txtarr = txt.split("\n");
+	let out='';
+	let last_break=false;
+	for (let i=0; i < txtarr.length; i++){
+		let s = txtarr[i];
+		if (!s.length || s.match(/^[ \t]+$/)){
+			last_break=true;
+			continue;
+		}
+		else {
+			let marr;
+			if (marr = s.match(/^( +)/)) {
+				s = s.replace(/^ +/,"\xa0".repeat(marr[1].length));
+			}
+			if (keep_breaks && last_break) out+="\n"
+			out+=s+"\n"
+			last_break=false;
+		}
+	}
+
+	let arr = out.split("\n");
+	for (let i=0; i < arr.length; i++){
+		let str = arr[i];
+		arr[i] = wrap(str,{maxlen:wraplen});
+	}
+	wout(arr.join("\n"));
+//for (let ln of arr){
+//wout(ln);
+//}
+	breaker();
+	links=[];
+	let iter=0;
+	for (let ln of art.getElementsByTagName("A")){
+		let use_ln;
+		if(ln.origin==window.location.origin){
+			if (ln.hash.match(/^#/) || ln.pathname == window.location.pathname) continue;
+			let usehost = hostname;
+			if (ln.pathname.match(/\.md$/)) usehost = "https://github.com";
+			use_ln = usehost+ln.pathname;
+		}
+		if (!use_ln) use_ln = ln.href;
+		if (!use_ln) continue;
+
+		let desc = ln.innerText.replace(/\n/g," ").regstr();
+		if (!(!desc||desc.match(/^[ \t]$/))) {
+			werr(`${iter}) ${desc}`);
+			iter++;
+			links.push(use_ln);
+		}
+	}
+	breaker();
+}//»
+
+const getmailrc=()=>{//«
+
+return new Promise(async(y,n)=>{
+
+const perr=s=>{
+	y(`Parse error: ${s}`);
+	return false;
 }
-if (!com) {
-	let obj = getcache();
-	if (!obj) getcache({});
-	return Object.keys(coms)
+const err=(s)=>{
+	y(s);
+};
+let cursec;
+let is_alias;
+let obj={
+	to:{aliases:{}},
+	sub:{}
+};
+let user = ENV.USER;
+if (!(user && user!="user")) return err("No valid user");
+let rv =await fsapi.readFile(`/home/${user}/.mailrc`,{FORCETEXT:true});
+if (rv===false) return err(`~/.mailrc not found`);
+if (!(isarr(rv)&&isstr(rv[0]))) return err("Unknown value returned from fs.readFile");
+
+const parse_field=str=>{
+	let sec = obj[cursec];
+
+	let arr = str.split("=");
+
+	if (arr.length!=2) return perr("87rSj");
+	let k = arr[0];
+	if (!k.length) return perr("79gJn");
+	let v = arr[1];
+	if (!v.length) return perr("33yHH");
+	if (cursec=="to"){
+		if (is_alias){
+			if (!sec[v]) return perr("28HGT");
+			sec.aliases[k]=v;
+			return true;
+		}
+		else if (!v.match(/^[a-z]+[a-z.]?[a-z0-9]+@[a-z]+\.(com|net|org|gov)+$/)) return perr("98hTh");
+	}
+	sec[k]=v;
+	return true;
+};
+for (let ln of rv){
+	is_alias=false;
+	ln = ln.regstr();
+	if (!ln.length) continue;
+	if (ln.match(/^#FROM /)){
+		let arr = ln.split(" ");
+		arr.shift();
+		obj.from = arr.join(" ");
+		continue;
+	}
+	if (ln=="#TO") {
+		cursec="to";
+		continue;
+	}
+	else if (ln=="#SUBJECT") {
+		cursec="sub";
+		continue;
+	}
+	let parts = ln.split(" ");
+	if (parts.length==1){
+		if (!parse_field(parts[0])) return;
+	}
+	else if (parts.length==2){
+		if (!parts[0]=="alias") return perr("674YI");
+		is_alias=true;
+		if (!parse_field(parts[1])) return;
+	}
+	else{
+		return perr("485SA");
+	}
+	//let arr = ln.split("=");
 }
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in net!");
-if (args===true) return coms[com];
-coms[com](args);
+y(obj);
+});
+
+}//»
+
+/*
+const get_store=(name)=>{//«
+	return new Promise(async(Y,N)=>{
+		if (!await fsapi.loadMod("sys.idb")) return N("Cannot load module: sys.idb!");
+		let mod = new NS.mods["sys.idb"](Core);
+		mod.init("storage", name);
+		Y(mod.tx());
+	});
+};//»
+*/
+
+//»
+
+COMS[comarg](args);
+
+
+}
 

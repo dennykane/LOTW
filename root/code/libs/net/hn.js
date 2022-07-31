@@ -1937,15 +1937,6 @@ ${TAB}If the "count" option is not specified, you may specify how many to get. (
 
 COMS[comarg](args);
 
-/*
-if (!com) return Object.keys(COMS)
-
-if (!args) return coms_help[com];
-if (!COMS[com]) return cberr("No com: " + com + " in net.hn!");
-if (args===true) return COMS[com];
-COMS[com](args);
-*/
-
 
 }
 

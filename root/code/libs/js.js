@@ -1,92 +1,6 @@
+export const lib = (comarg, args, Core, Shell)=>{
 
-//Imports«
-const NS = window[__OS_NS__];
-const NUM = Number.isFinite;
-
-let _;
-const {mods}=NS;
-const{log,cwarn,cerr,sys_url}= Core;
-const capi=Core.api;
-let getkeys = capi.getKeys;
-
-let globals = Core.globals;
-let util = globals.util;
-_ = util;
-let strnum = _.strnum;
-let isnotneg = _.isnotneg;
-let isnum = _.isnum;
-let isstr = _.isstr;
-let isid = _.isid;
-let isarr = _.isarr;
-let isobj = _.isobj;
-let make = _.make;
-let ispos = function(arg) {return isnum(arg,true);}
-let isneg = function(arg) {return isnum(arg,false);}
-let iseof = function(arg) {return (isobj(arg)&&arg.EOF);}
-let isnotnegint = function(arg){return _.isint(arg, true);}
-
-const {fs,FSPREF,FSLET,FSBRANCH}=globals;
-const fsapi = NS.api.fs;
-
-const{//«
-cbeof,
-sherr,
-get_path_of_object,
-get_options,
-termobj,
-cur_com_name,
-readFile,
-read_file_args_or_stdin,
-read_file,
-read_stdin,
-cur_dir,
-constant_vars,
-path_to_par_and_name,
-is_writable,
-path_to_obj,
-if_com_sub,
-check_pipe_writer,
-tmp_env,
-
-kill_register,
-arg2con,
-atbc,
-get_reader,
-sys_write,
-cb,
-normpath,
-cbok,
-cberr,
-serr,
-failopts,
-failnoopts,
-werr,
-werrarr,
-wout,
-woutarr,
-woutobj,
-wclout,
-wappout,
-refresh,
-respbr,
-wclerr,
-suse,
-get_var_str,
-ptw,
-term_prompt,
-do_red,
-Desk,
-is_root,
-ENODESK,
-EOF,
-ENV,
-PIPES,
-pipe_arr
-}=shell_exports;//»
-
-//»
-
-const coms = {//«
+const COMS = {//«
 
 'escodegen':async function(){//«
 /*//«let opts= {
@@ -204,13 +118,96 @@ cbok();
 }//»
 
 }//»
+if (!comarg) return Object.keys(COMS);
 
-const coms_help={//«
-};//»
+//Imports«
+const NS = window[__OS_NS__];
+const NUM = Number.isFinite;
 
-if (!com) return new Promise((y,n)=>{y(Object.keys(coms));});
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in js!");
-if (args===true) return coms[com];
-coms[com](args);
+let _;
+const {mods}=NS;
+const{log,cwarn,cerr,sys_url}= Core;
+const capi=Core.api;
+let getkeys = capi.getKeys;
 
+let globals = Core.globals;
+let util = globals.util;
+_ = util;
+let strnum = _.strnum;
+let isnotneg = _.isnotneg;
+let isnum = _.isnum;
+let isstr = _.isstr;
+let isid = _.isid;
+let isarr = _.isarr;
+let isobj = _.isobj;
+let make = _.make;
+let ispos = function(arg) {return isnum(arg,true);}
+let isneg = function(arg) {return isnum(arg,false);}
+let iseof = function(arg) {return (isobj(arg)&&arg.EOF);}
+let isnotnegint = function(arg){return _.isint(arg, true);}
+
+const {fs,FSPREF,FSLET,FSBRANCH}=globals;
+const fsapi = NS.api.fs;
+
+const{//«
+cbeof,
+sherr,
+get_path_of_object,
+get_options,
+termobj,
+cur_com_name,
+readFile,
+read_file_args_or_stdin,
+read_file,
+read_stdin,
+cur_dir,
+constant_vars,
+path_to_par_and_name,
+is_writable,
+path_to_obj,
+if_com_sub,
+check_pipe_writer,
+tmp_env,
+
+kill_register,
+arg2con,
+atbc,
+get_reader,
+sys_write,
+cb,
+normpath,
+cbok,
+cberr,
+serr,
+failopts,
+failnoopts,
+werr,
+werrarr,
+wout,
+woutarr,
+woutobj,
+wclout,
+wappout,
+refresh,
+respbr,
+wclerr,
+suse,
+get_var_str,
+ptw,
+term_prompt,
+do_red,
+Desk,
+is_root,
+ENODESK,
+EOF,
+ENV,
+PIPES,
+pipe_arr
+}=Shell;//»
+
+//»
+
+
+COMS[comarg](args);
+
+}

@@ -124,20 +124,27 @@ Since the underlying JavaScript itself offers extremely effective algorithmic su
 those users who need to invoke their own non-supported, non-trivial functions via the command line will be
 directed to the development side of LOTW.
 
-## Invoking commands
+## Searching for and invoking commands
 
 The
 [Terminal](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/sys/Terminal.js)
 application automatically loads the
 [shell](https://github.com/linuxontheweb/lotw/tree/main/root/code/mods/sys/shell.js)
-module upon invocation. Located inside that file are a number of builtin
+module upon invocation. Located inside the shell's source code are a number of builtin
 commands (like ls, cat, echo and pwd).  You can see which these are by double
-tapping the Tab key in the Terminal with nothing at the prompt.  But since
-there may be an arbitrary number of commands (10,000+) in a given LOTW setup,
-an early design decision was to create the concept of "command libraries" that
-could be brought into the current shell's execution context via a command, eg.,
-to bring in all of the commands in the 'fs' command library, run: `$ import
-fs`.
+tapping the Tab key in the Terminal with nothing at the prompt.  Since, however, 
+there may be an arbitrary number of commands (1,000+) in a given LOTW installation,
+an early design decision was to work out a concept of "command libraries", such that
+the commands in a given library may be imported into the current shell's execution context;
+so, to bring in all of the commands in the 'fs' command library, run: `$ import
+fs`. 
+
+Here is the way that you can see which commands are in a given library: `$ lib &lt; libname &gt;`.
+Also, since the `lib` command supports autocompletion for its argument, you can 
+use it as a quick way to search for the available libraries in the LOTW system. 
+Other than certain commands in certain libraries (like `vim` in 'fs'), though, 
+most commands are fairly old and likely not to work in the current LOTW system.
+These can either be updated to work or simply deleted from the given command library.
 
 
 

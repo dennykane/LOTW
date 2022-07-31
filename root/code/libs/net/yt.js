@@ -1,4 +1,23 @@
 
+export const lib = (comarg, args, Core, Shell)=>{
+
+const COMS={//«
+
+yt:async()=>{
+
+	if (!key) return cberr("No 'YTKEY' in the env!");
+	let id = args.shift();
+	if (!id) return cberr("No id given!");
+	if (!id.match(/^[a-z0-9_-]{11}$/i)) return cberr("The id is invalid");
+	let url = `https://www.googleapis.com/youtube/v3/videos?key=${key}&id=${id}`;
+	url+='&part=snippet,contentDetails&fields=items(snippet(title),contentDetails(duration))';
+	let rv = await capi.xget(url,{text:true});
+	cbok(rv);
+}
+
+}//»
+if (!comarg) return Object.keys(COMS);
+
 //Imports«
 
 const{NS,xgetobj,globals,log,cwarn,cerr}=Core;
@@ -30,7 +49,7 @@ const {
 	kill_register,
 	EOF,
 	ENV
-} = shell_exports;
+} = Shell;
 const fsapi=NS.api.fs;
 const capi = Core.api;
 const fileorin = read_file_args_or_stdin;
@@ -43,35 +62,10 @@ if (com) key = get_var_str("YTKEY");
 //»
 
 
-const coms={//«
+COMS[comarg](args);
 
-yt:async()=>{
 
-	if (!key) return cberr("No 'YTKEY' in the env!");
-	let id = args.shift();
-	if (!id) return cberr("No id given!");
-	if (!id.match(/^[a-z0-9_-]{11}$/i)) return cberr("The id is invalid");
-	let url = `https://www.googleapis.com/youtube/v3/videos?key=${key}&id=${id}`;
-	url+='&part=snippet,contentDetails&fields=items(snippet(title),contentDetails(duration))';
-	let rv = await capi.xget(url,{text:true});
-	cbok(rv);
 }
-
-}//»
-
-const coms_help={//«
-}
-//»
-
-if (!com) return Object.keys(coms)
-
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in net.yt!");
-if (args===true) return coms[com];
-coms[com](args);
-
-
-
 
 
 

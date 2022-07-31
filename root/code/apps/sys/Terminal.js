@@ -149,7 +149,7 @@ let downevt=null;
 let MAX_TAB_SIZE=256;
 let awaiting_remote_tab_completion = false;
 //const com_completers = ["help","man", "examples"];
-const com_completers = ["app"];
+const com_completers = ["app","lib"];
 const STAT_OK=1;
 const STAT_WARNING=2;
 const STAT_ERROR=3;
@@ -2246,7 +2246,7 @@ return;
 				if (!rv) return cerr(NS.error.message);
 			}
 ///*
-			else if (type=="AppDir"){
+			else if (type=="appDir"||type=="libDir"){
 				handle_letter_press(".");//"/"
 			}
 			else if (type=="Link") {
@@ -2428,15 +2428,15 @@ log("YARR WHAT MAN OPTIONS????");
 			});
 		}
 		else {
-			if (tok0==="app"){
+			if (tok0==="app"||tok0=="lib"){
 				let path="";
 				if (tok) path=`?path=${tok}`;
-				let rv = await fetch(`/_getapp${path}`);
+				let rv = await fetch(`/_get${tok0}${path}`);
 				let arr = await rv.json();
 				let all = [];
 				for (let n of arr) {
 					if (n.match(/\.js$/)) all.push([n.replace(/\.js$/,""),"File"]);
-					else all.push([n,"AppDir"]);
+					else all.push([n,`${tok0}Dir`]);
 				}
 				contents = all;
 				if (tok.match(/\./)){
@@ -2445,6 +2445,7 @@ log("YARR WHAT MAN OPTIONS????");
 				}
 				docontents();
 			}
+
 		}
 	}
 	else {

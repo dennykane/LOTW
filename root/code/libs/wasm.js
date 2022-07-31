@@ -387,6 +387,828 @@ arch_prctl		384
 
 »*/
 
+export const lib = (comarg, args, Core, Shell)=>{
+
+const COMS = {//«
+
+'parsewasm':function(){//«
+
+let sws = failopts(args,{
+	LONG:{
+		nglbimps:1,
+		nglbexps:1,
+		nfncimps: 1,
+		nfncexps: 1,
+		elements: 1,
+		start: 1,
+		type:1,
+		toplevel:1,
+		imports:1,
+		exports:1,
+		decls: 1,
+		globals: 1,
+//		code: 3,
+		data:1,
+		fmt:3,
+//		funcnumtoname:3,
+		funcnamebyindex:3,
+		indexbyfuncname:3,
+		codebyname:3,
+		codebyindex:3,
+		sigbyname:3,
+		sigbyindex:3
+	}
+});
+if (!sws) return;
+
+let fname = args.shift();
+let ret;
+let dofuncs = [];
+atbc(fname, wasm=>{//«
+if (!wasm) return cberr("Got no wasm!");
+
+let parser = new WasmParser(wasm);
+//nglbimps:1, nfncimps: 1, nfncexps: 1, nglbexps:1,
+let getnum;
+let funcnum = null;
+let funcfmt = "text";
+if (sws.fmt){//«
+	if (sws.fmt.match(/^t(ext)?$/)){
+		funcfmt = "text";
+	}
+	else if (sws.fmt.match(/^b(in(ary)?)?/)){
+		funcfmt = "bin";
+	}
+	else return cberr(sws.fmt+": invalid function format");
+}//»
+
+if (sws.sigbyindex) {//«
+	let str = sws.sigbyindex;
+	if (!okint(str)) return cberr(str+": invalid function number");
+	let index = parseInt(str);
+	dofuncs.push(()=>{
+		let gotret;
+		let outarr = [];
+		let doit=()=>{return parser.dump_types({OP:OP_GET_SIG_BY_NUM, VAL: gotret});}
+		gotret = parser.dump_imports({OP: OP_GET_TYPE_BY_NUM, WHICH: FUNCTION, VAL: index, OUT: outarr}, true);
+		if (!(gotret===null)) return doit();
+		gotret = parser.dump_decls({OP: OP_GET_DECL_TYPE, VAL: (index-outarr[0])});
+		if (gotret===null){
+//cerr("WHOA! DIDN'T GET A DECL WITH A VALUE=="+(index-num_imports)+"!!!");
+			return;
+		}
+		return doit();
+	});
+}//»
+if (sws.sigbyname) {//«
+	dofuncs.push(()=>{
+		let outarr = [];
+		let doit=()=>{return parser.dump_types({OP:OP_GET_SIG_BY_NUM, VAL: gotret});}
+		let gotret = parser.dump_imports({OP: OP_GET_TYPE_BY_NAME, WHICH: FUNCTION, VAL: sws.sigbyname, OUT: outarr}, true);
+		if (!(gotret===null)) return doit();
+		let index = parser.dump_exports({OP: OP_MATCH_NAME, WHICH: FUNCTION, VAL: sws.sigbyname}, true);
+		if (index == null) return false;
+		gotret = parser.dump_decls({OP: OP_GET_DECL_TYPE, VAL: (index-outarr[0])});
+		if (gotret===null){
+cerr("WHOA! DIDN'T GET A DECL WITH A VALUE=="+(index-outarr[0])+"!!!");
+			return;
+		}
+		return doit();
+	});
+}//»
+if (sws.codebyname) {//«
+	dofuncs.push(()=>{
+		let index = parser.dump_exports({OP: OP_MATCH_NAME, WHICH: FUNCTION, VAL: sws.codebyname})
+		if (index===null) return false;
+		let num_imports = parser.dump_imports({OP: OP_GET_COUNT, WHICH: FUNCTION}, true);
+		let body_num = index - num_imports;
+		return parser.dump_code(body_num, funcfmt);
+	});
+}//»
+if (sws.codebyindex) {//«
+	let str = sws.codebyindex;
+	if (!okint(str)) return cberr(str+": invalid function number");
+	let num = parseInt(str);
+	dofuncs.push(()=>{
+		let num_imports = parser.dump_imports({OP: OP_GET_COUNT, WHICH: FUNCTION}, true);
+		let body_num = num - num_imports;
+//cwarn("Getting body number: " + body_num);
+		return parser.dump_code(body_num, funcfmt);
+	});
+}//»
+if (sws.funcnamebyindex) {//«
+	let str = sws.funcnamebyindex;
+	if (!okint(str)) return cberr(str+": invalid function number");
+	let num = parseInt(str);
+	dofuncs.push(()=>{
+//cwarn("HI");
+		let gotret = parser.dump_imports({OP: OP_GET_NAME_AT_NUM, WHICH: FUNCTION, VAL: num}, true);
+//log(gotret);
+		if (util.isstr(gotret)) {
+			wout(gotret);
+			return true;
+		}
+		gotret = parser.dump_exports({OP: OP_GET_NAME_AT_NUM, WHICH: FUNCTION, VAL: num}, true);
+		if (util.isstr(gotret)) {
+			wout(gotret);
+			return true;
+		}
+		return false;
+	});
+}//»
+if (sws.indexbyfuncname) {//«
+	dofuncs.push(()=>{
+		let gotret = parser.dump_imports({OP: OP_GET_NUM_BY_NAME, WHICH: FUNCTION, VAL: sws.indexbyfuncname}, true);
+		if (gotret!==null) {
+			wout(""+gotret);
+			return true;
+		}
+		gotret = parser.dump_exports({OP: OP_MATCH_NAME, WHICH: FUNCTION, VAL: sws.indexbyfuncname}, true);
+		if (gotret!==null) {
+			wout(""+gotret);
+			return true;
+		}
+
+//		if (util.isstr(gotret)) {
+//			wout(gotret);
+//			return true;
+//		}
+		return false;
+	});
+}//»
+if (sws.nglbimps) dofuncs.push(()=>{return parser.dump_imports({OP: OP_GET_COUNT, WHICH: GLOBAL});});
+if (sws.nfncimps) dofuncs.push(()=>{return parser.dump_imports({OP: OP_GET_COUNT, WHICH: FUNCTION});});
+if (sws.nglbexps) dofuncs.push(()=>{return parser.dump_exports({OP: OP_GET_COUNT, WHICH: GLOBAL});});
+if (sws.nfncexps) dofuncs.push(()=>{return parser.dump_exports({OP: OP_GET_COUNT, WHICH: FUNCTION});});
+if (sws.toplevel) dofuncs.push(parser.dump_toplevel);
+if (sws.imports) dofuncs.push(parser.dump_imports);
+if (sws.exports) dofuncs.push(parser.dump_exports);
+if (sws.data) dofuncs.push(parser.dump_data);
+if (sws.type) dofuncs.push(parser.dump_types);
+if (sws.decls) dofuncs.push(parser.dump_decls);
+if (sws.globals) dofuncs.push(parser.dump_globals);
+if (sws.start) dofuncs.push(parser.dump_start);
+if (sws.elements) dofuncs.push(parser.dump_elements);
+
+if (!dofuncs.length) return cberr("Nothing to do!");
+
+for (let func of dofuncs){
+	try{
+		ret = func();
+	}
+	catch(e){
+		cerr(e);
+		return cberr(e.message);
+	}
+	if (!ret) return cberr("There was an error");
+
+}
+
+cbok();
+
+});//»
+
+},//»
+'lebdec':function(){//«
+	if (!args.length) return cbok();
+	let arr = [];
+	let didbreak = false;
+	let argsin=[];
+	for (let str of args) argsin = argsin.concat(str.split(/ +/));
+
+	for (let n  of argsin) {
+		let num = parseInt(n);
+		if (num > 255) return cberr("Illegal byte value: " + num);
+		else if (num < 0) return cberr("Got negative value: " + num);
+		let binstr = num.toString(2);
+		if (binstr.length < 8){
+			arr.unshift(binstr);
+			didbreak = true;
+			break;
+		}
+		arr.unshift(binstr.slice(1));
+	}
+	if (!didbreak) return cberr("Invalid byte sequence");
+	wout(parseInt(arr.join(""), 2)+"");
+	cbok();
+
+},//»
+'lebenc':function(){//«
+	if (!args.length) return cbok();
+	if (args.length > 1) return _.suse("number");
+	let num = parseInt(args[0]);
+	let bits = num.toString(2);
+	let arr = [];
+	while (true){
+		if (bits.length <= 7){
+			arr.push(parseInt(bits,2));
+			break;
+		}
+		let end = bits.slice(bits.length-7);
+		arr.push(parseInt("1"+end,2));
+		bits = bits.slice(0, bits.length-7);
+	}
+	let hexout = "";
+	for (let n of arr) {
+		let s = n.toString(16);
+		if (s.length==1) s = "0"+s;
+		hexout += "0x"+s+" ";
+	}
+	wout(hexout.replace(/ $/,""));
+	cbok();
+},//»
+'cheezwasm':function(){//«
+
+var fname = args.shift();
+if (!fname) return cberr("Need filename!");
+let mainfunc = args.shift();
+if (!mainfunc) {
+	mainfunc = "main";
+}
+wout("Using main function: " + mainfunc);
+let func;
+let run = _=>{
+	let got;
+	wout("Calling: " + mainfunc + " with " + args.length + " arguments!");
+	if (args.length) {
+		for (let i=0; i < args.length; i++) args[i] = parseInt(args[i]);
+		 got = func(...args);
+	}
+	else got = func();
+	wout("Returned: " + got);
+	cbok();
+
+}
+
+
+let info = {//«
+	env: {//«
+		log: str=>{console.log(str)}
+	}//»
+};//»
+
+_.atbc(fname, wasm=>{//«
+	if (!wasm) return cberr("Got no wasm!");
+
+	WebAssembly.instantiate(wasm, info).then(ret=>{
+		let inst = ret.instance;
+		let	mod = ret.module;
+		let	exp = inst.exports;
+		func = exp[mainfunc];
+		if (!func) return cberr("Not an exported function: " + mainfunc);
+		run();
+	}).catch(e=>{
+log(e);
+		cberr(e.message);
+	})
+
+});//»
+
+},//»
+'ezwasm':function(){//«
+
+/*HOWTO IMPORT A JS FUNCTION INTO C/C++«
+
+*****************     program.c   *************************
+
+(pound) include <Math.h>
+
+void consoleLog (float num);
+
+float getSqrt (float num) {
+  consoleLog(num);
+  return sqrt(num);
+}
+
+
+***********************************************************
+
+$ emcc -s "EXPORTED_FUNCTIONS=['_getSqrt']" -s ERROR_ON_UNDEFINED_SYMBOLS=0 program.c -o modname.js
+
+Need to grep these variables from modname.js:
+
+var STATIC_BUMP = X;
+
+Module['wasmTableSize'] = Y;
+Module['wasmMaxTableSize'] = Z;
+
+»*/
+
+//Standard imports«
+var err = cberr;
+var ok = cbok;
+var out = wout;
+//»
+
+//Com init«
+var which = args.shift();
+if (!which) return cberr("No arg!");
+
+let numstr = args.shift();
+let num=100;
+if (numstr){
+	num = util.strnum(numstr);
+	if (!isint(num)) return err("Invalid number: " + numstr);
+	if (num <= 0) return err("Want a positive number");
+}
+//»
+
+//Funcs«
+
+let abort = mess=>{throw mess;}
+let nogrow = _=>{abort("Cannot grow memory!");}
+let invfunc = _=>{abort("Invalid function called!");}
+let noimpl = name=>{abort("Not implenthing: " + name);}
+let noop = _=>{}
+
+function assert(condition, text) {if (!condition) {abort('Assertion failed: ' + text);}}
+
+function staticAlloc(size) {//«
+  assert(!staticSealed);
+  var ret = STATICTOP;
+  STATICTOP = (STATICTOP + size + 15) & -16;
+  assert(STATICTOP < TOTAL_MEMORY, 'not enough memory for static allocation - increase TOTAL_MEMORY');
+  return ret;
+}//»
+function alignMemory(size, factor) {//«
+  if (!factor) factor = STACK_ALIGN; // stack alignment (16-byte) by default
+  var ret = size = Math.ceil(size / factor) * factor;
+  return ret;
+}//»
+
+//»
+
+//Init«
+const TOTAL_MEMORY = 16*1024*1024;
+const TOTAL_STACK = 5242880;
+const WASM_PAGE_SIZE = 65536;
+
+const STATIC_BUMP = 1536;
+const wasmTableSize = 0;
+const wasmMaxTableSize = 0;
+
+var TABLE_SIZE = wasmTableSize;
+var MAX_TABLE_SIZE = wasmMaxTableSize;
+
+var GLOBAL_BASE = 1024;
+var STACK_ALIGN = 16;
+var STATIC_BASE, STATICTOP, staticSealed;
+var STACK_BASE, STACKTOP, STACK_MAX;
+var DYNAMIC_BASE, DYNAMICTOP_PTR;
+var staticSealed = false;
+var tempDoublePtr;
+
+STATIC_BASE = STATICTOP = STACK_BASE = STACKTOP = STACK_MAX = DYNAMIC_BASE = DYNAMICTOP_PTR = 0;
+STATICTOP = STATIC_BASE + STATIC_BUMP;
+
+tempDoublePtr = STATICTOP;STATICTOP += 16;
+
+STATIC_BASE = GLOBAL_BASE;
+DYNAMICTOP_PTR = staticAlloc(4);
+STACK_BASE = STACKTOP = alignMemory(STATICTOP);
+STACK_MAX = STACK_BASE + TOTAL_STACK;
+DYNAMIC_BASE = alignMemory(STACK_MAX);
+assert(tempDoublePtr % 8 == 0);
+
+let memory = new WebAssembly.Memory({
+	'initial': TOTAL_MEMORY / WASM_PAGE_SIZE,
+	'maximum': TOTAL_MEMORY / WASM_PAGE_SIZE 
+});
+let table = new WebAssembly.Table({
+	'initial': TABLE_SIZE,
+	'maximum': MAX_TABLE_SIZE,
+	'element': 'anyfunc'
+});
+
+//log(memory.buffer);
+
+let info = {//«
+
+	env: {//«
+		memory: memory,
+		table: table,
+		_consoleLog: str=>{console.log(str)},
+		enlargeMemory: _=>{nogrow();},
+		abortStackOverflow: _=>{abort("Stack Overflow")},
+		abortOnCannotGrowMemory: nogrow,
+		getTotalMemory: _=>{return TOTAL_MEMORY},
+		nullFunc_ii: _=>{invfunc()},
+		nullFunc_iiii: _=>{invfunc()},
+		___setErrNo: _=>{noimpl("setErrNo")},
+		___syscall140: _=>{noimpl("___syscall140")},
+		___syscall146: _=>{noimpl("___syscall146")},
+		___syscall54: _=>{noimpl("___syscall54")},
+		___syscall6: _=>{noimpl("___syscall6")},
+		_emscripten_memcpy_big: _=>{noimpl("_emscripten_memcpy_big")},
+//		: _=>{noimpl("")},
+//		: _=>{noimpl("")},
+		___lock: noop,
+		___unlock: noop,
+		memoryBase: STATIC_BASE,
+		tableBase: 0,
+		DYNAMICTOP_PTR: DYNAMICTOP_PTR,
+		tempDoublePtr: tempDoublePtr,
+		STACKTOP: STACKTOP, 
+		STACK_MAX: STACK_MAX
+	},//»
+	global:{//«
+      'NaN': NaN,
+      'Infinity': Infinity
+	}//»
+
+};//»
+
+let mod, inst, exp;
+//In HEAPU8, you have 16,777,216 8 bit numbers with which to fucking DO ANYTHING!!!
+let HEAPU8 = new Uint8Array(memory.buffer);
+
+
+//»
+
+let run=_=>{//«
+//log(mem);
+	let ret;
+	out("Getting the square root of: " + num);
+	ret = exp._getSqrt(num);
+	out("Returned: " + ret);
+	ok();
+}//»
+
+Core.get_wasm(which,ret=>{//«
+	if (!ret) return err("No wasm: " + which);
+	WebAssembly.instantiate(ret, info)
+	.then(ret2=>{
+		inst = ret2.instance;
+		mod = ret2.module;
+		exp = inst.exports;
+log(exp);
+		run();
+	},
+	e=>{
+		err(e);
+	})
+});//»
+
+},//»
+'walt':function(){//«
+	var fname = args.shift();
+	let mod;
+	if (!fname) return cberr("Need filename!");
+	fs.getmod('util.walt',ret=>{
+		if (!ret&&ret.Walt) return cberr("No walt module!");
+
+mod = ret.Walt
+//cbok();
+//return;
+//		let mod = ret.getmod();
+		arg2con(fname,ret=>{
+			if (!ret) return cberr(fname+": not found");
+			let out;
+try {
+	out = mod.compile(ret);
+}
+catch(e){
+log(e);
+cberr(e.message);
+return;
+}
+			if (!out) return cberr("No compiler output!");
+			let blob = new Blob([out.buffer()],{type:"application/wasm"});
+			woutobj(blob);
+			cbok();
+		});
+	});
+},//»
+'wast2wasm':function(){//«
+	var fname = args.shift();
+	if (!fname) return cberr("Need filename!");
+	fs.getmod('util.libwabt',ret=>{
+		if (!ret) return cberr("NOLIBWABT");
+		var mod = ret.getmod();
+		arg2con(fname,ret=>{
+			if (!ret) return cberr(fname+": not found");
+			var script, blob;
+			try {
+				script = mod.wasm.parseWast('filename.wast', ret);
+				script.resolveNames();
+				script.validate();
+				blob = new Blob([script.toBinary({log: true}).buffer],{type:"application/wasm"});
+			}
+			catch(e){
+				cberr(e.message);
+				return;
+			}
+			woutobj(blob);
+			cbok();
+		});
+	});
+},//»
+'runwasm':function(){//«
+	var fname = args.shift();
+	if (!fname) return cberr("Need filename");
+	var funcname = args.shift();
+	if (!funcname) return cberr("Need function name");
+	var badarg = ()=>{
+		cberr("Expected JSON parseable boolean, int, float, or null  arguments!");
+	}
+	fs.get_fs_data(normpath(fname),ret=>{
+		if (!ret) return cberr(fname+": not found");
+		WebAssembly.instantiate(ret).then(binmod=> { 
+			var exports = binmod.instance.exports
+			var func = exports[funcname];
+			if (!func) return cberr(funcname+": not a wasm function");
+			var outargs=[];
+			var ret;
+			for (let str of args) {
+				let arg;
+				try {
+					arg = JSON.parse(str);
+				}
+				catch(e){
+					return badarg();
+				}
+				if (!(isbool(arg)||isnum(arg)||isnull(arg))) return badarg();
+				outargs.push(arg);
+			}
+			try {
+				ret = func.apply(null, args)
+			}
+			catch(e) {
+				cberr(e.message);
+				return;
+			}
+
+			if (!isnull(ret)) ret+="";
+			cbok(ret);
+		}).catch(e=>{
+			cberr(e.message);
+		})
+	});
+},//»
+
+/*
+'parsewasm':function(){//«
+var _=this.exports;
+
+let sections = ["Type","Import","Function", "Table", "Memory","Global", "Export", "Start", "Element", "Code", "Data"];
+//0 indicating a Function import or definition
+//1 indicating a Table import or definition
+//2 indicating a Memory import or definition
+//3 indicating a Global import or definition
+let external_kinds = ["Function", "Table", "Memory", "Global"];
+
+var cberr = _.cberr;
+var cbok = _.cbok;
+var wout = _.wout;
+var werr = _.werr;
+
+
+var sws = _.failopts(args,{SHORT:{e:1,i:1}});
+if (!sws) return;
+var fname = args.shift();
+var dump_imports = sws.i;
+var dump_exports = sws.e;
+
+var dump_sections = true;
+if (dump_imports||dump_exports) dump_sections = false;
+
+//«
+//const TYPE=1;	//Function signature declarations
+//const IMPORT=2;	//Import declarations
+//const FUNCTION=3;	//Function declarations
+//const TABLE=4;	//Indirect function table and other tables
+//const MEMORY=5;	//Memory attributes
+//const GLOBAL=6;	//Global declarations
+//const EXPORT=7;	//Exports
+//const START=8;	//Start function declaration
+//const ELEMENT=9;	//Elements section
+//const CODE=10;	//Function bodies (code)
+//const DATA=11;	//Data segments
+//»
+let leb = LEB128();
+let getnum = leb.decodeUInt32;
+if (!fname) return cberr("Need filename!");
+
+_.atbc(fname, wasm=>{//«
+if (!wasm) return cberr("Got no wasm!");
+_=wasm;
+//log(wasm);
+
+if (_.length < 8) return cberr("Invalid length (need at least 8 bytes)");
+
+if (!(_[0]==0&&_[1]==97&&_[2]==115&&_[3]==109)) return cberr("Invalid magic: need '\\0asm'!");
+if (!(_[4]==1&&_[5]==0&&_[6]==0&&_[7]==0)) return cberr("Looking for version 1!");
+let len = _.length;
+let cur = 8;
+
+let ret;
+let iter = 0;
+while (cur < len){//«
+	iter++;
+	if (iter > 20) return cberr("INFINITE LOOP!!!");
+	let which = _[cur];
+	if (which==0) return cberr("Not (yet) handling custom sections!");
+	else if (which>11) return cberr("Section number > 11: " + which);
+	cur++;
+	ret = getnum(_, cur);
+	if (!Number.isInteger(ret.value)) return cberr("Non integer value returned: " + ret.value);
+	let hex = (cur-1).toString(16);
+	if (hex.length%2) hex = "0"+hex;
+	if (dump_sections) {
+		wout("Section#"+which+" @ 0x"+hex+": " + ret.value + " bytes ("+sections[which-1]+")");
+		cur=ret.nextIndex;
+		cur+=ret.value;
+	}
+	else {
+		cur=ret.nextIndex;
+		let nextcur = cur + ret.value;
+		if (which==2 && dump_imports) {//«
+//log("GOTO: " + (ret.value + ret.nextIndex));
+			wout("Found imports:");
+			ret = getnum(_,cur);
+			let n = ret.value;
+//log(n, which, dump_imports);
+			cur = ret.nextIndex;
+			let j,len;
+			let modstr, namestr
+			for (let i=0; i < n; i++){//«
+				ret = getnum(_, cur);
+				len = ret.value;
+				cur = ret.nextIndex;
+				modstr = "";
+				for (j=0; j < len; j++) modstr+=String.fromCharCode(_[cur+j]);
+				cur+=j;
+				ret = getnum(_, cur);
+				len = ret.value;
+				cur = ret.nextIndex;
+				namestr = "";
+				for (j=0; j < len; j++) namestr+=String.fromCharCode(_[cur+j]);
+				cur+=j;
+				let kindval = _[cur];
+				let kind = external_kinds[kindval];
+				if (!kind) return cberr("Invalid external kind at: " + cur);
+				if (kindval==0) {//«
+					wout(i+") "+modstr+"->"+namestr + " [" + kind+"("+(_[++cur])+")]");
+					cur++;
+				}//»
+				else if (kindval==3) {//Global«
+
+					//-0x01 (i.e., the byte 0x7f)	i32 ==> 127
+					//-0x02 (i.e., the byte 0x7e)	i64 ==> 126
+					//-0x03 (i.e., the byte 0x7d)	f32
+					//-0x04 (i.e., the byte 0x7c)	f64
+					//let which = 
+					//const i32 = "";
+					cur++;
+					let numval = _[cur];
+					let numtype;
+					switch(numval){
+						case 0x7f: numtype = "i32";
+						case 0x7e: numtype = "i64";
+						case 0x7d: numtype = "f32";
+						case 0x7c: numtype = "f64";
+					}
+					if (!numtype) return cberr("Unkown value type at: " + cur);
+					cur++;
+					let mutval = _[cur];
+					if (!(mutval==1||mutval==0)) return cberr("Uknown mutability at: " + cur);
+					let mutstr = mutval==0 ? "const":"var";
+					wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+numtype+","+mutstr+")]");
+					cur++;
+				}//»
+				else if (kindval==2) {//Memory«
+					cur++;
+					let if_max = _[cur];
+					cur++;
+					ret = getnum(_, cur);
+					let initial_mem = ret.value;
+					let max_mem;
+					cur = ret.nextIndex;
+					if (if_max){
+						ret = getnum(_, cur);
+						max_mem = ret.value;
+						cur = ret.nextIndex;
+						wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_mem+"->"+max_mem+")]");
+					}
+					else wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_mem+")]");
+				}//»
+				else if (kindval==1) {//Table«
+//-0x10 (i.e., the byte 0x70)	anyfunc
+//-0x20 (i.e., the byte 0x60)	func
+					cur++;
+					let elem_type = _[cur];
+					if (elem_type!=0x70) return cberr("Unknown elem_type != 'anyfunc!'");
+					cur++;
+					let if_max = _[cur];
+					cur++;
+					ret = getnum(_, cur);
+					let initial_sz = ret.value;
+					let max_sz;
+					cur = ret.nextIndex;
+					if (if_max){
+						ret = getnum(_, cur);
+						max_sz = ret.value;
+						cur = ret.nextIndex;
+						wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_sz+"->"+max_sz+")]");
+					}
+					else wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_sz+")]");
+				}//»
+			}//»
+			cur = nextcur;
+		}//»
+		else if (which==7 && dump_exports) {
+log("EXPORTS!");
+			cur=ret.nextIndex;
+			cur+=ret.value;
+		}
+		else {
+			cur=ret.nextIndex;
+			cur+=ret.value;
+		}
+	}
+}//»
+
+
+cbok();
+
+
+});//»
+
+},//»
+'wasmio':function(){//«
+
+	var _=this.exports;
+
+	var which = args.shift();
+	if (!which) return _.cberr("Nothing");
+
+	let wasmname = which; //brum==stdin, sloom==example.txt
+	let cur_out_str="";
+	let cur_err_str="";
+	let Module, FS;
+
+	let file_name = "example.txt";
+	let file_str = "Hello\necho all\n\n\nthese lines\n\nback at me???\nHAR.\n";
+	var intarr = util.text_to_bytes(file_str, true);
+	let stdin_iter=0;
+	let lastch;
+	let io = {//«
+		putchout:code=>{
+			if (code==10){
+				if (lastch === 10) _.respbr();
+				else _.wout(cur_out_str);
+				cur_out_str="";
+			}
+			else cur_out_str+=String.fromCharCode(code);
+			lastch = code;
+		},
+		putcherr:code=>{
+			if (code==10){
+				_.werr(cur_err_str);
+				cur_err_str="";
+			}
+			cur_err_str+=String.fromCharCode(code);
+		},
+		getchin:()=>{
+			if (stdin_iter==file_str.length) return null;
+			let ch = file_str[stdin_iter++];
+			return ch.charCodeAt();
+		}
+	}//»
+	function set_file(){//«
+		var node = FS.createFile(FS.root, file_name, {isDevice: false}, true, true);
+		node.contents = intarr;
+		node.usedBytes = file_str.length;
+	}//»
+	fs.getmod("wasmio",(wasmmod)=>{//«
+		if (!wasmmod) return _.cberr("No wasm module!");
+		Core.get_wasm(wasmname,(wasmret)=>{
+			//log(wasmret);
+			if (!wasmret) return _.cberr("No "+wasmname+".wasm!");
+			wasmmod.WASMIO({wasmBinary:wasmret}, null, 
+			{
+				LOAD: (ret, errmess)=>{
+					if (!ret) return _.cberr(errmess);
+					Module = ret;
+				},
+				EXIT:retval=>{
+					if (retval===0) _.cbok();
+					else _.cberr();
+				},
+				PRERUN:fs=>{
+					FS = fs;
+					set_file();
+				}
+			} , {IO:io, TABLESIZE: 505, STATICBUMP: 23936});
+		});
+	});//»
+
+},//»
+*/
+
+}//»
+if (!comarg) return Object.keys(COMS);
+
 //Imports«
 
 var Desk = Core.Desk;
@@ -411,10 +1233,10 @@ var isint = _.isint;
 
 var fs = globals.fs;
 
-//const shell_exports = this._;
+//const Shell = this._;
 const{
 normpath,cberr,cbok,wout,werr,failopts,atbc,woutobj,arg2con
-}=shell_exports;
+}=Shell;
 
 //»
 const okint = val=>{//«
@@ -453,7 +1275,7 @@ const OP_GET_NUM_BY_NAME= 19;
 //»
 
 function WasmParser(buf){//«
-let shell_obj = shell_exports;
+let shell_obj = Shell;
 //log(shell_obj);
 let term = shell_obj.termobj;
 let stdout = shell_obj.wout;
@@ -1808,831 +2630,8 @@ log(await (Core.api.toStr(bytes)));
 
 }//»
 
-const coms = {//«
 
-'parsewasm':function(){//«
-
-let sws = failopts(args,{
-	LONG:{
-		nglbimps:1,
-		nglbexps:1,
-		nfncimps: 1,
-		nfncexps: 1,
-		elements: 1,
-		start: 1,
-		type:1,
-		toplevel:1,
-		imports:1,
-		exports:1,
-		decls: 1,
-		globals: 1,
-//		code: 3,
-		data:1,
-		fmt:3,
-//		funcnumtoname:3,
-		funcnamebyindex:3,
-		indexbyfuncname:3,
-		codebyname:3,
-		codebyindex:3,
-		sigbyname:3,
-		sigbyindex:3
-	}
-});
-if (!sws) return;
-
-let fname = args.shift();
-let ret;
-let dofuncs = [];
-atbc(fname, wasm=>{//«
-if (!wasm) return cberr("Got no wasm!");
-
-let parser = new WasmParser(wasm);
-//nglbimps:1, nfncimps: 1, nfncexps: 1, nglbexps:1,
-let getnum;
-let funcnum = null;
-let funcfmt = "text";
-if (sws.fmt){//«
-	if (sws.fmt.match(/^t(ext)?$/)){
-		funcfmt = "text";
-	}
-	else if (sws.fmt.match(/^b(in(ary)?)?/)){
-		funcfmt = "bin";
-	}
-	else return cberr(sws.fmt+": invalid function format");
-}//»
-
-if (sws.sigbyindex) {//«
-	let str = sws.sigbyindex;
-	if (!okint(str)) return cberr(str+": invalid function number");
-	let index = parseInt(str);
-	dofuncs.push(()=>{
-		let gotret;
-		let outarr = [];
-		let doit=()=>{return parser.dump_types({OP:OP_GET_SIG_BY_NUM, VAL: gotret});}
-		gotret = parser.dump_imports({OP: OP_GET_TYPE_BY_NUM, WHICH: FUNCTION, VAL: index, OUT: outarr}, true);
-		if (!(gotret===null)) return doit();
-		gotret = parser.dump_decls({OP: OP_GET_DECL_TYPE, VAL: (index-outarr[0])});
-		if (gotret===null){
-//cerr("WHOA! DIDN'T GET A DECL WITH A VALUE=="+(index-num_imports)+"!!!");
-			return;
-		}
-		return doit();
-	});
-}//»
-if (sws.sigbyname) {//«
-	dofuncs.push(()=>{
-		let outarr = [];
-		let doit=()=>{return parser.dump_types({OP:OP_GET_SIG_BY_NUM, VAL: gotret});}
-		let gotret = parser.dump_imports({OP: OP_GET_TYPE_BY_NAME, WHICH: FUNCTION, VAL: sws.sigbyname, OUT: outarr}, true);
-		if (!(gotret===null)) return doit();
-		let index = parser.dump_exports({OP: OP_MATCH_NAME, WHICH: FUNCTION, VAL: sws.sigbyname}, true);
-		if (index == null) return false;
-		gotret = parser.dump_decls({OP: OP_GET_DECL_TYPE, VAL: (index-outarr[0])});
-		if (gotret===null){
-cerr("WHOA! DIDN'T GET A DECL WITH A VALUE=="+(index-outarr[0])+"!!!");
-			return;
-		}
-		return doit();
-	});
-}//»
-if (sws.codebyname) {//«
-	dofuncs.push(()=>{
-		let index = parser.dump_exports({OP: OP_MATCH_NAME, WHICH: FUNCTION, VAL: sws.codebyname})
-		if (index===null) return false;
-		let num_imports = parser.dump_imports({OP: OP_GET_COUNT, WHICH: FUNCTION}, true);
-		let body_num = index - num_imports;
-		return parser.dump_code(body_num, funcfmt);
-	});
-}//»
-if (sws.codebyindex) {//«
-	let str = sws.codebyindex;
-	if (!okint(str)) return cberr(str+": invalid function number");
-	let num = parseInt(str);
-	dofuncs.push(()=>{
-		let num_imports = parser.dump_imports({OP: OP_GET_COUNT, WHICH: FUNCTION}, true);
-		let body_num = num - num_imports;
-//cwarn("Getting body number: " + body_num);
-		return parser.dump_code(body_num, funcfmt);
-	});
-}//»
-if (sws.funcnamebyindex) {//«
-	let str = sws.funcnamebyindex;
-	if (!okint(str)) return cberr(str+": invalid function number");
-	let num = parseInt(str);
-	dofuncs.push(()=>{
-//cwarn("HI");
-		let gotret = parser.dump_imports({OP: OP_GET_NAME_AT_NUM, WHICH: FUNCTION, VAL: num}, true);
-//log(gotret);
-		if (util.isstr(gotret)) {
-			wout(gotret);
-			return true;
-		}
-		gotret = parser.dump_exports({OP: OP_GET_NAME_AT_NUM, WHICH: FUNCTION, VAL: num}, true);
-		if (util.isstr(gotret)) {
-			wout(gotret);
-			return true;
-		}
-		return false;
-	});
-}//»
-if (sws.indexbyfuncname) {//«
-	dofuncs.push(()=>{
-		let gotret = parser.dump_imports({OP: OP_GET_NUM_BY_NAME, WHICH: FUNCTION, VAL: sws.indexbyfuncname}, true);
-		if (gotret!==null) {
-			wout(""+gotret);
-			return true;
-		}
-		gotret = parser.dump_exports({OP: OP_MATCH_NAME, WHICH: FUNCTION, VAL: sws.indexbyfuncname}, true);
-		if (gotret!==null) {
-			wout(""+gotret);
-			return true;
-		}
-
-//		if (util.isstr(gotret)) {
-//			wout(gotret);
-//			return true;
-//		}
-		return false;
-	});
-}//»
-if (sws.nglbimps) dofuncs.push(()=>{return parser.dump_imports({OP: OP_GET_COUNT, WHICH: GLOBAL});});
-if (sws.nfncimps) dofuncs.push(()=>{return parser.dump_imports({OP: OP_GET_COUNT, WHICH: FUNCTION});});
-if (sws.nglbexps) dofuncs.push(()=>{return parser.dump_exports({OP: OP_GET_COUNT, WHICH: GLOBAL});});
-if (sws.nfncexps) dofuncs.push(()=>{return parser.dump_exports({OP: OP_GET_COUNT, WHICH: FUNCTION});});
-if (sws.toplevel) dofuncs.push(parser.dump_toplevel);
-if (sws.imports) dofuncs.push(parser.dump_imports);
-if (sws.exports) dofuncs.push(parser.dump_exports);
-if (sws.data) dofuncs.push(parser.dump_data);
-if (sws.type) dofuncs.push(parser.dump_types);
-if (sws.decls) dofuncs.push(parser.dump_decls);
-if (sws.globals) dofuncs.push(parser.dump_globals);
-if (sws.start) dofuncs.push(parser.dump_start);
-if (sws.elements) dofuncs.push(parser.dump_elements);
-
-if (!dofuncs.length) return cberr("Nothing to do!");
-
-for (let func of dofuncs){
-	try{
-		ret = func();
-	}
-	catch(e){
-		cerr(e);
-		return cberr(e.message);
-	}
-	if (!ret) return cberr("There was an error");
+COMS[comarg](args);
 
 }
-
-cbok();
-
-});//»
-
-},//»
-'lebdec':function(){//«
-	if (!args.length) return cbok();
-	let arr = [];
-	let didbreak = false;
-	let argsin=[];
-	for (let str of args) argsin = argsin.concat(str.split(/ +/));
-
-	for (let n  of argsin) {
-		let num = parseInt(n);
-		if (num > 255) return cberr("Illegal byte value: " + num);
-		else if (num < 0) return cberr("Got negative value: " + num);
-		let binstr = num.toString(2);
-		if (binstr.length < 8){
-			arr.unshift(binstr);
-			didbreak = true;
-			break;
-		}
-		arr.unshift(binstr.slice(1));
-	}
-	if (!didbreak) return cberr("Invalid byte sequence");
-	wout(parseInt(arr.join(""), 2)+"");
-	cbok();
-
-},//»
-'lebenc':function(){//«
-	if (!args.length) return cbok();
-	if (args.length > 1) return _.suse("number");
-	let num = parseInt(args[0]);
-	let bits = num.toString(2);
-	let arr = [];
-	while (true){
-		if (bits.length <= 7){
-			arr.push(parseInt(bits,2));
-			break;
-		}
-		let end = bits.slice(bits.length-7);
-		arr.push(parseInt("1"+end,2));
-		bits = bits.slice(0, bits.length-7);
-	}
-	let hexout = "";
-	for (let n of arr) {
-		let s = n.toString(16);
-		if (s.length==1) s = "0"+s;
-		hexout += "0x"+s+" ";
-	}
-	wout(hexout.replace(/ $/,""));
-	cbok();
-},//»
-'cheezwasm':function(){//«
-
-var fname = args.shift();
-if (!fname) return cberr("Need filename!");
-let mainfunc = args.shift();
-if (!mainfunc) {
-	mainfunc = "main";
-}
-wout("Using main function: " + mainfunc);
-let func;
-let run = _=>{
-	let got;
-	wout("Calling: " + mainfunc + " with " + args.length + " arguments!");
-	if (args.length) {
-		for (let i=0; i < args.length; i++) args[i] = parseInt(args[i]);
-		 got = func(...args);
-	}
-	else got = func();
-	wout("Returned: " + got);
-	cbok();
-
-}
-
-
-let info = {//«
-	env: {//«
-		log: str=>{console.log(str)}
-	}//»
-};//»
-
-_.atbc(fname, wasm=>{//«
-	if (!wasm) return cberr("Got no wasm!");
-
-	WebAssembly.instantiate(wasm, info).then(ret=>{
-		let inst = ret.instance;
-		let	mod = ret.module;
-		let	exp = inst.exports;
-		func = exp[mainfunc];
-		if (!func) return cberr("Not an exported function: " + mainfunc);
-		run();
-	}).catch(e=>{
-log(e);
-		cberr(e.message);
-	})
-
-});//»
-
-},//»
-'ezwasm':function(){//«
-
-/*HOWTO IMPORT A JS FUNCTION INTO C/C++«
-
-*****************     program.c   *************************
-
-(pound) include <Math.h>
-
-void consoleLog (float num);
-
-float getSqrt (float num) {
-  consoleLog(num);
-  return sqrt(num);
-}
-
-
-***********************************************************
-
-$ emcc -s "EXPORTED_FUNCTIONS=['_getSqrt']" -s ERROR_ON_UNDEFINED_SYMBOLS=0 program.c -o modname.js
-
-Need to grep these variables from modname.js:
-
-var STATIC_BUMP = X;
-
-Module['wasmTableSize'] = Y;
-Module['wasmMaxTableSize'] = Z;
-
-»*/
-
-//Standard imports«
-var err = cberr;
-var ok = cbok;
-var out = wout;
-//»
-
-//Com init«
-var which = args.shift();
-if (!which) return cberr("No arg!");
-
-let numstr = args.shift();
-let num=100;
-if (numstr){
-	num = util.strnum(numstr);
-	if (!isint(num)) return err("Invalid number: " + numstr);
-	if (num <= 0) return err("Want a positive number");
-}
-//»
-
-//Funcs«
-
-let abort = mess=>{throw mess;}
-let nogrow = _=>{abort("Cannot grow memory!");}
-let invfunc = _=>{abort("Invalid function called!");}
-let noimpl = name=>{abort("Not implenthing: " + name);}
-let noop = _=>{}
-
-function assert(condition, text) {if (!condition) {abort('Assertion failed: ' + text);}}
-
-function staticAlloc(size) {//«
-  assert(!staticSealed);
-  var ret = STATICTOP;
-  STATICTOP = (STATICTOP + size + 15) & -16;
-  assert(STATICTOP < TOTAL_MEMORY, 'not enough memory for static allocation - increase TOTAL_MEMORY');
-  return ret;
-}//»
-function alignMemory(size, factor) {//«
-  if (!factor) factor = STACK_ALIGN; // stack alignment (16-byte) by default
-  var ret = size = Math.ceil(size / factor) * factor;
-  return ret;
-}//»
-
-//»
-
-//Init«
-const TOTAL_MEMORY = 16*1024*1024;
-const TOTAL_STACK = 5242880;
-const WASM_PAGE_SIZE = 65536;
-
-const STATIC_BUMP = 1536;
-const wasmTableSize = 0;
-const wasmMaxTableSize = 0;
-
-var TABLE_SIZE = wasmTableSize;
-var MAX_TABLE_SIZE = wasmMaxTableSize;
-
-var GLOBAL_BASE = 1024;
-var STACK_ALIGN = 16;
-var STATIC_BASE, STATICTOP, staticSealed;
-var STACK_BASE, STACKTOP, STACK_MAX;
-var DYNAMIC_BASE, DYNAMICTOP_PTR;
-var staticSealed = false;
-var tempDoublePtr;
-
-STATIC_BASE = STATICTOP = STACK_BASE = STACKTOP = STACK_MAX = DYNAMIC_BASE = DYNAMICTOP_PTR = 0;
-STATICTOP = STATIC_BASE + STATIC_BUMP;
-
-tempDoublePtr = STATICTOP;STATICTOP += 16;
-
-STATIC_BASE = GLOBAL_BASE;
-DYNAMICTOP_PTR = staticAlloc(4);
-STACK_BASE = STACKTOP = alignMemory(STATICTOP);
-STACK_MAX = STACK_BASE + TOTAL_STACK;
-DYNAMIC_BASE = alignMemory(STACK_MAX);
-assert(tempDoublePtr % 8 == 0);
-
-let memory = new WebAssembly.Memory({
-	'initial': TOTAL_MEMORY / WASM_PAGE_SIZE,
-	'maximum': TOTAL_MEMORY / WASM_PAGE_SIZE 
-});
-let table = new WebAssembly.Table({
-	'initial': TABLE_SIZE,
-	'maximum': MAX_TABLE_SIZE,
-	'element': 'anyfunc'
-});
-
-//log(memory.buffer);
-
-let info = {//«
-
-	env: {//«
-		memory: memory,
-		table: table,
-		_consoleLog: str=>{console.log(str)},
-		enlargeMemory: _=>{nogrow();},
-		abortStackOverflow: _=>{abort("Stack Overflow")},
-		abortOnCannotGrowMemory: nogrow,
-		getTotalMemory: _=>{return TOTAL_MEMORY},
-		nullFunc_ii: _=>{invfunc()},
-		nullFunc_iiii: _=>{invfunc()},
-		___setErrNo: _=>{noimpl("setErrNo")},
-		___syscall140: _=>{noimpl("___syscall140")},
-		___syscall146: _=>{noimpl("___syscall146")},
-		___syscall54: _=>{noimpl("___syscall54")},
-		___syscall6: _=>{noimpl("___syscall6")},
-		_emscripten_memcpy_big: _=>{noimpl("_emscripten_memcpy_big")},
-//		: _=>{noimpl("")},
-//		: _=>{noimpl("")},
-		___lock: noop,
-		___unlock: noop,
-		memoryBase: STATIC_BASE,
-		tableBase: 0,
-		DYNAMICTOP_PTR: DYNAMICTOP_PTR,
-		tempDoublePtr: tempDoublePtr,
-		STACKTOP: STACKTOP, 
-		STACK_MAX: STACK_MAX
-	},//»
-	global:{//«
-      'NaN': NaN,
-      'Infinity': Infinity
-	}//»
-
-};//»
-
-let mod, inst, exp;
-//In HEAPU8, you have 16,777,216 8 bit numbers with which to fucking DO ANYTHING!!!
-let HEAPU8 = new Uint8Array(memory.buffer);
-
-
-//»
-
-let run=_=>{//«
-//log(mem);
-	let ret;
-	out("Getting the square root of: " + num);
-	ret = exp._getSqrt(num);
-	out("Returned: " + ret);
-	ok();
-}//»
-
-Core.get_wasm(which,ret=>{//«
-	if (!ret) return err("No wasm: " + which);
-	WebAssembly.instantiate(ret, info)
-	.then(ret2=>{
-		inst = ret2.instance;
-		mod = ret2.module;
-		exp = inst.exports;
-log(exp);
-		run();
-	},
-	e=>{
-		err(e);
-	})
-});//»
-
-},//»
-'walt':function(){//«
-	var fname = args.shift();
-	let mod;
-	if (!fname) return cberr("Need filename!");
-	fs.getmod('util.walt',ret=>{
-		if (!ret&&ret.Walt) return cberr("No walt module!");
-
-mod = ret.Walt
-//cbok();
-//return;
-//		let mod = ret.getmod();
-		arg2con(fname,ret=>{
-			if (!ret) return cberr(fname+": not found");
-			let out;
-try {
-	out = mod.compile(ret);
-}
-catch(e){
-log(e);
-cberr(e.message);
-return;
-}
-			if (!out) return cberr("No compiler output!");
-			let blob = new Blob([out.buffer()],{type:"application/wasm"});
-			woutobj(blob);
-			cbok();
-		});
-	});
-},//»
-'wast2wasm':function(){//«
-	var fname = args.shift();
-	if (!fname) return cberr("Need filename!");
-	fs.getmod('util.libwabt',ret=>{
-		if (!ret) return cberr("NOLIBWABT");
-		var mod = ret.getmod();
-		arg2con(fname,ret=>{
-			if (!ret) return cberr(fname+": not found");
-			var script, blob;
-			try {
-				script = mod.wasm.parseWast('filename.wast', ret);
-				script.resolveNames();
-				script.validate();
-				blob = new Blob([script.toBinary({log: true}).buffer],{type:"application/wasm"});
-			}
-			catch(e){
-				cberr(e.message);
-				return;
-			}
-			woutobj(blob);
-			cbok();
-		});
-	});
-},//»
-'runwasm':function(){//«
-	var fname = args.shift();
-	if (!fname) return cberr("Need filename");
-	var funcname = args.shift();
-	if (!funcname) return cberr("Need function name");
-	var badarg = ()=>{
-		cberr("Expected JSON parseable boolean, int, float, or null  arguments!");
-	}
-	fs.get_fs_data(normpath(fname),ret=>{
-		if (!ret) return cberr(fname+": not found");
-		WebAssembly.instantiate(ret).then(binmod=> { 
-			var exports = binmod.instance.exports
-			var func = exports[funcname];
-			if (!func) return cberr(funcname+": not a wasm function");
-			var outargs=[];
-			var ret;
-			for (let str of args) {
-				let arg;
-				try {
-					arg = JSON.parse(str);
-				}
-				catch(e){
-					return badarg();
-				}
-				if (!(isbool(arg)||isnum(arg)||isnull(arg))) return badarg();
-				outargs.push(arg);
-			}
-			try {
-				ret = func.apply(null, args)
-			}
-			catch(e) {
-				cberr(e.message);
-				return;
-			}
-
-			if (!isnull(ret)) ret+="";
-			cbok(ret);
-		}).catch(e=>{
-			cberr(e.message);
-		})
-	});
-},//»
-
-/*
-'parsewasm':function(){//«
-var _=this.exports;
-
-let sections = ["Type","Import","Function", "Table", "Memory","Global", "Export", "Start", "Element", "Code", "Data"];
-//0 indicating a Function import or definition
-//1 indicating a Table import or definition
-//2 indicating a Memory import or definition
-//3 indicating a Global import or definition
-let external_kinds = ["Function", "Table", "Memory", "Global"];
-
-var cberr = _.cberr;
-var cbok = _.cbok;
-var wout = _.wout;
-var werr = _.werr;
-
-
-var sws = _.failopts(args,{SHORT:{e:1,i:1}});
-if (!sws) return;
-var fname = args.shift();
-var dump_imports = sws.i;
-var dump_exports = sws.e;
-
-var dump_sections = true;
-if (dump_imports||dump_exports) dump_sections = false;
-
-//«
-//const TYPE=1;	//Function signature declarations
-//const IMPORT=2;	//Import declarations
-//const FUNCTION=3;	//Function declarations
-//const TABLE=4;	//Indirect function table and other tables
-//const MEMORY=5;	//Memory attributes
-//const GLOBAL=6;	//Global declarations
-//const EXPORT=7;	//Exports
-//const START=8;	//Start function declaration
-//const ELEMENT=9;	//Elements section
-//const CODE=10;	//Function bodies (code)
-//const DATA=11;	//Data segments
-//»
-let leb = LEB128();
-let getnum = leb.decodeUInt32;
-if (!fname) return cberr("Need filename!");
-
-_.atbc(fname, wasm=>{//«
-if (!wasm) return cberr("Got no wasm!");
-_=wasm;
-//log(wasm);
-
-if (_.length < 8) return cberr("Invalid length (need at least 8 bytes)");
-
-if (!(_[0]==0&&_[1]==97&&_[2]==115&&_[3]==109)) return cberr("Invalid magic: need '\\0asm'!");
-if (!(_[4]==1&&_[5]==0&&_[6]==0&&_[7]==0)) return cberr("Looking for version 1!");
-let len = _.length;
-let cur = 8;
-
-let ret;
-let iter = 0;
-while (cur < len){//«
-	iter++;
-	if (iter > 20) return cberr("INFINITE LOOP!!!");
-	let which = _[cur];
-	if (which==0) return cberr("Not (yet) handling custom sections!");
-	else if (which>11) return cberr("Section number > 11: " + which);
-	cur++;
-	ret = getnum(_, cur);
-	if (!Number.isInteger(ret.value)) return cberr("Non integer value returned: " + ret.value);
-	let hex = (cur-1).toString(16);
-	if (hex.length%2) hex = "0"+hex;
-	if (dump_sections) {
-		wout("Section#"+which+" @ 0x"+hex+": " + ret.value + " bytes ("+sections[which-1]+")");
-		cur=ret.nextIndex;
-		cur+=ret.value;
-	}
-	else {
-		cur=ret.nextIndex;
-		let nextcur = cur + ret.value;
-		if (which==2 && dump_imports) {//«
-//log("GOTO: " + (ret.value + ret.nextIndex));
-			wout("Found imports:");
-			ret = getnum(_,cur);
-			let n = ret.value;
-//log(n, which, dump_imports);
-			cur = ret.nextIndex;
-			let j,len;
-			let modstr, namestr
-			for (let i=0; i < n; i++){//«
-				ret = getnum(_, cur);
-				len = ret.value;
-				cur = ret.nextIndex;
-				modstr = "";
-				for (j=0; j < len; j++) modstr+=String.fromCharCode(_[cur+j]);
-				cur+=j;
-				ret = getnum(_, cur);
-				len = ret.value;
-				cur = ret.nextIndex;
-				namestr = "";
-				for (j=0; j < len; j++) namestr+=String.fromCharCode(_[cur+j]);
-				cur+=j;
-				let kindval = _[cur];
-				let kind = external_kinds[kindval];
-				if (!kind) return cberr("Invalid external kind at: " + cur);
-				if (kindval==0) {//«
-					wout(i+") "+modstr+"->"+namestr + " [" + kind+"("+(_[++cur])+")]");
-					cur++;
-				}//»
-				else if (kindval==3) {//Global«
-
-					//-0x01 (i.e., the byte 0x7f)	i32 ==> 127
-					//-0x02 (i.e., the byte 0x7e)	i64 ==> 126
-					//-0x03 (i.e., the byte 0x7d)	f32
-					//-0x04 (i.e., the byte 0x7c)	f64
-					//let which = 
-					//const i32 = "";
-					cur++;
-					let numval = _[cur];
-					let numtype;
-					switch(numval){
-						case 0x7f: numtype = "i32";
-						case 0x7e: numtype = "i64";
-						case 0x7d: numtype = "f32";
-						case 0x7c: numtype = "f64";
-					}
-					if (!numtype) return cberr("Unkown value type at: " + cur);
-					cur++;
-					let mutval = _[cur];
-					if (!(mutval==1||mutval==0)) return cberr("Uknown mutability at: " + cur);
-					let mutstr = mutval==0 ? "const":"var";
-					wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+numtype+","+mutstr+")]");
-					cur++;
-				}//»
-				else if (kindval==2) {//Memory«
-					cur++;
-					let if_max = _[cur];
-					cur++;
-					ret = getnum(_, cur);
-					let initial_mem = ret.value;
-					let max_mem;
-					cur = ret.nextIndex;
-					if (if_max){
-						ret = getnum(_, cur);
-						max_mem = ret.value;
-						cur = ret.nextIndex;
-						wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_mem+"->"+max_mem+")]");
-					}
-					else wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_mem+")]");
-				}//»
-				else if (kindval==1) {//Table«
-//-0x10 (i.e., the byte 0x70)	anyfunc
-//-0x20 (i.e., the byte 0x60)	func
-					cur++;
-					let elem_type = _[cur];
-					if (elem_type!=0x70) return cberr("Unknown elem_type != 'anyfunc!'");
-					cur++;
-					let if_max = _[cur];
-					cur++;
-					ret = getnum(_, cur);
-					let initial_sz = ret.value;
-					let max_sz;
-					cur = ret.nextIndex;
-					if (if_max){
-						ret = getnum(_, cur);
-						max_sz = ret.value;
-						cur = ret.nextIndex;
-						wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_sz+"->"+max_sz+")]");
-					}
-					else wout(i+") "+modstr+"->"+namestr + " [" + kind+ "("+initial_sz+")]");
-				}//»
-			}//»
-			cur = nextcur;
-		}//»
-		else if (which==7 && dump_exports) {
-log("EXPORTS!");
-			cur=ret.nextIndex;
-			cur+=ret.value;
-		}
-		else {
-			cur=ret.nextIndex;
-			cur+=ret.value;
-		}
-	}
-}//»
-
-
-cbok();
-
-
-});//»
-
-},//»
-'wasmio':function(){//«
-
-	var _=this.exports;
-
-	var which = args.shift();
-	if (!which) return _.cberr("Nothing");
-
-	let wasmname = which; //brum==stdin, sloom==example.txt
-	let cur_out_str="";
-	let cur_err_str="";
-	let Module, FS;
-
-	let file_name = "example.txt";
-	let file_str = "Hello\necho all\n\n\nthese lines\n\nback at me???\nHAR.\n";
-	var intarr = util.text_to_bytes(file_str, true);
-	let stdin_iter=0;
-	let lastch;
-	let io = {//«
-		putchout:code=>{
-			if (code==10){
-				if (lastch === 10) _.respbr();
-				else _.wout(cur_out_str);
-				cur_out_str="";
-			}
-			else cur_out_str+=String.fromCharCode(code);
-			lastch = code;
-		},
-		putcherr:code=>{
-			if (code==10){
-				_.werr(cur_err_str);
-				cur_err_str="";
-			}
-			cur_err_str+=String.fromCharCode(code);
-		},
-		getchin:()=>{
-			if (stdin_iter==file_str.length) return null;
-			let ch = file_str[stdin_iter++];
-			return ch.charCodeAt();
-		}
-	}//»
-	function set_file(){//«
-		var node = FS.createFile(FS.root, file_name, {isDevice: false}, true, true);
-		node.contents = intarr;
-		node.usedBytes = file_str.length;
-	}//»
-	fs.getmod("wasmio",(wasmmod)=>{//«
-		if (!wasmmod) return _.cberr("No wasm module!");
-		Core.get_wasm(wasmname,(wasmret)=>{
-			//log(wasmret);
-			if (!wasmret) return _.cberr("No "+wasmname+".wasm!");
-			wasmmod.WASMIO({wasmBinary:wasmret}, null, 
-			{
-				LOAD: (ret, errmess)=>{
-					if (!ret) return _.cberr(errmess);
-					Module = ret;
-				},
-				EXIT:retval=>{
-					if (retval===0) _.cbok();
-					else _.cberr();
-				},
-				PRERUN:fs=>{
-					FS = fs;
-					set_file();
-				}
-			} , {IO:io, TABLESIZE: 505, STATICBUMP: 23936});
-		});
-	});//»
-
-},//»
-*/
-
-}//»
-
-const coms_help={//«
-};//»
-
-if (!com) return Object.keys(coms);
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in wasm!");
-if (args===true) return coms[com];
-coms[com](args);
 

@@ -1,49 +1,6 @@
+export const lib = (comarg, args, Core, Shell)=>{
 
-//Imports«
-
-const{NS,xgetobj,globals,log,cwarn,cerr}=Core;
-const{fs,util,widgets,dev_env,dev_mode}=globals;
-const{strnum,isarr,isobj,isstr,mkdv}=util;
-const {
-	readFile,
-	get_reader,
-	fmt,
-	read_stdin,
-	woutobj,
-	woutarr,
-	get_path_of_object,
-	pathToNode,
-	read_file_args_or_stdin,
-	serr,
-	normpath,
-	cur_dir,
-	respbr,
-	get_var_str,
-	refresh,
-	failopts,
-	cbok,
-	cberr,
-	wout,
-	werr,
-	termobj,
-	wrap_line,
-	kill_register,
-	EOF,
-	ENV
-} = shell_exports;
-const fsapi=NS.api.fs;
-const capi = Core.api;
-const fileorin = read_file_args_or_stdin;
-const stdin = read_stdin;
-const NUM = Number.isFinite;
-const MSTATS = "math.stats";
-let stats;
-let mods=NS.mods;;
-
-//»
-
-
-const coms={//«
+const COMS={//«
 
 linreg:async()=>{//«
 
@@ -94,20 +51,55 @@ cbok();
 }//»
 
 }//»
+if (!comarg) return Object.keys(COMS);
 
-const coms_help={//«
-}
+//Imports«
+
+const{NS,xgetobj,globals,log,cwarn,cerr}=Core;
+const{fs,util,widgets,dev_env,dev_mode}=globals;
+const{strnum,isarr,isobj,isstr,mkdv}=util;
+const {
+	readFile,
+	get_reader,
+	fmt,
+	read_stdin,
+	woutobj,
+	woutarr,
+	get_path_of_object,
+	pathToNode,
+	read_file_args_or_stdin,
+	serr,
+	normpath,
+	cur_dir,
+	respbr,
+	get_var_str,
+	refresh,
+	failopts,
+	cbok,
+	cberr,
+	wout,
+	werr,
+	termobj,
+	wrap_line,
+	kill_register,
+	EOF,
+	ENV
+} = Shell;
+const fsapi=NS.api.fs;
+const capi = Core.api;
+const fileorin = read_file_args_or_stdin;
+const stdin = read_stdin;
+const NUM = Number.isFinite;
+const MSTATS = "math.stats";
+let stats;
+let mods=NS.mods;;
+
 //»
 
-if (!com) return Object.keys(coms)
-
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in math.stats!");
-if (args===true) return coms[com];
-coms[com](args);
+COMS[comarg](args);
 
 
-
+}
 
 
 

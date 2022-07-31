@@ -1,4 +1,4 @@
-/*
+/*«
 
 Need positions of:
 - Segment.Size
@@ -33,606 +33,12 @@ been seeing the value as 0x99 (153), which adding 11 to gives 0xa4 (164).
 Doing this quick and dirty little hack stops us from getting pulled too deeply  into 
 binary file/codec insanity and filling up this nice little file with every conceivable
 EBML/Matroska type of thing...
-*/
+»*/
 
-//!!!TODO FIXME!!!
-const INFO_STARTS_AT_BYTE=52;
-
-//Imports«
-
-let _;//«
-let getkeys = Core.api.getKeys;
-_=Core;
-let log = _.log;
-let cwarn = _.cwarn;
-let cerr = _.cerr;
-let xget = _.xget;
-
-let globals = _.globals;
-let audio_ctx = globals.audio.ctx;
-let util = globals.util;
-_ = util;
-let strnum = _.strnum;
-let isnotneg = _.isnotneg;
-let isnum = _.isnum;
-let ispos = function(arg) {return isnum(arg,true);}
-let isneg = function(arg) {return isnum(arg,false);}
-let isid = _.isid;
-let isarr = _.isarr;
-let isobj = _.isobj;
-let isint = _.isint;
-let isstr = _.isstr;
-let isnull = _.isnull;
-let make = _.make;
-let iseof=Core.api.isEOF;
-let fs = globals.fs;
-
-let fs_url = Core.fs_url;
-let aumod=null;
-//»
-
-const {NS}=Core;
-
-const fsapi = NS.api.fs;
-
-fs.getmod("av.audio", modret=>{//«
-	if (!modret) return cerr("No audio module!");
-	aumod = modret;
-}, {STATIC: true});
+export const lib = (comarg, args, Core, Shell)=>{
 
 
-//»
-
-const {//«
-	wclerr,
-	normpath,
-	arg2con,
-	get_reader,
-	refresh,
-	respbr,
-	woutobj,
-	read_stdin,
-	cberr,
-	failopts,
-	cbok,
-	termobj,
-	werr,
-	wout,
-	ptw,
-	read_file_args_or_stdin,
-	set_obj_val
-} = shell_exports;//»
-
-let mkfakeobj=(type, obj, args)=>{//«
-    var type_to_str={
-        auf32: "audioFloat32Data",
-        auenc: "audioEncodedData"
-    }   
-    var argstr="";
-    if (args&&isarr(args)) argstr = args.join(",");
-    obj.toString = ()=>{
-        return "["+(type_to_str[type]||"Object")+" ("+argstr+")]";
-    }   
-    return obj;
-}; //»
-//»
-
-//Funcs«
-
-const TermSnap=function(obj,snapw,snaph,frame_num){//«
-
-const {cols,ed,x,y,w,h,sim,lns}=obj;
-let cury=y;
-let curx=x;
-if (sim) {
-	cury=h-1;
-	curx+=sim.length;
-}
-this.toString=()=>{return JSON.stringify(obj);};
-const to_svg=()=>{//«
-let out = `
-<svg viewBox="0 0 ${snapw} ${snaph}" xmlns="http://www.w3.org/2000/svg">
-<style>
-.s{font: 24px monospace; fill: #e3e3e3; white-space: pre;}
-</style>
-<rect x="0" y="0" width="${snapw}" height="${snaph}" fill="#000" />
-<rect x="${curx*14}" y="${6+cury*26}" width="12" height="24" fill="#00f" />
-`;
-let ypos=26;
-for (let ln of lns){
-	out+=`<text x="0" y="${ypos}" class="s">${ln}</text>\n`;
-	ypos+=26;
-}
-out+="</svg>";
-return out;
-};//»
-this.toSVG=to_svg;
-
-this.toImage=()=>{//«
-	return new Promise((y,n)=>{
-		let img=new Image;
-		img.onload=(e)=>{
-			img._off = obj.off;
-			this.img=img;
-			y(img);
-		};
-img.onerror=()=>{
-console.log(to_svg());
-n(`Bad Unicode in SVG? (frame: ${frame_num})`);
-};
-		img.src=URL.createObjectURL(new Blob([to_svg()], {type: 'image/svg+xml'}));
-	});
-};//»
-
-};//»
-const TermSnapArray=function(vidw, vidh){//«
-
-let arr=[];
-let data;
-let imgs;
-let rafId;
-this.cancel=()=>{
-	if (rafId){
-		cancelAnimationFrame(rafId);
-		rafId=null;
-	}
-};
-this.add=(snap)=>{arr.push(snap);};
-
-this.toString=()=>{//«
-let s = '[';
-for (let o of arr){
-	s+=o.toString()+",";
-}
-return s.replace(/,$/,"")+"]";
-};//»
-
-this.toImages=()=>{//«
-	return new Promise(async(y,n)=>{
-		if (imgs) return y(true);
-try{
-		let proms=[];
-		for (let o of arr) proms.push(o.toImage());
-		await Promise.all(proms);
-		imgs=[];
-		for (let p of proms) imgs.push(await p);
-}
-catch(e){
-n(e);
-return;
-}
-		y(true);
-	});
-};//»
-
-const to_img_video=()=>{//«
-
-return new Promise(async(y,n)=>{//«
-
-try{
-await this.toImages();
-}
-catch(e){
-n(e);
-return;
-}
-let start;
-if (imgs.length==0) {
-	y();
-	return;
-}
-
-let canvas = make('canvas');
-canvas.width=vidw;
-canvas.height=vidh;
-let ctx = canvas.getContext("2d");
-
-let videoStream = canvas.captureStream(5);
-let mediaRecorder = new MediaRecorder(videoStream);
-
-let chunks = [];
-
-mediaRecorder.ondataavailable = function(e) {
-	chunks.push(e.data);
-};
-
-mediaRecorder.onstop = function(e) {
-	let blob = new Blob(chunks, { 'type' : 'video/webm' });
-	y(blob);
-};
-
-const maybe_add_frame=()=>{
-	let next = imgs[0];
-	let off = window.performance.now()-start;
-	if (off >= next._off) {
-
-		let next_1 = imgs[1];
-		while(next_1 && off >= next_1._off){
-			next = next_1;
-			imgs.shift();
-			next_1 = imgs[1];
-		}
-		ctx.drawImage(next,0,0);
-		imgs.shift();
-		if (!imgs.length) {
-			mediaRecorder.stop();
-			return;
-		}
-	}
-	rafId=requestAnimationFrame(maybe_add_frame);
-};
-
-start = window.performance.now();
-mediaRecorder.start();
-ctx.drawImage(imgs.shift(),0,0);
-rafId=requestAnimationFrame(maybe_add_frame);
-
-});//»
-
-
-};//»
-
-this.toImgVideo=to_img_video;
-
-};//»
-
-const ebml_sz=(buf, pos)=>{//«
-	let nb;
-	let b = buf[pos];
-
-//xxxxxxxx
-	if (b&128) {nb = 1; b^=128;}
-	else if (b&64) {nb = 2;b^=64;}
-	else if (b&32) {nb = 3;b^=32;}
-	else if (b&16) {nb = 4;b^=16;}
-	else if (b&8) {nb = 5;b^=8;}
-	else if (b&4) {nb = 6;b^=4;}
-	else if (b&2) {nb = 7;b^=2;}
-	else if (b&1) {nb = 8;b^=1;}
-	let str = "0x"+(b.toString(16));
-	let end = pos+nb;
-	if (end>=buf.length) {
-		cberr(`Invalid ebml size @${pos}`);
-		return false;
-	}
-	let ch; 
-	for (let i=pos+1; i < end; i++) {
-		ch = buf[i].toString(16);
-		if (ch.length==1) ch = "0"+ch;
-		str = str + ch;
-	}   
-	return [parseInt(str), end]
-}//»
-const arr2text=(arr)=>{//«
-	let ret="";
-	for (let i=0; i < arr.length; i++) {
-		let code = arr[i];
-		if (code===0) ret+=" ";
-		else ret+=String.fromCharCode(code);
-	}
-	return ret;
-}//»
-const hex2text=(val)=>{//«
-	let ret="";
-	for (let j=0; j < val.length; j+=2) ret+=String.fromCharCode(parseInt("0x"+val.slice(j,j+2)));
-	return ret;
-}//»
-const hexeq=(bufarg, start, offset, strarg, if_nowarn)=>{//«
-	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
-	var ret = arr.map(x=>{
-		let s = ""+x.toString(16);
-		if (s.length == 1) return "0"+s;
-		return s;
-	});
-	var str = ret.toString().replace(/,/g,"");
-	return (strarg===str);
-}//»
-const gethex=(bufarg, start, offset, if_fmt)=>{//«
-	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
-	var ret = arr.map(x=>{
-		let s = ""+x.toString(16);
-		if (s.length == 1) return "0"+s;
-		return s;
-	});
-	let raw = ret.toString().replace(/,/g,"");
-	let ret_str="";
-	if (!if_fmt) ret_str = raw;
-	else {
-		for (let i=0; i < raw.length; i+=2) ret_str += raw[i]+raw[i+1]+" ";
-	}
-	return ret_str;
-}//»
-const read_1byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 1));}
-const read_2byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 2));}
-const read_4byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 4));}
-const read_8byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 8));}
-//function read_4byte_float(bufarg, offset){return parseFloat("0x"+gethex(bufarg, offset, 4));}
-//»
-
-const WEBM = {//«
-"id":"WEBM",
-"kids": {
-	"1a45dfa3": {
-		"id": "HEADER",
-		"kids": {
-			"4286": {"id": "EBMLVERSION"},
-			"42f7": {"id": "EBMLREADVERSION"},
-			"42f2": {"id": "EBMLMAXIDLENGTH"},
-			"42f3": {"id": "EBMLMAXSIZELENGTH"},
-			"4282": {"id": "DOCTYPE"},
-			"4287": {"id": "DOCTYPEVERSION"},
-			"4285": {"id": "DOCTYPEREADVERSION"}
-		}
-	},
-	"18538067": {
-		"id": "SEGMENT",
-		"kids": {
-			"1549a966": {
-				"id": "INFO",
-				"kids": {
-					"2ad7b1": {"id": "TIMECODESCALE"},
-					"4489": {"id": "DURATION"},
-					"7ba9": {"id": "TITLE"},
-					"5741": {"id": "WRITINGAPP"},
-					"4d80": {"id": "MUXINGAPP"},
-					"4461": {"id": "DATEUTC"},
-					"73a4": {"id": "SEGMENTUID"}
-				}
-			},
-			"1654ae6b": {
-				"id": "TRACKS",
-				"kids": {
-					"ae": {
-						"id": "TRACKENTRY",    //MULT
-						"out":[],
-						"mult": true,
-						"kids": {
-							"d7": {"id": "TRACKNUMBER"},
-							"73c5": {"id": "TRACKUID"},
-							"83": {"id": "TRACKTYPE"},
-							"e0": {
-								"id": "TRACKVIDEO",
-								"kids": {
-									"2383e3": {"id": "VIDEOFRAMERATE"},
-									"54b0": {"id": "VIDEODISPLAYWIDTH"},
-									"54ba": {"id": "VIDEODISPLAYHEIGHT"},
-									"b0": {"id": "VIDEOPIXELWIDTH"},
-									"ba": {"id": "VIDEOPIXELHEIGHT"},
-									"54aa": {"id": "VIDEOPIXELCROPB"},
-									"54bb": {"id": "VIDEOPIXELCROPT"},
-									"54cc": {"id": "VIDEOPIXELCROPL"},
-									"54dd": {"id": "VIDEOPIXELCROPR"},
-									"54b2": {"id": "VIDEODISPLAYUNIT"},
-									"9a": {"id": "VIDEOFLAGINTERLACED"},
-									"9d": {"id": "VIDEOFIELDORDER"},
-									"53b8": {"id": "VIDEOSTEREOMODE"},
-									"53c0": {"id": "VIDEOALPHAMODE"},
-									"54b3": {"id": "VIDEOASPECTRATIO"},
-									"2eb524": {"id": "VIDEOCOLORSPACE"},
-									"55b0": {"id": "VIDEOCOLOR"},
-									"55b1": {"id": "VIDEOCOLORMATRIXCOEFF"},
-									"55b2": {"id": "VIDEOCOLORBITSPERCHANNEL"},
-									"55b3": {"id": "VIDEOCOLORCHROMASUBHORZ"},
-									"55b4": {"id": "VIDEOCOLORCHROMASUBVERT"},
-									"55b5": {"id": "VIDEOCOLORCBSUBHORZ"},
-									"55b6": {"id": "VIDEOCOLORCBSUBVERT"},
-									"55b7": {"id": "VIDEOCOLORCHROMASITINGHORZ"},
-									"55b8": {"id": "VIDEOCOLORCHROMASITINGVERT"},
-									"55b9": {"id": "VIDEOCOLORRANGE"},
-									"55ba": {"id": "VIDEOCOLORTRANSFERCHARACTERISTICS"},
-									"55bb": {"id": "VIDEOCOLORPRIMARIES"},
-									"55bc": {"id": "VIDEOCOLORMAXCLL"},
-									"55bd": {"id": "VIDEOCOLORMAXFALL"},
-									"55d0": {"id": "VIDEOCOLORMASTERINGMETA"},
-									"55d1": {"id": "VIDEOCOLORRX"},
-									"55d2": {"id": "VIDEOCOLORRY"},
-									"55d3": {"id": "VIDEOCOLORGX"},
-									"55d4": {"id": "VIDEOCOLORGY"},
-									"55d5": {"id": "VIDEOCOLORBX"},
-									"55d6": {"id": "VIDEOCOLORBY"},
-									"55d7": {"id": "VIDEOCOLORWHITEX"},
-									"55d8": {"id": "VIDEOCOLORWHITEY"},
-									"55d9": {"id": "VIDEOCOLORLUMINANCEMAX"},
-									"55da": {"id": "VIDEOCOLORLUMINANCEMIN"},
-									"7670": {"id": "VIDEOPROJECTION"},
-									"7671": {"id": "VIDEOPROJECTIONTYPE"},
-									"7672": {"id": "VIDEOPROJECTIONPRIVATE"},
-									"7673": {"id": "VIDEOPROJECTIONPOSEYAW"},
-									"7674": {"id": "VIDEOPROJECTIONPOSEPITCH"},
-									"7675": {"id": "VIDEOPROJECTIONPOSEROLL"}
-								}
-							},
-							"e1": {
-								"id": "TRACKAUDIO",
-								"kids": {
-									"b5": {"id": "AUDIOSAMPLINGFREQ"},
-									"78b5": {"id": "AUDIOOUTSAMPLINGFREQ"},
-									"6264": {"id": "AUDIOBITDEPTH"},
-									"9f": {"id": "AUDIOCHANNELS"}
-								}
-							},
-							"e2": {"id": "TRACKOPERATION"},
-							"e3": {"id": "TRACKCOMBINEPLANES"},
-							"e4": {"id": "TRACKPLANE"},
-							"e5": {"id": "TRACKPLANEUID"},
-							"e6": {"id": "TRACKPLANETYPE"},
-							"86": {"id": "CODECID"},
-							"63a2": {"id": "CODECPRIVATE"},
-							"258688": {"id": "CODECNAME"},
-							"3b4040": {"id": "CODECINFOURL"},
-							"26b240": {"id": "CODECDOWNLOADURL"},
-							"aa": {"id": "CODECDECODEALL"},
-							"56aa": {"id": "CODECDELAY"},
-							"56bb": {"id": "SEEKPREROLL"},
-							"536e": {"id": "TRACKNAME"},
-							"22b59c": {"id": "TRACKLANGUAGE"},
-							"b9": {"id": "TRACKFLAGENABLED"},
-							"88": {"id": "TRACKFLAGDEFAULT"},
-							"55aa": {"id": "TRACKFLAGFORCED"},
-							"55ab": {"id": "TRACKFLAGHEARINGIMPAIRED"},
-							"55ac": {"id": "TRACKFLAGVISUALIMPAIRED"},
-							"55ad": {"id": "TRACKFLAGTEXTDESCRIPTIONS"},
-							"55ae": {"id": "TRACKFLAGORIGINAL"},
-							"55af": {"id": "TRACKFLAGCOMMENTARY"},
-							"9c": {"id": "TRACKFLAGLACING"},
-							"6de7": {"id": "TRACKMINCACHE"},
-							"6df8": {"id": "TRACKMAXCACHE"},
-							"23e383": {"id": "TRACKDEFAULTDURATION"},
-							"6d80": {"id": "TRACKCONTENTENCODINGS"},
-							"6240": {
-								"id": "TRACKCONTENTENCODING",
-								"kids": {
-									"5031": {"id": "ENCODINGORDER"},
-									"5032": {"id": "ENCODINGSCOPE"},
-									"5033": {"id": "ENCODINGTYPE"},
-									"5034": {"id": "ENCODINGCOMPRESSION"},
-									"4254": {"id": "ENCODINGCOMPALGO"},
-									"4255": {"id": "ENCODINGCOMPSETTINGS"},
-									"5035": {"id": "ENCODINGENCRYPTION"},
-									"47e7": {"id": "ENCODINGENCAESSETTINGS"},
-									"47e1": {"id": "ENCODINGENCALGO"},
-									"47e2": {"id": "ENCODINGENCKEYID"},
-									"47e5": {"id": "ENCODINGSIGALGO"},
-									"47e6": {"id": "ENCODINGSIGHASHALGO"},
-									"47e4": {"id": "ENCODINGSIGKEYID"},
-									"47e3": {"id": "ENCODINGSIGNATURE"}
-								}
-							},
-							"23314f": {"id": "TRACKTIMECODESCALE"},
-							"55ee": {"id": "TRACKMAXBLKADDID"}
-						}
-					}
-				}
-			},
-			"1c53bb6b": {
-				"id": "CUES",
-				"kids": {
-					"bb": {
-						"id": "POINTENTRY",		//MULT
-						"out":[],
-						"mult":true,
-						"kids": {
-							"b3": {"id": "CUETIME"},
-							"b7": {
-								"id": "CUETRACKPOSITION",
-								"kids": {
-									"f7": {"id": "CUETRACK"},
-									"f1": {"id": "CUECLUSTERPOSITION"},
-									"f0": {"id": "CUERELATIVEPOSITION"},
-									"b2": {"id": "CUEDURATION"},
-									"5378": {"id": "CUEBLOCKNUMBER"}
-								}
-							}	
-						}
-					}				
-				}
-			},
-			"1254c367": {
-				"id": "TAGS",
-				"kids": {
-					"7373": {"id": "TAG"},
-					"67c8": {"id": "SIMPLETAG"},
-					"45a3": {"id": "TAGNAME"},
-					"4487": {"id": "TAGSTRING"},
-					"447a": {"id": "TAGLANG"},
-					"4484": {"id": "TAGDEFAULT"},
-					"44b4": {"id": "BUG"},
-					"63c0": {"id": "TAGTARGETS"},
-					"63ca": {"id": "TYPE"},
-					"68ca": {"id": "TYPEVALUE"},
-					"63c5": {"id": "TRACKUID"},
-					"63c4": {"id": "CHAPTERUID"},
-					"63c6": {"id": "ATTACHUID"}
-				}
-			},
-			"114d9b74": {
-				"id": "SEEKHEAD",
-				"kids": {
-					"4dbb": {
-						"id": "SEEKENTRY", 		//MULT
-						"out":[],
-						"mult":true,
-						"kids": {
-							"53ab": {"id": "SEEKID"},
-							"53ac": {"id": "SEEKPOSITION"}
-						}
-					}
-				}
-			},
-			"1941a469": {
-				"id": "ATTACHMENTS",
-				"kids": {
-					"61a7": {"id": "ATTACHEDFILE"},
-					"467e": {"id": "FILEDESC"},
-					"466e": {"id": "FILENAME"},
-					"4660": {"id": "FILEMIMETYPE"},
-					"465c": {"id": "FILEDATA"},
-					"46ae": {"id": "FILEUID"}
-				}
-			},
-			"1f43b675": {
-				"id": "CLUSTER",		// MULT
-				"out":[],
-				"mult":true,
-				"kids": {
-					"e7": {"id": "CLUSTERTIMECODE"},
-					"a7": {"id": "CLUSTERPOSITION"},
-					"ab": {"id": "CLUSTERPREVSIZE"},
-					"a3": {"id": "SIMPLEBLOCK"},
-					"a0": {
-						"id": "BLOCKGROUP",
-						"out":[],
-						"mult":true,
-						"kids": {
-							"a1": {"id": "BLOCK"},
-							"9b": {"id": "BLOCKDURATION"},
-							"fb": {"id": "BLOCKREFERENCE"},
-							"a4": {"id": "CODECSTATE"},
-							"75a2": {"id": "DISCARDPADDING"},
-							"75a1": {
-								"id": "BLOCKADDITIONS",
-								"kids": {
-									"a6": {
-										"id": "BLOCKMORE",
-										"kids": {
-											"ee": {"id": "BLOCKADDID"},
-											"a5": {"id": "BLOCKADDITIONAL"}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			},
-			"1043a770": {
-				"id": "CHAPTERS",
-				"kids": {
-					"45b9": {"id": "EDITIONENTRY"},
-					"b6": {"id": "CHAPTERATOM"},
-					"91": {"id": "CHAPTERTIMESTART"},
-					"92": {"id": "CHAPTERTIMEEND"},
-					"80": {"id": "CHAPTERDISPLAY"},
-					"85": {"id": "CHAPSTRING"},
-					"437c": {"id": "CHAPLANG"},
-					"437e": {"id": "CHAPCOUNTRY"},
-					"45bc": {"id": "EDITIONUID"},
-					"45bd": {"id": "EDITIONFLAGHIDDEN"},
-					"45db": {"id": "EDITIONFLAGDEFAULT"},
-					"45dd": {"id": "EDITIONFLAGORDERED"},
-					"73c4": {"id": "CHAPTERUID"},
-					"98": {"id": "CHAPTERFLAGHIDDEN"},
-					"4598": {"id": "CHAPTERFLAGENABLED"},
-					"63c3": {"id": "CHAPTERPHYSEQUIV"}
-				}
-			}
-		}
-	}
-}
-
-};//»
-
-const coms = {
+const COMS = {
 
 'webmfile':async function(){//«
 
@@ -2234,17 +1640,609 @@ cbarg&&cbarg();
 },//»
 
 }
+if (!comarg) return Object.keys(COMS);
 
-const coms_help={
-beep:`Yo make a beeping sound, yo!`,
+
+const INFO_STARTS_AT_BYTE=52;
+
+//Imports«
+
+let _;//«
+let getkeys = Core.api.getKeys;
+_=Core;
+let log = _.log;
+let cwarn = _.cwarn;
+let cerr = _.cerr;
+let xget = _.xget;
+
+let globals = _.globals;
+let audio_ctx = globals.audio.ctx;
+let util = globals.util;
+_ = util;
+let strnum = _.strnum;
+let isnotneg = _.isnotneg;
+let isnum = _.isnum;
+let ispos = function(arg) {return isnum(arg,true);}
+let isneg = function(arg) {return isnum(arg,false);}
+let isid = _.isid;
+let isarr = _.isarr;
+let isobj = _.isobj;
+let isint = _.isint;
+let isstr = _.isstr;
+let isnull = _.isnull;
+let make = _.make;
+let iseof=Core.api.isEOF;
+let fs = globals.fs;
+
+let fs_url = Core.fs_url;
+let aumod=null;
+//»
+
+const {NS}=Core;
+
+const fsapi = NS.api.fs;
+
+fs.getmod("av.audio", modret=>{//«
+	if (!modret) return cerr("No audio module!");
+	aumod = modret;
+}, {STATIC: true});
+
+
+//»
+
+const {//«
+	wclerr,
+	normpath,
+	arg2con,
+	get_reader,
+	refresh,
+	respbr,
+	woutobj,
+	read_stdin,
+	cberr,
+	failopts,
+	cbok,
+	termobj,
+	werr,
+	wout,
+	ptw,
+	read_file_args_or_stdin,
+	set_obj_val
+} = Shell;//»
+
+let mkfakeobj=(type, obj, args)=>{//«
+    var type_to_str={
+        auf32: "audioFloat32Data",
+        auenc: "audioEncodedData"
+    }   
+    var argstr="";
+    if (args&&isarr(args)) argstr = args.join(",");
+    obj.toString = ()=>{
+        return "["+(type_to_str[type]||"Object")+" ("+argstr+")]";
+    }   
+    return obj;
+}; //»
+//»
+
+//Funcs«
+
+const TermSnap=function(obj,snapw,snaph,frame_num){//«
+
+const {cols,ed,x,y,w,h,sim,lns}=obj;
+let cury=y;
+let curx=x;
+if (sim) {
+	cury=h-1;
+	curx+=sim.length;
+}
+this.toString=()=>{return JSON.stringify(obj);};
+const to_svg=()=>{//«
+let out = `
+<svg viewBox="0 0 ${snapw} ${snaph}" xmlns="http://www.w3.org/2000/svg">
+<style>
+.s{font: 24px monospace; fill: #e3e3e3; white-space: pre;}
+</style>
+<rect x="0" y="0" width="${snapw}" height="${snaph}" fill="#000" />
+<rect x="${curx*14}" y="${6+cury*26}" width="12" height="24" fill="#00f" />
+`;
+let ypos=26;
+for (let ln of lns){
+	out+=`<text x="0" y="${ypos}" class="s">${ln}</text>\n`;
+	ypos+=26;
+}
+out+="</svg>";
+return out;
+};//»
+this.toSVG=to_svg;
+
+this.toImage=()=>{//«
+	return new Promise((y,n)=>{
+		let img=new Image;
+		img.onload=(e)=>{
+			img._off = obj.off;
+			this.img=img;
+			y(img);
+		};
+img.onerror=()=>{
+console.log(to_svg());
+n(`Bad Unicode in SVG? (frame: ${frame_num})`);
+};
+		img.src=URL.createObjectURL(new Blob([to_svg()], {type: 'image/svg+xml'}));
+	});
+};//»
+
+};//»
+const TermSnapArray=function(vidw, vidh){//«
+
+let arr=[];
+let data;
+let imgs;
+let rafId;
+this.cancel=()=>{
+	if (rafId){
+		cancelAnimationFrame(rafId);
+		rafId=null;
+	}
+};
+this.add=(snap)=>{arr.push(snap);};
+
+this.toString=()=>{//«
+let s = '[';
+for (let o of arr){
+	s+=o.toString()+",";
+}
+return s.replace(/,$/,"")+"]";
+};//»
+
+this.toImages=()=>{//«
+	return new Promise(async(y,n)=>{
+		if (imgs) return y(true);
+try{
+		let proms=[];
+		for (let o of arr) proms.push(o.toImage());
+		await Promise.all(proms);
+		imgs=[];
+		for (let p of proms) imgs.push(await p);
+}
+catch(e){
+n(e);
+return;
+}
+		y(true);
+	});
+};//»
+
+const to_img_video=()=>{//«
+
+return new Promise(async(y,n)=>{//«
+
+try{
+await this.toImages();
+}
+catch(e){
+n(e);
+return;
+}
+let start;
+if (imgs.length==0) {
+	y();
+	return;
 }
 
-if (!com) return Object.keys(coms);
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in av!");
-if (args===true) return coms[com];
-coms[com](args);
+let canvas = make('canvas');
+canvas.width=vidw;
+canvas.height=vidh;
+let ctx = canvas.getContext("2d");
+
+let videoStream = canvas.captureStream(5);
+let mediaRecorder = new MediaRecorder(videoStream);
+
+let chunks = [];
+
+mediaRecorder.ondataavailable = function(e) {
+	chunks.push(e.data);
+};
+
+mediaRecorder.onstop = function(e) {
+	let blob = new Blob(chunks, { 'type' : 'video/webm' });
+	y(blob);
+};
+
+const maybe_add_frame=()=>{
+	let next = imgs[0];
+	let off = window.performance.now()-start;
+	if (off >= next._off) {
+
+		let next_1 = imgs[1];
+		while(next_1 && off >= next_1._off){
+			next = next_1;
+			imgs.shift();
+			next_1 = imgs[1];
+		}
+		ctx.drawImage(next,0,0);
+		imgs.shift();
+		if (!imgs.length) {
+			mediaRecorder.stop();
+			return;
+		}
+	}
+	rafId=requestAnimationFrame(maybe_add_frame);
+};
+
+start = window.performance.now();
+mediaRecorder.start();
+ctx.drawImage(imgs.shift(),0,0);
+rafId=requestAnimationFrame(maybe_add_frame);
+
+});//»
+
+
+};//»
+
+this.toImgVideo=to_img_video;
+
+};//»
+
+const ebml_sz=(buf, pos)=>{//«
+	let nb;
+	let b = buf[pos];
+
+//xxxxxxxx
+	if (b&128) {nb = 1; b^=128;}
+	else if (b&64) {nb = 2;b^=64;}
+	else if (b&32) {nb = 3;b^=32;}
+	else if (b&16) {nb = 4;b^=16;}
+	else if (b&8) {nb = 5;b^=8;}
+	else if (b&4) {nb = 6;b^=4;}
+	else if (b&2) {nb = 7;b^=2;}
+	else if (b&1) {nb = 8;b^=1;}
+	let str = "0x"+(b.toString(16));
+	let end = pos+nb;
+	if (end>=buf.length) {
+		cberr(`Invalid ebml size @${pos}`);
+		return false;
+	}
+	let ch; 
+	for (let i=pos+1; i < end; i++) {
+		ch = buf[i].toString(16);
+		if (ch.length==1) ch = "0"+ch;
+		str = str + ch;
+	}   
+	return [parseInt(str), end]
+}//»
+const arr2text=(arr)=>{//«
+	let ret="";
+	for (let i=0; i < arr.length; i++) {
+		let code = arr[i];
+		if (code===0) ret+=" ";
+		else ret+=String.fromCharCode(code);
+	}
+	return ret;
+}//»
+const hex2text=(val)=>{//«
+	let ret="";
+	for (let j=0; j < val.length; j+=2) ret+=String.fromCharCode(parseInt("0x"+val.slice(j,j+2)));
+	return ret;
+}//»
+const hexeq=(bufarg, start, offset, strarg, if_nowarn)=>{//«
+	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
+	var ret = arr.map(x=>{
+		let s = ""+x.toString(16);
+		if (s.length == 1) return "0"+s;
+		return s;
+	});
+	var str = ret.toString().replace(/,/g,"");
+	return (strarg===str);
+}//»
+const gethex=(bufarg, start, offset, if_fmt)=>{//«
+	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
+	var ret = arr.map(x=>{
+		let s = ""+x.toString(16);
+		if (s.length == 1) return "0"+s;
+		return s;
+	});
+	let raw = ret.toString().replace(/,/g,"");
+	let ret_str="";
+	if (!if_fmt) ret_str = raw;
+	else {
+		for (let i=0; i < raw.length; i+=2) ret_str += raw[i]+raw[i+1]+" ";
+	}
+	return ret_str;
+}//»
+const read_1byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 1));}
+const read_2byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 2));}
+const read_4byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 4));}
+const read_8byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 8));}
+//function read_4byte_float(bufarg, offset){return parseFloat("0x"+gethex(bufarg, offset, 4));}
+//»
+
+const WEBM = {//«
+"id":"WEBM",
+"kids": {
+	"1a45dfa3": {
+		"id": "HEADER",
+		"kids": {
+			"4286": {"id": "EBMLVERSION"},
+			"42f7": {"id": "EBMLREADVERSION"},
+			"42f2": {"id": "EBMLMAXIDLENGTH"},
+			"42f3": {"id": "EBMLMAXSIZELENGTH"},
+			"4282": {"id": "DOCTYPE"},
+			"4287": {"id": "DOCTYPEVERSION"},
+			"4285": {"id": "DOCTYPEREADVERSION"}
+		}
+	},
+	"18538067": {
+		"id": "SEGMENT",
+		"kids": {
+			"1549a966": {
+				"id": "INFO",
+				"kids": {
+					"2ad7b1": {"id": "TIMECODESCALE"},
+					"4489": {"id": "DURATION"},
+					"7ba9": {"id": "TITLE"},
+					"5741": {"id": "WRITINGAPP"},
+					"4d80": {"id": "MUXINGAPP"},
+					"4461": {"id": "DATEUTC"},
+					"73a4": {"id": "SEGMENTUID"}
+				}
+			},
+			"1654ae6b": {
+				"id": "TRACKS",
+				"kids": {
+					"ae": {
+						"id": "TRACKENTRY",    //MULT
+						"out":[],
+						"mult": true,
+						"kids": {
+							"d7": {"id": "TRACKNUMBER"},
+							"73c5": {"id": "TRACKUID"},
+							"83": {"id": "TRACKTYPE"},
+							"e0": {
+								"id": "TRACKVIDEO",
+								"kids": {
+									"2383e3": {"id": "VIDEOFRAMERATE"},
+									"54b0": {"id": "VIDEODISPLAYWIDTH"},
+									"54ba": {"id": "VIDEODISPLAYHEIGHT"},
+									"b0": {"id": "VIDEOPIXELWIDTH"},
+									"ba": {"id": "VIDEOPIXELHEIGHT"},
+									"54aa": {"id": "VIDEOPIXELCROPB"},
+									"54bb": {"id": "VIDEOPIXELCROPT"},
+									"54cc": {"id": "VIDEOPIXELCROPL"},
+									"54dd": {"id": "VIDEOPIXELCROPR"},
+									"54b2": {"id": "VIDEODISPLAYUNIT"},
+									"9a": {"id": "VIDEOFLAGINTERLACED"},
+									"9d": {"id": "VIDEOFIELDORDER"},
+									"53b8": {"id": "VIDEOSTEREOMODE"},
+									"53c0": {"id": "VIDEOALPHAMODE"},
+									"54b3": {"id": "VIDEOASPECTRATIO"},
+									"2eb524": {"id": "VIDEOCOLORSPACE"},
+									"55b0": {"id": "VIDEOCOLOR"},
+									"55b1": {"id": "VIDEOCOLORMATRIXCOEFF"},
+									"55b2": {"id": "VIDEOCOLORBITSPERCHANNEL"},
+									"55b3": {"id": "VIDEOCOLORCHROMASUBHORZ"},
+									"55b4": {"id": "VIDEOCOLORCHROMASUBVERT"},
+									"55b5": {"id": "VIDEOCOLORCBSUBHORZ"},
+									"55b6": {"id": "VIDEOCOLORCBSUBVERT"},
+									"55b7": {"id": "VIDEOCOLORCHROMASITINGHORZ"},
+									"55b8": {"id": "VIDEOCOLORCHROMASITINGVERT"},
+									"55b9": {"id": "VIDEOCOLORRANGE"},
+									"55ba": {"id": "VIDEOCOLORTRANSFERCHARACTERISTICS"},
+									"55bb": {"id": "VIDEOCOLORPRIMARIES"},
+									"55bc": {"id": "VIDEOCOLORMAXCLL"},
+									"55bd": {"id": "VIDEOCOLORMAXFALL"},
+									"55d0": {"id": "VIDEOCOLORMASTERINGMETA"},
+									"55d1": {"id": "VIDEOCOLORRX"},
+									"55d2": {"id": "VIDEOCOLORRY"},
+									"55d3": {"id": "VIDEOCOLORGX"},
+									"55d4": {"id": "VIDEOCOLORGY"},
+									"55d5": {"id": "VIDEOCOLORBX"},
+									"55d6": {"id": "VIDEOCOLORBY"},
+									"55d7": {"id": "VIDEOCOLORWHITEX"},
+									"55d8": {"id": "VIDEOCOLORWHITEY"},
+									"55d9": {"id": "VIDEOCOLORLUMINANCEMAX"},
+									"55da": {"id": "VIDEOCOLORLUMINANCEMIN"},
+									"7670": {"id": "VIDEOPROJECTION"},
+									"7671": {"id": "VIDEOPROJECTIONTYPE"},
+									"7672": {"id": "VIDEOPROJECTIONPRIVATE"},
+									"7673": {"id": "VIDEOPROJECTIONPOSEYAW"},
+									"7674": {"id": "VIDEOPROJECTIONPOSEPITCH"},
+									"7675": {"id": "VIDEOPROJECTIONPOSEROLL"}
+								}
+							},
+							"e1": {
+								"id": "TRACKAUDIO",
+								"kids": {
+									"b5": {"id": "AUDIOSAMPLINGFREQ"},
+									"78b5": {"id": "AUDIOOUTSAMPLINGFREQ"},
+									"6264": {"id": "AUDIOBITDEPTH"},
+									"9f": {"id": "AUDIOCHANNELS"}
+								}
+							},
+							"e2": {"id": "TRACKOPERATION"},
+							"e3": {"id": "TRACKCOMBINEPLANES"},
+							"e4": {"id": "TRACKPLANE"},
+							"e5": {"id": "TRACKPLANEUID"},
+							"e6": {"id": "TRACKPLANETYPE"},
+							"86": {"id": "CODECID"},
+							"63a2": {"id": "CODECPRIVATE"},
+							"258688": {"id": "CODECNAME"},
+							"3b4040": {"id": "CODECINFOURL"},
+							"26b240": {"id": "CODECDOWNLOADURL"},
+							"aa": {"id": "CODECDECODEALL"},
+							"56aa": {"id": "CODECDELAY"},
+							"56bb": {"id": "SEEKPREROLL"},
+							"536e": {"id": "TRACKNAME"},
+							"22b59c": {"id": "TRACKLANGUAGE"},
+							"b9": {"id": "TRACKFLAGENABLED"},
+							"88": {"id": "TRACKFLAGDEFAULT"},
+							"55aa": {"id": "TRACKFLAGFORCED"},
+							"55ab": {"id": "TRACKFLAGHEARINGIMPAIRED"},
+							"55ac": {"id": "TRACKFLAGVISUALIMPAIRED"},
+							"55ad": {"id": "TRACKFLAGTEXTDESCRIPTIONS"},
+							"55ae": {"id": "TRACKFLAGORIGINAL"},
+							"55af": {"id": "TRACKFLAGCOMMENTARY"},
+							"9c": {"id": "TRACKFLAGLACING"},
+							"6de7": {"id": "TRACKMINCACHE"},
+							"6df8": {"id": "TRACKMAXCACHE"},
+							"23e383": {"id": "TRACKDEFAULTDURATION"},
+							"6d80": {"id": "TRACKCONTENTENCODINGS"},
+							"6240": {
+								"id": "TRACKCONTENTENCODING",
+								"kids": {
+									"5031": {"id": "ENCODINGORDER"},
+									"5032": {"id": "ENCODINGSCOPE"},
+									"5033": {"id": "ENCODINGTYPE"},
+									"5034": {"id": "ENCODINGCOMPRESSION"},
+									"4254": {"id": "ENCODINGCOMPALGO"},
+									"4255": {"id": "ENCODINGCOMPSETTINGS"},
+									"5035": {"id": "ENCODINGENCRYPTION"},
+									"47e7": {"id": "ENCODINGENCAESSETTINGS"},
+									"47e1": {"id": "ENCODINGENCALGO"},
+									"47e2": {"id": "ENCODINGENCKEYID"},
+									"47e5": {"id": "ENCODINGSIGALGO"},
+									"47e6": {"id": "ENCODINGSIGHASHALGO"},
+									"47e4": {"id": "ENCODINGSIGKEYID"},
+									"47e3": {"id": "ENCODINGSIGNATURE"}
+								}
+							},
+							"23314f": {"id": "TRACKTIMECODESCALE"},
+							"55ee": {"id": "TRACKMAXBLKADDID"}
+						}
+					}
+				}
+			},
+			"1c53bb6b": {
+				"id": "CUES",
+				"kids": {
+					"bb": {
+						"id": "POINTENTRY",		//MULT
+						"out":[],
+						"mult":true,
+						"kids": {
+							"b3": {"id": "CUETIME"},
+							"b7": {
+								"id": "CUETRACKPOSITION",
+								"kids": {
+									"f7": {"id": "CUETRACK"},
+									"f1": {"id": "CUECLUSTERPOSITION"},
+									"f0": {"id": "CUERELATIVEPOSITION"},
+									"b2": {"id": "CUEDURATION"},
+									"5378": {"id": "CUEBLOCKNUMBER"}
+								}
+							}	
+						}
+					}				
+				}
+			},
+			"1254c367": {
+				"id": "TAGS",
+				"kids": {
+					"7373": {"id": "TAG"},
+					"67c8": {"id": "SIMPLETAG"},
+					"45a3": {"id": "TAGNAME"},
+					"4487": {"id": "TAGSTRING"},
+					"447a": {"id": "TAGLANG"},
+					"4484": {"id": "TAGDEFAULT"},
+					"44b4": {"id": "BUG"},
+					"63c0": {"id": "TAGTARGETS"},
+					"63ca": {"id": "TYPE"},
+					"68ca": {"id": "TYPEVALUE"},
+					"63c5": {"id": "TRACKUID"},
+					"63c4": {"id": "CHAPTERUID"},
+					"63c6": {"id": "ATTACHUID"}
+				}
+			},
+			"114d9b74": {
+				"id": "SEEKHEAD",
+				"kids": {
+					"4dbb": {
+						"id": "SEEKENTRY", 		//MULT
+						"out":[],
+						"mult":true,
+						"kids": {
+							"53ab": {"id": "SEEKID"},
+							"53ac": {"id": "SEEKPOSITION"}
+						}
+					}
+				}
+			},
+			"1941a469": {
+				"id": "ATTACHMENTS",
+				"kids": {
+					"61a7": {"id": "ATTACHEDFILE"},
+					"467e": {"id": "FILEDESC"},
+					"466e": {"id": "FILENAME"},
+					"4660": {"id": "FILEMIMETYPE"},
+					"465c": {"id": "FILEDATA"},
+					"46ae": {"id": "FILEUID"}
+				}
+			},
+			"1f43b675": {
+				"id": "CLUSTER",		// MULT
+				"out":[],
+				"mult":true,
+				"kids": {
+					"e7": {"id": "CLUSTERTIMECODE"},
+					"a7": {"id": "CLUSTERPOSITION"},
+					"ab": {"id": "CLUSTERPREVSIZE"},
+					"a3": {"id": "SIMPLEBLOCK"},
+					"a0": {
+						"id": "BLOCKGROUP",
+						"out":[],
+						"mult":true,
+						"kids": {
+							"a1": {"id": "BLOCK"},
+							"9b": {"id": "BLOCKDURATION"},
+							"fb": {"id": "BLOCKREFERENCE"},
+							"a4": {"id": "CODECSTATE"},
+							"75a2": {"id": "DISCARDPADDING"},
+							"75a1": {
+								"id": "BLOCKADDITIONS",
+								"kids": {
+									"a6": {
+										"id": "BLOCKMORE",
+										"kids": {
+											"ee": {"id": "BLOCKADDID"},
+											"a5": {"id": "BLOCKADDITIONAL"}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"1043a770": {
+				"id": "CHAPTERS",
+				"kids": {
+					"45b9": {"id": "EDITIONENTRY"},
+					"b6": {"id": "CHAPTERATOM"},
+					"91": {"id": "CHAPTERTIMESTART"},
+					"92": {"id": "CHAPTERTIMEEND"},
+					"80": {"id": "CHAPTERDISPLAY"},
+					"85": {"id": "CHAPSTRING"},
+					"437c": {"id": "CHAPLANG"},
+					"437e": {"id": "CHAPCOUNTRY"},
+					"45bc": {"id": "EDITIONUID"},
+					"45bd": {"id": "EDITIONFLAGHIDDEN"},
+					"45db": {"id": "EDITIONFLAGDEFAULT"},
+					"45dd": {"id": "EDITIONFLAGORDERED"},
+					"73c4": {"id": "CHAPTERUID"},
+					"98": {"id": "CHAPTERFLAGHIDDEN"},
+					"4598": {"id": "CHAPTERFLAGENABLED"},
+					"63c3": {"id": "CHAPTERPHYSEQUIV"}
+				}
+			}
+		}
+	}
+}
+
+};//»
+
+
+COMS[comarg](args);
 
 
 
+}
 

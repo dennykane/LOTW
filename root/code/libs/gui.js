@@ -1,46 +1,8 @@
+export const lib = (comarg, args, Core, Shell)=>{
 
-//Imports«
 
-let Desk = Core.Desk;
-let log = Core.log;
-let cwarn = Core.cwarn;
-let cerr = Core.cerr;
 
-let globals = Core.globals;
-let util = globals.util;
-let WDG = globals.widgets;
-
-const{
-	isarr,
-	isstr,
-	isobj,
-	make,
-	mkdv
-}=util;
-const {
-	ENODESK,
-	readFile,
-	cbok,
-	cberr,
-	wout,
-	werr,
-	werrarr,
-	get_options,
-	failopts,
-	read_stdin,
-	get_reader,
-	termobj
-} = shell_exports;
-const{
-isEOF
-}=Core.api;
-let _Desk;
-if (termobj) _Desk = Desk;
-
-const NUM=Number.isFinite;
-//»
-
-const coms = {//«
+const COMS = {//«
 
 'render':async args=>{//«
 
@@ -362,18 +324,53 @@ console.log(rv);
 
 }//»
 
-const coms_help={
+if (!comarg) return Object.keys(COMS);
+
+//Imports«
+
+let Desk = Core.Desk;
+let log = Core.log;
+let cwarn = Core.cwarn;
+let cerr = Core.cerr;
+
+let globals = Core.globals;
+let util = globals.util;
+let WDG = globals.widgets;
+
+const{
+	isarr,
+	isstr,
+	isobj,
+	make,
+	mkdv
+}=util;
+const {
+	ENODESK,
+	readFile,
+	cbok,
+	cberr,
+	wout,
+	werr,
+	werrarr,
+	get_options,
+	failopts,
+	read_stdin,
+	get_reader,
+	termobj
+} = Shell;
+const{
+isEOF
+}=Core.api;
+let _Desk;
+if (termobj) _Desk = Desk;
+
+const NUM=Number.isFinite;
+//»
+
+COMS[comarg](args);
+
+
 }
-
-if (!com) return Object.keys(coms);
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in gui!");
-if (args===true) return coms[com];
-coms[com](args);
-
-
-
-
 
 /*
 

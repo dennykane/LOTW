@@ -1,116 +1,7 @@
-//Imports«
-//var log = Desk.log;
 
+export const lib = (comarg, args, Core, Shell)=>{
 
-//const {suse,sherr,ENV,failopts,cbok,cberr,wout,werr,termobj,wrap_line} = shell_exports;
-const {log,cwarn,cerr,globals}=Core;
-const {util,fs}=globals;
-const {
-strnum,
-isnotneg,
-isnum,
-isid,
-isarr,
-isstr,
-isobj,
-make,
-}=util;
-let ispos = function(arg) {return isnum(arg,true);}
-let isneg = function(arg) {return isnum(arg,false);}
-const{
-	wrap_line,
-	cbeof,
-	sherr,
-	get_path_of_object,
-	get_options,
-	termobj,
-	cur_com_name,
-	read_file_args_or_stdin,
-	read_file,
-	read_stdin,
-	cur_dir,
-	constant_vars,
-	path_to_par_and_name,
-	is_writable,
-	path_to_obj,
-	if_com_sub,
-	check_pipe_writer,
-	tmp_env,
-	kill_register,
-	arg2con,
-	atbc,
-	get_reader,
-	sys_write,
-	cb,
-	normpath,
-	cbok,
-	cberr,
-	serr,
-	failopts,
-	failnoopts,
-   	werr,
-	werrarr,
-	wout,
-	woutarr,
-	woutobj,
-	wclout,
-	wappout,
-	refresh,
-	respbr,
-	wclerr,
-	suse,
-	get_var_str,
-	ptw,
-	term_prompt,
-	do_red,
-	Desk,
-	is_root,
-	ENODESK,
-	EOF,
-	ENV
-}=shell_exports;
-//»
-
-let fullpath = function(path, cwd) {return fs.get_fullpath(path,null,cwd);}
-
-function digest(which){//«
-let fname = args.pop();
-let doit=(buf)=>{
-	crypto.subtle.digest(which, buf)
-	.then(ret=>{
-		let arr = new Uint8Array(ret);
-		let str = '';
-		for (let ch of arr) str += ch.toString(16).lpad(2,"0");
-		wout(str);
-		cbok();
-	})
-	.catch(e=>{
-		cberr(e.message);
-	})
-}
-if (!fname) {
-	let str = "";
-	let iter=0;
-	let arr = [];
-	read_stdin(async ret=>{
-		if (util.isobj(ret)&&ret.EOF){
-			doit(await Core.api.strToBuf(arr.join("\n")));
-			return;
-		}
-		if (typeof ret !== "string") return cberr("Expected string input on stdin");
-		arr.push(ret);
-	},{SENDEOF:true})
-}
-else {
-	atbc(fname,ret=>{
-		if (!ret) return cberr("could not stat: " + fname);
-		doit(ret.buffer);
-	});
-}
-
-}//»
-
-const coms = {//«
+const COMS = {//«
 
 /*
 	'argtest': function(args) {//«
@@ -193,7 +84,7 @@ return cberr("Please port me to lib/Util.js!");
 			else {
 				cwarn("Unknown value returned from fs.read_file",rv);
 			}
-		}, {exports:shell_exports});
+		}, {exports:Shell});
 	}
 	else{
 		let done = false;
@@ -559,14 +450,124 @@ cbok(""+nb);
 	'sha512sum':function(){digest("SHA-512")},
 
 }//»
+if (!comarg) return Object.keys(COMS);
 
-const coms_help={
+//Imports«
+//var log = Desk.log;
+
+
+//const {suse,sherr,ENV,failopts,cbok,cberr,wout,werr,termobj,wrap_line} = Shell;
+const {log,cwarn,cerr,globals}=Core;
+const {util,fs}=globals;
+const {
+strnum,
+isnotneg,
+isnum,
+isid,
+isarr,
+isstr,
+isobj,
+make,
+}=util;
+let ispos = function(arg) {return isnum(arg,true);}
+let isneg = function(arg) {return isnum(arg,false);}
+const{
+	wrap_line,
+	cbeof,
+	sherr,
+	get_path_of_object,
+	get_options,
+	termobj,
+	cur_com_name,
+	read_file_args_or_stdin,
+	read_file,
+	read_stdin,
+	cur_dir,
+	constant_vars,
+	path_to_par_and_name,
+	is_writable,
+	path_to_obj,
+	if_com_sub,
+	check_pipe_writer,
+	tmp_env,
+	kill_register,
+	arg2con,
+	atbc,
+	get_reader,
+	sys_write,
+	cb,
+	normpath,
+	cbok,
+	cberr,
+	serr,
+	failopts,
+	failnoopts,
+   	werr,
+	werrarr,
+	wout,
+	woutarr,
+	woutobj,
+	wclout,
+	wappout,
+	refresh,
+	respbr,
+	wclerr,
+	suse,
+	get_var_str,
+	ptw,
+	term_prompt,
+	do_red,
+	Desk,
+	is_root,
+	ENODESK,
+	EOF,
+	ENV
+}=Shell;
+//»
+
+let fullpath = function(path, cwd) {return fs.get_fullpath(path,null,cwd);}
+
+function digest(which){//«
+let fname = args.pop();
+let doit=(buf)=>{
+	crypto.subtle.digest(which, buf)
+	.then(ret=>{
+		let arr = new Uint8Array(ret);
+		let str = '';
+		for (let ch of arr) str += ch.toString(16).lpad(2,"0");
+		wout(str);
+		cbok();
+	})
+	.catch(e=>{
+		cberr(e.message);
+	})
+}
+if (!fname) {
+	let str = "";
+	let iter=0;
+	let arr = [];
+	read_stdin(async ret=>{
+		if (util.isobj(ret)&&ret.EOF){
+			doit(await Core.api.strToBuf(arr.join("\n")));
+			return;
+		}
+		if (typeof ret !== "string") return cberr("Expected string input on stdin");
+		arr.push(ret);
+	},{SENDEOF:true})
+}
+else {
+	atbc(fname,ret=>{
+		if (!ret) return cberr("could not stat: " + fname);
+		doit(ret.buffer);
+	});
 }
 
-if (!com) return Object.keys(coms);
-if (!args) return coms_help[com];
-if (!coms[com]) return cberr("No com: " + com + " in util!");
-if (args===true) return coms[com];
-coms[com](args);
+}//»
 
+
+
+COMS[comarg](args);
+
+
+}
 

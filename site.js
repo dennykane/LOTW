@@ -227,6 +227,7 @@ log(`Cannot stat: ${BINPATH}/dummy.js`);
 
 const WWWPATH = `${BASEPATH}/www`;
 const APPPATH = `${BASEPATH}/root/code/apps`;
+const LIBPATH = `${BASEPATH}/root/code/libs`;
 
 const DEFMIME = "application/octet-stream";
 
@@ -406,6 +407,7 @@ log(e);
 				res.end(JSON.stringify(await readdir(BINPATH)));
 			}
 			else if (url == "/_getapp") res.end(JSON.stringify(await readdir(APPPATH, {getDir:true, getRaw:true}, args.path)));
+			else if (url == "/_getlib") res.end(JSON.stringify(await readdir(LIBPATH, {getDir:true, getRaw:true}, args.path)));
 			else if (url=="/_getdir"){//«
 				let path = decodeURIComponent(args.path);
 //				let recur = args.all;
