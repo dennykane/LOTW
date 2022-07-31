@@ -161,9 +161,15 @@ in the 'fs' library will be automatically imported and available for use.
 ## Examples
 
 
-Filter out whitespace only lines in file.txt and send the output into `less`:
+Filter out whitespace-only lines in file.txt and send the output into `less`:
 
 `~$ cat file.txt | grep '^[^\s]+$' | less`
+
+* * *
+
+Attempt to create a new file from two files, then delete the originals. Print a message upon failure.
+
+`~$ cat file1.txt file2.txt > newfile.txt && rm file1.txt file2.txt || echo "The operation failed!"`
 
 
 # Development
