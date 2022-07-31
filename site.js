@@ -110,6 +110,7 @@ LOTW - Main
 </html>
 `;
 //HTML_TOP«
+
 const HTML_TOP=`
 <html>
 <head>
@@ -154,23 +155,12 @@ a:visited{
 
 
 <div class="content">
-<h2>This "blog" mainly exists to fool Hacker News*</h2>
+<h1>LOTW Blog</h1>
 <hr>
 `;
 
 const HTML_BOT=`
 <hr>
-<p>
-*A "real" blog is about having new and interesting things to say. If I ever have
-anything new or interesting to say, I'll say it to vim, in a .js file. So and but
-Hacker News (HN) is just like this place online where all the techies go if they
-want to get their things out there. It's real hard to get your little message to
-make much of a noise on HN. So, if you have anything you want to get noticed, you
-will probably need to devote a decent amount of time towards making regular posts.
-But they don't want you to keep repetitively putting the same exact link up there.
-So here I can make believe that I have an actual blog that I give two shits about,
-where each post obviously uses its own link. But all I'm ever going to write is
-maybe a short paragraph or two.
 </div>
 </body>
 </html>

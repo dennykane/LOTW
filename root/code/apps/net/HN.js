@@ -1,5 +1,5 @@
 
-/*xTODOx
+/*xTODOx//«
 
 
 We need 3 screens (at least);
@@ -44,20 +44,32 @@ field. Then we can just retrieve the new kids list from firebase, and add this t
 and then save this to the datastore.
 
 
-*/
+
+
+await_notices() is where we are going to either: 
+
+1) Find the top story items in the "live list", 
+2) or get it from the db if not in it, and then add it it into the Offline list.
+
+
+
+
 
 
 //https://news.ycombinator.com/reply?id=22514747&goto=item%3Fid%3D22514004%2322514747
 //												 goto=item ? id = 22514004 # 22514747
 //																  original 
 //																    story
+»*/
+
 
 export const app=function(arg){
 
 //Imports«
-const {Core,Main,Desk,NS}=arg;
 
-const Topwin=Main.top;
+const {Core,Main:_Main,Desk,NS}=arg;
+
+const Topwin=_Main.top;
 const {log,cwarn,cerr,globals}=Core;
 //log(Core,Main,Desk);
 //const{fs,util,widgets,dev_env,dev_mode}=globals;
@@ -77,13 +89,22 @@ const popok=(s)=>{return new Promise((y,n)=>{_popok(s,{win:Topwin,cb:y});});};
 const poperr=(s)=>{return new Promise((y,n)=>{_poperr(s,{win:Topwin,cb:y});});};
 const popyesno=(s)=>{return new Promise((y,n)=>{_popyesno(s,{win:Topwin,cb:y});});};
 
-const fsapi=NS.api.fs;
+const fs=NS.api.fs;
 
-//Topwin.titleimg={TCOL:"#ff6600",BGCOL:"#000"};
 
 //»
 
 //Var«
+
+let notices=[];
+
+let offlist;
+let notiflist;
+let notif_elem_hold;
+let online_elem_hold;
+let offline_elem_hold;
+
+let last_path;
 let toplist;
 
 let FS = 24;
@@ -102,7 +123,7 @@ const TIMES=[];
 //let GET_NUM_STORIES = 30;
 let GET_NUM_STORIES = 1;
 
-let MAX_CACHE_DIFF_MINUTES = 10;
+let MAX_CACHE_DIFF_MINUTES = 1000;
 
 let POPUP_WID=window.outerWidth-100;
 let POPUP_HGT=window.outerHeight-100;
@@ -110,29 +131,59 @@ let POPUP_HGT=window.outerHeight-100;
 let ifapi;
 let db;
 
+const USERDATAPATH =`${globals.home_path}/.data/apps/net/HN`
+const NOTICESFILEPATH =`${USERDATAPATH}/notices`
 const HN_DB_NAME="hackernews";
 const HN_DB_VERS=1;
 const HN_ITEM_STORE_NAME="items";
-
-
 const CACHE_PATH = '/var/cache/apps/net/HN';
-
 const HN_BASE_URL = "https://hacker-news.firebaseio.com";
-        
 const HN_APPNAME = "hackernews";
 
 //»
 
 //DOM«
 
+_Main.pos="relative";
+_Main.bgcol="#030303";
+_Main.tcol="#ddd";
+_Main.fs=19;
 
-Main.bgcol="#030303";
-Main.tcol="#ddd";
-Main.fs=19;
-Main.overy="scroll";
-Main.tabIndex="-1";
-Main.style.outline="none";
-//Main.tab_level = 0;
+let Main;
+
+let Online = mkdv();
+Online.pos="absolute";
+Online.w="100%";
+Online.h="100%";
+Online.loc(0,0);
+Online.overy="scroll";
+Online.tabIndex="-1";
+Online.style.outline="none";
+
+let Offline = mkdv();
+Offline.pos="absolute";
+Offline.w="100%";
+Offline.h="100%";
+Offline.loc(0,0);
+Offline.overy="scroll";
+Offline.tabIndex="-1";
+Offline.dis="none";
+
+
+let Notif = mkdv();
+Notif.pos="absolute";
+Notif.w="100%";
+Notif.h="100%";
+Notif.loc(0,0);
+Notif.overy="scroll";
+Notif.tabIndex="-1";
+Notif.dis="none";
+
+_Main.add(Online);
+_Main.add(Offline);
+_Main.add(Notif);
+Main = Online;
+
 
 //»
 
@@ -230,6 +281,15 @@ main.onfocus=()=>{
 main.tab_level = level;
 main.mar=10;
 main.bor="1px dotted #aaa";
+main.onmousedown=()=>{
+	if (cur_elem !== this){
+		if (cur_elem&&cur_elem.blur) cur_elem.blur();
+		this.focus();
+	}
+};
+main.ondblclick=()=>{
+this.toggle();
+};
 
 const head = mkdv();//header
 head.pad=5;
@@ -405,7 +465,7 @@ this.toggle = async()=>{//«
 	let kids = arg.kids||[];
 	let len = kids.length;
 
-	let list = new List(`Comments\x20(${len})`, coms, level+1, 19, _storyid, this);
+	let list = new List(`Comments\x20(${len})`, coms, level+1, _storyid, this);
 	this.list = list;
 	list.item = this;
 	for (let i=0; i < len;i++){
@@ -448,7 +508,7 @@ this.focus =()=>{
 
 };//»
 
-const List = function( _tit, _par, _level, _fs, _storyid, _paritem) {//«
+const List = function( _tit, _par, _level, _storyid, _paritem) {//«
 
 this.type = "list";
 this.id = _storyid;
@@ -462,13 +522,13 @@ this.kids = ALL;
 //log(_storyid);
 	if (!_storyid) {
 		m.classList.add("tabbable","list");
-		m.mar=1;
+//		m.mar=1;
 	}
 	m.classList.add("list");
 	m.tabIndex="-1";
 	m.tab_level=_level;
 	const n = mkdv();//name
-	n.fs=_fs;
+//	n.fs=_fs;
 	n.fw="bold";
 	n.innerText=_tit;
 //	n.marl=n.mart=10;
@@ -477,6 +537,8 @@ this.kids = ALL;
 
 	const l = mkdv();//list
 	m.add(n,l);
+//log(m);
+	m.mar=2;
 	this.onenter=()=>{
 		if (ALL[0]) ALL[0].main.focus();
 	};
@@ -533,8 +595,6 @@ const User =function() {//«
 //»
 
 //Funcs«
-
-const stat=()=>{}
 
 const mkbut = (str, par, fn, opts={})=>{//«
 	let butcol="e7e7e7";
@@ -703,7 +763,7 @@ const writeCache=(path,val, if_append)=>{//«
 		let opts={isSys:true, reject:true};
 		opts.APPEND = if_append;
 		try {
-			y(await fsapi.writeHtml5File(`${CACHE_PATH}/${path}`,val, opts));
+			y(await fs.writeHtml5File(`${CACHE_PATH}/${path}`,val, opts));
 		}
 		catch(e){
 cerr(e);
@@ -731,7 +791,6 @@ const get_fbase=(path, type)=>{//«
 const get_fbase_stories=which=>{return get_fbase(`${which}stories`);}
 const get_fbase_item=id=>{return get_fbase(`item/${id}`);};
 const get_fbase_user=name=>{return get_fbase(`user/${name}`);};
-
 const get_user = async(opts={})=>{//«
 
 /*User object
@@ -757,7 +816,6 @@ submitted	List of the user's stories, polls and comments.
 	holdelem&&holdelem.focus();
 
 };//»
-
 const get_item=(id, if_reget)=>{//«
 	return new Promise(async(y,n)=>{
 		let item;
@@ -806,7 +864,7 @@ const get_hn=()=>{//«
 const nofb=()=>{poperr("The 'hackernews' firebase module is not running\x20(call 'hnfbup' first)");};
 const load_iface=()=>{//«
 	return new Promise(async(Y,N)=>{
-		let rv = await fsapi.loadMod("iface.iface",{STATIC:true});
+		let rv = await fs.loadMod("iface.iface",{STATIC:true});
 		if (!rv) return Y();
 		Y(true);
 		if (typeof rv === "string") Core.do_update(`mods.iface.iface`, rv);
@@ -839,7 +897,7 @@ cwarn("firebase is disconnected: "+HN_APPNAME);
 };//»
 const cache_file=path=>{//«
 	return new Promise(async(y,n)=>{
-		let ent = await fsapi.getFsEntryByPath(`${CACHE_PATH}/${path}`);
+		let ent = await fs.getFsEntryByPath(`${CACHE_PATH}/${path}`);
 		if (!ent) return y();
 		ent.file(y);
 	});
@@ -858,79 +916,7 @@ const file_to_ints = (file)=>{//«
 		y(new Uint32Array(await file_to_buf(file)));
 	});
 };//»
-
-
-const init_stories=async(which)=>{//«
-
-	if (is_getting){
-cwarn("is_getting == true");
-		return;
-	}
-is_getting = true;
-	let file = await cache_file(`${which}stories`);
-	let arr;
-	if (file){
-		let dm = Math.floor((Date.now() - file.lastModified)/60000);
-		if (dm < MAX_CACHE_DIFF_MINUTES){
-//cwarn(`Use cache: ${dm} < ${MAX_CACHE_DIFF_MINUTES}`);
-log(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
-			arr = await file_to_ints(file);
-			last_get = file.lastModified;
-		}
-		else{
-cwarn("Expired!");
-			arr = await get_stories(which);
-			last_get = Date.now();
-		}
-	}
-	else{
-cwarn(`GET: ${which}stories`);
-		arr = await get_stories(which);
-	}
-
-	if (!(arr&&arr.length)) {
-		is_getting = false;
-		return;
-	}
-
-//cwarn(`Found: ${GET_NUM_STORIES} stories`);
-//	let items = [];
-
-	toplist = new List(`${which.firstup()}stories`, Main, 0, 23);
-
-	for (let i=0; i < GET_NUM_STORIES;i++){
-		let id=arr[i];
-		let item = await get_item(id);
-		if (!item){
-			poperr(`Error getting item: ${id}`);
-			is_getting = false;
-			return;
-		}
-//if (item.type)
-		if (item.type=="story"||item.type=="comment") toplist.add(i, item);
-	}
-	toplist.focus();
-	is_getting = false;
-
-}//»
 const update_times=()=>{for(let t of TIMES)t.update();}
-const init = async()=>{//«
-
-	if (!await open_db()) return poperr("Could not open the database!");
-
-	let rv = await load_firebase();
-	if (rv!==true) return poperr(rv);
-	if (!await fsapi.mkHtml5Dir(CACHE_PATH)) {
-		await poperr (`Could not create '${CACHE_PATH}'!`);
-		return;
-	}
-//	Main.focus();
-	init_stories(DEF_STORY_TYPE);
-//	update_times();
-//	time_interval = setInterval(update_times,1000);
-
-};//»
-
 const reget_item = async item=>{//«
 
 //log(item);
@@ -968,7 +954,6 @@ log("RV", rv);
 
 
 };//»
-
 const goto_item=(path)=>{//«
 
 const getitem=(list, id)=>{
@@ -999,11 +984,157 @@ while(id){
 
 }//»
 
+const switch_screen=()=>{//«
+
+	if (Main===Online){
+		online_elem_hold = cur_elem;
+		Main.dis="none";
+		Main=Offline;
+		Main.dis="";
+		cur_elem = offline_elem_hold;
+	}
+
+	else if (Main==Offline){
+		offline_elem_hold = cur_elem;
+		Main.dis="none";
+		Main=Notif;
+		Main.dis="";
+		cur_elem = notif_elem_hold;
+		if (notif_elem_hold) notif_elem_hold.focus();
+	}
+
+	else if (Main==Notif){
+		notif_elem_hold = cur_elem;
+		Main.dis="none";
+		Main=Online;
+		Main.dis="";
+		cur_elem = online_elem_hold;
+	}
+	if (cur_elem) cur_elem.focus();
+
+
+
+}//»
+
+const init_stories=async(which)=>{//«
+
+	if (is_getting){
+cwarn("is_getting == true");
+		return;
+	}
+	is_getting = true;
+	let file = await cache_file(`${which}stories`);
+	let arr;
+	if (file){
+		let dm = Math.floor((Date.now() - file.lastModified)/60000);
+		if (dm < MAX_CACHE_DIFF_MINUTES){
+//cwarn(`Use cache: ${dm} < ${MAX_CACHE_DIFF_MINUTES}`);
+log(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
+			arr = await file_to_ints(file);
+			last_get = file.lastModified;
+		}
+		else{
+cwarn("Expired!");
+			arr = await get_stories(which);
+			last_get = Date.now();
+		}
+	}
+	else{
+cwarn(`GET: ${which}stories`);
+		arr = await get_stories(which);
+	}
+
+	if (!(arr&&arr.length)) {
+		is_getting = false;
+		return;
+	}
+
+	toplist = new List(`${which.firstup()}\xa0stories`, Main, 0);
+
+	for (let i=0; i < GET_NUM_STORIES;i++){
+		let id=arr[i];
+		let item = await get_item(id);
+		if (!item){
+			poperr(`Error getting item: ${id}`);
+			is_getting = false;
+			return;
+		}
+		if (item.type=="story"||item.type=="comment") toplist.add(i, item);
+	}
+	toplist.focus();
+	is_getting = false;
+
+}//»
+
+const init_offline=()=>{//«
+	offlist = new List(`Offline\xa0stories`, Offline, 0);
+	offline_elem_hold = offlist;
+};//»
+
+const init_notif=()=>{//«
+	notiflist = new List(`Notifications`, Notif, 0);
+	notif_elem_hold = notiflist;
+};//»
+
+const set_notice=async(path)=>{//«
+	let str = JSON.stringify(last_path);
+	if (notices.includes(str)){
+cwarn("Already being notified for the message!");
+	}
+	else{
+		notices.push(str);
+	}
+	if (await fs.writeFile(NOTICESFILEPATH, JSON.stringify(notices))) 
+log(notices);
+	else 
+cwarn(`Could not write to the file: ${NOTICESFILEPATH}`);
+
+}//»
+
+const await_notices=()=>{
+
+log("AWAIT", notices);
+
+};
+
+const init = async()=>{//«
+	let rv;
+
+	if (!await open_db()) return poperr("Could not open the database!");
+
+	rv = await load_firebase();
+	if (rv!==true) return poperr(rv);
+	if (!await fs.mkHtml5Dir(CACHE_PATH)) {
+		await poperr (`Could not create '${CACHE_PATH}'!`);
+		return;
+	}
+	init_stories(DEF_STORY_TYPE);
+	init_offline();
+	init_notif();
+
+	if (!await fs.mkDir(USERDATAPATH)){
+		cerr(`Could not get/make directory: ${USERDATAPATH}!`);
+//		return;
+	}
+	rv = await fs.readFile(NOTICESFILEPATH,{text:true});
+	if (rv){
+		try{
+			notices = JSON.parse(rv);
+			await_notices();
+//log(notices);
+		}
+		catch(e){
+			cwarn(`Could not parse the file at ${USERDATAPATH}`);
+			cerr(e);
+		}
+	}
+
+};//»
+
 //»
 
 //Obj/CB«
 
-let last_path;
 
 this.onkeydown=async(e,s)=>{//«
 
@@ -1085,6 +1216,10 @@ cwarn("What is this cur_elem", cur_elem);
 	}
 	return;
 }//»
+else if(s=="/_"){
+switch_screen();
+return;
+}
 
 else if (s=="i_"){
 if (!last_path) return;
@@ -1120,10 +1255,14 @@ let got = await get_fbase(`item/${cur_elem.id}/kids`);
 }
 else if (s=="g_") cur_elem.gotolink&&cur_elem.gotolink();
 else if (s=="u_") get_user();
-else if (s=="p_"){
+else if (s=="n_"){
+//n == Notify
+
 
 last_path = cur_elem.path();
-log(last_path);
+
+set_notice(last_path);
+
 
 }
 
@@ -1152,12 +1291,15 @@ toplist&&toplist.focus();
 //	Main.focus();
 };//»
 this.onblur=()=>{}
+this.onappinit=init;
 
 //»
 
-init();
 
 }
+
+
+
 
 
 
