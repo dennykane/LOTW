@@ -102,6 +102,7 @@ the LOTW file system).
 - **Toggle layout mode**: Ctrl+Shift+l
 - **Toggle window chrome**: Ctrl+Shift+w
 - **Cycle window stack**: Alt+\`
+- **Reload**: Alt+r
 
 ### Icons
 - **Toggle icon selection status under cursor**: Space
@@ -146,6 +147,15 @@ Other than certain commands in certain libraries (like `vim` in 'fs'), though,
 most commands are fairly old and likely not to work in the current LOTW system.
 These can either be updated to work or simply deleted from the given command library.
 
+## ~/.bashrc
+
+Most Linux power users put their shell's runtime configuration file to great use. The 
+standard one exists with the name '.bashrc' in the user's home directory (abbreviated as '~/').
+Using this method, environment variables and command aliases can be created and arbitrary commands 
+can be executed upon loading the Terminal application. So, to automatically import the 'fs'
+command library into you shell's execution context, you can run: `$ echo 'import fs;' >> ~/.bashrc`.
+Then the next time the Terminal is loaded (you can use the **Reload** shortcut), the commands
+in the 'fs' library will be automatically imported and available for use.
 
 
 ## Examples
