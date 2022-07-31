@@ -102,7 +102,7 @@ the LOTW file system).
 - **Toggle layout mode**: Ctrl+Shift+l
 - **Toggle window chrome**: Ctrl+Shift+w
 - **Cycle window stack**: Alt+\`
-- **Reload**: Alt+r
+- **Reload**: Alt+r (essential for developers)
 
 ### Icons
 - **Toggle icon selection status under cursor**: Space
