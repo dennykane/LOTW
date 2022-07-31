@@ -6294,13 +6294,12 @@ maxed/fullscreened wins).
 
 */
 		if (!(cobj.overrides && cobj.overrides[kstr])){
-//			if (kstr=="f_A") return fullscreen_window();
-//			if (kstr=="n_A") return minimize_window();
-//			if (kstr=="x_A") return close_window();
-//			if (kstr=="m_A") return maximize_window();
-//			if (kstr=="l_CA") return toggle_win_layout();
-//			if (kstr=="w_CA") return toggle_win_chrome();
-			if (kstr==="p_CAS") return win_reload();
+			if (kstr==="r_A") return win_reload();
+			if (kstr==="p_CAS") {
+cwarn("Please use 'Alt+r'!!!");
+//win_reload();
+return;
+			}
 			if (!is_full) {
 				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
 					if (is_max) return;
@@ -6316,7 +6315,7 @@ maxed/fullscreened wins).
 			}
 		}
 		if (cwin.movediv || cwin.is_minimized) return;
-		if (kstr=="r_A" && cobj.onrefresh) return cobj.onrefresh();
+//		if (kstr=="r_A" && cobj.onrefresh) return cobj.onrefresh();
 		if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
 		return;
 	}

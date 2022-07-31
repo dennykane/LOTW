@@ -114,11 +114,36 @@ the LOTW file system).
 
 # Command line usage
 
+## LOTW uses a subset of the Shell Command Language
+
 Other than high level control flow structures (like if..then and for..in), the syntax of
 [the POSIX Shell Command Language](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html)
-should mostly work. It is easiest to provide working examples that showcase the particular
-capabilities of the LOTW system. Those are forthcoming.
+should mostly work. The reason why control flow idioms are not supported is because they add to
+the complexity of the codebase (much more risk) without enough of a payoff in terms of added value (not much more reward).
+Since the underlying JavaScript itself offers extremely effective algorithmic support,
+those users who need to invoke their own non-supported, non-trivial functions via the command line will be
+directed to the development side of LOTW.
 
+## Invoking commands
+
+The
+[Terminal](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/sys/Terminal.js)
+application automatically loads the
+[shell](https://github.com/linuxontheweb/lotw/tree/main/root/code/mods/sys/shell.js)
+module upon invocation. Located inside that file are a number of builtin
+commands (like ls, cat, echo and pwd).  You can see which these are by double
+tapping the Tab key in the Terminal with nothing at the prompt.  But since
+there may be an arbitrary number of commands (10,000+) in a given LOTW setup,
+an early design decision was to create the concept of "command libraries" that
+could be brought into the current shell's execution context via a command, eg.,
+to bring in all of the commands in the 'fs' command library, run: `$ import
+fs`.
+
+
+
+## Examples
+
+`~$ cat lines.txt | grep '^[^\s]+$' | less`
 
 # Development
 

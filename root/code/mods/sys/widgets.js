@@ -571,7 +571,8 @@ const popup = (str, opts={}) => {
 		STR: str,
 		SEL: opts.sel,
 		WIN: opts.win,
-		CB: opts.cb
+		CB: opts.cb,
+		WIDE: opts.wide
 	});
 }
 this.popup=popup;

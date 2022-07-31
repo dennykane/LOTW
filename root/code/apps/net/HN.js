@@ -1,5 +1,11 @@
 
+/*xTODOx
 
+
+Wait on the number of kids for a given item to increase from current amount...
+
+
+*/
 export const app=function(arg){
 
 //Imports«
@@ -12,7 +18,13 @@ const {log,cwarn,cerr,globals}=Core;
 const{util,dev_env,dev_mode}=globals;
 const{isarr,isobj,isstr,mkdv,mksp,mk}=util;
 const {popup:_popup,popok:_popok,poperr:_poperr,popyesno:_popyesno, popin:_popin,popinarea:_popinarea}=NS.api.widgets;
-const popup=(s)=>{return new Promise((y,n)=>{_popup(s,{win:Topwin,cb:y});});};
+const popup=(s,opts={})=>{
+	return new Promise((y,n)=>{
+		opts.win = Topwin;
+		opts.cb = y;
+		_popup(s,opts);
+	});
+};
 const popin=(s)=>{return _popin(s,{win:Topwin});};
 const popinarea=(tit)=>{return _popinarea("",tit,{win:Topwin});};
 const popok=(s)=>{return new Promise((y,n)=>{_popok(s,{win:Topwin,cb:y});});};
@@ -26,6 +38,7 @@ const fsapi=NS.api.fs;
 //»
 
 //Var«
+let toplist;
 
 let FS = 24;
 
@@ -134,6 +147,8 @@ this.type="item";
 this.id = _storyid;
 this.number = _num;
 this.tabpar = _tabpar;
+this.user = arg.by;
+//log(arg);
 
 //DOM«
 
@@ -208,8 +223,8 @@ if (is_story) {//«
 //	info.innerText = `${arg.descendants}`;
 let tcol;
 let n = arg.descendants;
-if (n<6) tcol="#77d";//blue
-else if (n<12) tcol="#aaf";//light blue
+if (n<6) tcol="#99e";//blue
+else if (n<12) tcol="#bbf";//light blue
 else if (n<25) tcol="#7ff";//turquoise
 else if (n<50) tcol="#8f8";//green
 else if (n < 100) tcol="#ff9";//yellow
@@ -359,14 +374,11 @@ this.toggle = async()=>{//«
 this.onenter=()=>{
 if (cont.dis==="none") return;
 this.list.onenter();
-//log(this.list);
-//log(cont.dis);
-//log(body);
-//	body.focus();
-
 };
 
-
+this.focus =()=>{
+main.focus();
+};
 
 };//»
 
@@ -378,9 +390,13 @@ this.id = _storyid;
 	const ALL = [];
 
 	const m = mkdv();//main
+
 	_par.add(m);
 //log(_storyid);
-	if (!_storyid) m.classList.add("tabbable","list");
+	if (!_storyid) {
+		m.classList.add("tabbable","list");
+		m.mar=1;
+	}
 	m.classList.add("list");
 	m.tabIndex="-1";
 	m.tab_level=_level;
@@ -418,7 +434,25 @@ nw.main.focus();
 	};
 	m.onfocus=()=>{
 		cur_elem = this;
+if (!_storyid){
+m.bor="1px dotted #ff0";
+}
+
 	};
+m.onblur=()=>{
+	if (!_storyid) {
+		m.bor="1px solid transparent";
+		cur_elem = null;
+	}
+};
+	if (!_storyid) {
+		m.onescape=()=>{
+			if (cur_elem == this){
+				m.blur();
+				return true;
+			}
+		};
+	}
 	this.focus=()=>{
 		m.focus();
 	};
@@ -629,6 +663,34 @@ const get_fbase=(path, type)=>{//«
 };//»
 const get_fbase_stories=which=>{return get_fbase(`${which}stories`);}
 const get_fbase_item=id=>{return get_fbase(`item/${id}`);};
+const get_fbase_user=name=>{return get_fbase(`user/${name}`);};
+
+const get_user = async(opts={})=>{//«
+
+/*User object
+id	The user's unique username. Case-sensitive. Required.
+created	Creation date of the user, in Unix Time.
+karma	The user's karma.
+about	The user's optional self-description. HTML.
+submitted	List of the user's stories, polls and comments.
+*/
+
+	let holdelem;
+	let user;
+	let which = opts.which||"about";
+	if (opts.user) user = opts.user;
+	else{
+		user = cur_elem.user;
+		holdelem = cur_elem;
+	}
+
+	let about = await get_fbase(`user/${cur_elem.user}/${which}`)
+	if (!about) about = "[Nothing]";
+	await popup(about, {title: cur_elem.user, wide: true});
+	holdelem&&holdelem.focus();
+
+};//»
+
 const get_item=(id, if_reget)=>{//«
 	return new Promise(async(y,n)=>{
 		let item;
@@ -767,7 +829,8 @@ cwarn(`GET: ${which}stories`);
 //cwarn(`Found: ${GET_NUM_STORIES} stories`);
 //	let items = [];
 
-	let list = new List(`${which.firstup()}stories`, Main, 0, 23);
+	toplist = new List(`${which.firstup()}stories`, Main, 0, 23);
+
 	for (let i=0; i < GET_NUM_STORIES;i++){
 		let id=arr[i];
 		let item = await get_item(id);
@@ -777,9 +840,9 @@ cwarn(`GET: ${which}stories`);
 			return;
 		}
 //if (item.type)
-		if (item.type=="story"||item.type=="comment") list.add(i, item);
+		if (item.type=="story"||item.type=="comment") toplist.add(i, item);
 	}
-	list.focus();
+	toplist.focus();
 	is_getting = false;
 
 }//»
@@ -830,7 +893,9 @@ cwarn("is_getting == true");
 	let rv = new Item(got, item.number, item.tabpar, item.id)
 log("RV", rv);
 	item.list.replace(item, rv);
+	rv.toggle();	
 	is_getting = false;
+	
 
 //*/
 
@@ -897,6 +962,7 @@ if (s=="TAB_"||s=="TAB_S"){//«
 		act.onescape&&act.onescape();
 		arr[prev_ind].focus();
 	}
+	return;
 }//»
 else if(s=="SPACE_"){//«
 	e.preventDefault();
@@ -905,6 +971,7 @@ else if(s=="SPACE_"){//«
 		return;
 	}
 	if (cur_elem.toggle) cur_elem.toggle();
+	return;
 }//»
 else if(s=="ENTER_"){//«
 
@@ -918,9 +985,12 @@ else if(s=="ENTER_"){//«
 	else {
 cwarn("What is this cur_elem", cur_elem);
 	}
-
+	return;
 }//»
-else if (s=="r_") {
+
+if (!cur_elem) return;
+
+if (s=="r_") {
 //log(cur_elem);
 	if (cur_elem.type==="item") reget_item(cur_elem);
 	else if (cur_elem.type=="list" && !cur_elem.id){
@@ -934,9 +1004,11 @@ Main.innerHTML="";
 init_stories(DEF_STORY_TYPE);
 
 	}
-
+	return;
 }
-else if (s=="c_"){
+
+if (cur_elem.type!=="item") return;
+if (s=="c_"){
 	if (cur_elem.comment) cur_elem.comment();
 }
 else if (s=="k_"){
@@ -945,6 +1017,17 @@ if (!cur_elem.id) return;
 let got = await get_fbase(`item/${cur_elem.id}/kids`);
 }
 else if (s=="g_") cur_elem.gotolink&&cur_elem.gotolink();
+else if (s=="u_"){
+
+//let user = await get_fbase_user(cur_elem.user);
+
+get_user();
+//setTimeout(()=>{
+//log(cur_elem);
+//cur_elem.focus();
+//},0);
+
+}
 
 };//»
 this.onescape = ()=>{//«
@@ -963,6 +1046,8 @@ this.onfocus=()=>{//«
 	if(cur_elem&&cur_elem.focus) cur_elem.focus();
 	else{
 //cwarn("NOFOCUS", cur_elem);
+//log(toplist);
+toplist&&toplist.focus();
 	}
 //log(cur_elem);
 //	Main.focus();
