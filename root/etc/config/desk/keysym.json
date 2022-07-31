@@ -9,5 +9,5 @@
 	"w_CA":{"n":"toggle_win_chrome"},
 	"n_A":{"n":"minimize_window"},
 	"f_CAS":{"n":"toggle_fullscreen"},
-	"b_CAS":{"n":"toggle_taskbar"}
+	"b_A":{"n":"toggle_taskbar"}
 }
