@@ -160,8 +160,11 @@ in the 'fs' library will be automatically imported and available for use.
 
 ## Examples
 
-**Filter out whitespace only lines in file.txt and send the output into `less`**
+
+Filter out whitespace only lines in file.txt and send the output into `less`:
+
 `~$ cat file.txt | grep '^[^\s]+$' | less`
+
 
 # Development
 
