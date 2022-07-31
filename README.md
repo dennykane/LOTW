@@ -139,7 +139,7 @@ the commands in a given library may be imported into the current shell's executi
 so, to bring in all of the commands in the 'fs' command library, run: `$ import
 fs`. 
 
-Here is the way that you can see which commands are in a given library: `$ lib &lt; libname &gt;`.
+Here is the way that you can see which commands are in a given library: `$ lib <libname>`.
 Also, since the `lib` command supports autocompletion for its argument, you can 
 use it as a quick way to search for the available libraries in the LOTW system. 
 Other than certain commands in certain libraries (like `vim` in 'fs'), though, 
