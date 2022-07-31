@@ -53,13 +53,13 @@ a default application will be invoked as the handler. The default application
 is currently 'util.BinView' (code at 
 [root/code/apps/util/BinView.js](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/util/BinView.js)).
 
-2) Using the command `$ open path/to/somefile.ext` in the Terminal. 
+2) Using the command `$ open path/to/somefile.ext` in the terminal. 
 
-3) Creating an application icon via the Terminal like this: `$ mkappicon
+3) Creating an application icon via the terminal like this: `$ mkappicon
 audio.Synth > ~/Desktop/MyAppIcon.app`, and then using either of the above
 methods to open the application.
 
-4) Opening the application directly with the 'app' command like such: `$ app audio.Synth`. This method allows for tab
+4) Opening the application directly with the `app` command like such: `$ app audio.Synth`. This method allows for tab
 completion of the command's argument, making it a *very* simple way to search for available applications.
 
 
@@ -128,12 +128,12 @@ directed to the development side of LOTW.
 ## Searching for and invoking commands
 
 The
-[Terminal](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/sys/Terminal.js)
+[terminal](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/sys/Terminal.js)
 application automatically loads the
 [shell](https://github.com/linuxontheweb/lotw/tree/main/root/code/mods/sys/shell.js)
 module upon invocation. Located inside the shell's source code are a number of builtin
 commands (like `ls`, `cat`, `echo` and `pwd`).  You can see which these are by double
-tapping the Tab key in the Terminal with nothing at the prompt.  Since, however, 
+tapping the Tab key in the terminal with nothing at the prompt.  Since, however, 
 there may be an arbitrary number of commands (1,000+) in a given LOTW installation,
 an early design decision was to work out a concept of "command libraries", such that
 the commands in a given library may be imported into the current shell's execution context;
@@ -152,9 +152,9 @@ If useful, they can be updated to work; if not, then simply deleted from the giv
 Most Linux power users put their shell's runtime configuration file to great use. The 
 standard one exists with the name '.bashrc' in the user's home directory (abbreviated as '~/').
 Using this method, environment variables and command aliases can be created and arbitrary commands 
-can be executed upon loading the Terminal application. So, to automatically import the 'fs'
+can be executed upon loading the terminal application. So, to automatically import the 'fs'
 command library into you shell's execution context, you can run: `$ echo 'import fs;' >> ~/.bashrc`.
-Then the next time the Terminal is loaded (you can use the **Reload** shortcut), the commands
+Then the next time the terminal is loaded (you can use the **Reload** shortcut), the commands
 in the 'fs' library will be automatically imported and available for use.
 
 
