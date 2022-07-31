@@ -153,7 +153,7 @@ Most Linux power users put their shell's runtime configuration file to great use
 standard one exists with the name '.bashrc' in the user's home directory (abbreviated as '~/').
 Using this method, environment variables and command aliases can be created and arbitrary commands 
 can be executed upon loading the terminal application. So, to automatically import the 'fs'
-command library into you shell's execution context, you can run: `$ echo 'import fs;' >> ~/.bashrc`.
+command library into you shell's execution context, you can run: <code>$&nbsp;echo 'import fs;' >> ~/.bashrc</code>.
 Then the next time the terminal is loaded (you can use the **Reload** shortcut), the commands
 in the 'fs' library will be automatically imported and available for use.
 
