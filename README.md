@@ -28,7 +28,7 @@ example, performing the following simple operation in the terminal application
 indeed creates an entry at `~/file.txt`, held in the browser's sandboxed local
 storage, accessible regardless of network status.
 
-	~$ echo "A bunch of interesting thoughts" > file.txt
+	$ echo "A bunch of interesting thoughts" > file.txt
 
 ## Disclaimer (YMMV)
 
@@ -163,13 +163,13 @@ in the 'fs' library will be automatically imported and available for use.
 
 Filter out whitespace-only lines in file.txt and send the output into `less`.
 
-`~$ cat file.txt | grep '^[^\s]+$' | less`
+`$ cat file.txt | grep '^[^\s]+$' | less`
 
 * * *
 
 Attempt to create a new file from two files, then delete the originals. Print a message upon failure.
 
-`~$ cat file1.txt file2.txt > newfile.txt && rm file1.txt file2.txt || echo "The operation failed!"`
+`$ cat file1.txt file2.txt > newfile.txt && rm file1.txt file2.txt || echo "The operation failed!"`
 
 
 # Development
