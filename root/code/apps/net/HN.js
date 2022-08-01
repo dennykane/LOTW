@@ -1,6 +1,9 @@
 
 /*xTODOx«
 
+When we goto_item(), we need to check if 
+
+
 
 First, do a ref.once to get the entire new kids list, and then wait on incoming new messages 
 with ref.on('child_added').
@@ -73,7 +76,7 @@ await_notices() is where we are going to either:
 »*/
 
 
-export const app=function(arg){
+export const app=function(arg){//«
 
 //Imports«
 
@@ -105,9 +108,19 @@ const fs=NS.api.fs;
 //»
 
 //Var«
+
+let total_new = 0;
+let MIN_REGET_MINS = 3;
+//let GET_NUM_STORIES = 30;
+let GET_NUM_STORIES = 1;
+
+let MAX_CACHE_DIFF_MINUTES = 200;
+
+
 const REFS=[];
 let notices=[];
 
+let toplist;
 let offlist;
 let notiflist;
 let notif_elem_hold;
@@ -115,25 +128,19 @@ let online_elem_hold;
 let offline_elem_hold;
 
 let last_path;
-let toplist;
 
 let FS = 24;
 
 let last_get;
 let is_getting = false;
-let MIN_REGET_MINS = 3;
 
 const DEF_STORY_TYPE = "top";
 
 let cur_elem;
 
-let time_interval;
-const TIMES=[];
+//let time_interval;
+//const TIMES=[];
 
-//let GET_NUM_STORIES = 30;
-let GET_NUM_STORIES = 3;
-
-let MAX_CACHE_DIFF_MINUTES = 1000;
 
 let POPUP_WID=window.outerWidth-100;
 let POPUP_HGT=window.outerHeight-100;
@@ -153,6 +160,8 @@ const HN_APPNAME = "hackernews";
 //»
 
 //DOM«
+
+let statbar = Topwin.status_bar;
 
 _Main.pos="relative";
 _Main.bgcol="#030303";
@@ -199,57 +208,9 @@ Main = Online;
 
 //Classes«
 
-const Time = function(SECS,par){//«
-const time_arr=(secs)=>{//«
-	let arr;
-	if (secs) arr = new Date(secs*1000).toString().split(" ");
-	else arr = new Date().toString().split(" ");
-	let tm = arr[4].split(":");
-	return [arr[3],arr[1],arr[2].replace(/^0/,""),tm[0],tm[1],tm[2]];
-};//»
-let d = mksp();
-let TMARR = time_arr(SECS);
-this.update=()=>{
-if (!d.isConnected) return;
-let now = Math.floor(Date.now()/1000);
-let diff = now - SECS;
-let num, unit;
-let val;
-let pref="";
-if (diff <= 15) val = "just now";
-else if (diff < 60){
-	pref="<";
-	num = 1;
-	unit = "min";
-}
-else if (diff < 3600){
-	num = Math.floor(diff/60);
-	unit="min";
-}
-else if (diff < 86400){
-	num = Math.floor(diff/3600);
-	unit = "hr";
-}
-else{
-	num = Math.floor(diff/86400);
-	unit = "day";
-}
-if (!val) {
-	if (num!==1) unit = unit+"s";
-	val = `${pref}${num}\xa0${unit}\xa0ago`
-}
-d.innerText = val;
-};
-this.kill=()=>{
-	TIMES.splice(TIMES.indexOf(this), 1);
-};
-par.add(d);
-TIMES.push(this);
-this.update();
-};//»
-
 const Item = function(arg, _num, _tabpar, _storyid, _paritem) {//«
 //log(arg, _num, _par, _tabpar, _storyid);
+
 this.data = arg;
 this.type="item";
 this.id = _storyid;
@@ -330,9 +291,9 @@ const user = mkdv();
 user.style.whiteSpace="nowrap";
 user.innerText=arg.by||"?";
 user.marr=20;
-const time = mkdv();
-time.marr=20;
-new Time(arg.time, time);
+//const time = mkdv();
+//time.marr=20;
+//new Time(arg.time, time);
 
 if (is_story) {//«
 //bhead.style.alignItems="end";
@@ -410,7 +371,8 @@ body.onenter=()=>{//«
 	}
 };//»
 body.onfocus=()=>{
-	cur_elem = body;
+log("BODYFOCUS!");
+//	cur_elem = body;
 };
 const combut = mkbut("Comment",cont,()=>{//«
 	let url;
@@ -462,10 +424,10 @@ this.toggle = ()=>{//«
 			main.is_active=false;
 			if (comprev) comprev.dis="";
 			main.scrollIntoView();
-			return;
+			return Y();
 		}
 		if (arg.type==="story"||arg.type=="comment"){
-			if (coms) return;
+			if (coms) return Y();
 		}
 		else return cwarn(`Toggle: ${arg.type}`);
 
@@ -482,23 +444,19 @@ this.toggle = ()=>{//«
 		for (let i=0; i < len;i++){
 			let id=kids[i];
 			let item = await get_item(id);
+
 			if (!item){
 				poperr(`Error getting item: ${id}`);
 				return;
 			}
-			list.add(i, item);
+			list.add(item);
 		}
 		Y();
 	});
 };//»
-
-this.open=()=>{
-
-if (cont.dis==="none") return this.toggle();
-
-}
-
-this.path=()=>{
+this.open=()=>{if(cont.dis==="none")return this.toggle();}
+this.close=()=>{if(!cont.dis)return this.toggle();}
+this.path=()=>{//«
 	if (_path) return _path;
 	let cur = _paritem;
 	let arr = [arg.id];
@@ -508,62 +466,58 @@ this.path=()=>{
 	}
 	_path = arr;
 	return _path;
-};
-
-this.onenter=()=>{
+};//»
+this.onenter=()=>{//«
 	if (cont.dis==="none") return;
 	this.list.onenter();
-};
+};//»
+this.focus=()=>{main.focus();};
 
-this.focus =()=>{
-	main.focus();
-};
 
 };//»
-
 const List = function( _tit, _par, _level, _storyid, _paritem) {//«
 
 this.type = "list";
 this.id = _storyid;
 this.parent = _paritem;
 
-	const ALL = [];
+const ALL = [];
 this.kids = ALL;
-	const m = mkdv();//main
+const m = mkdv();//main
 
-	_par.add(m);
+_par.add(m);
 //log(_storyid);
-	if (!_storyid) {
-		m.classList.add("tabbable","list");
+if (!_storyid) {
+	m.classList.add("tabbable","list");
 //		m.mar=1;
-	}
-	m.classList.add("list");
-	m.tabIndex="-1";
-	m.tab_level=_level;
-	const n = mkdv();//name
+}
+m.classList.add("list");
+m.tabIndex="-1";
+m.tab_level=_level;
+const n = mkdv();//name
 //	n.fs=_fs;
-	n.fw="bold";
-	n.innerText=_tit;
+n.fw="bold";
+n.innerText=_tit;
 //	n.marl=n.mart=10;
-	n.padl=n.padt=5;
-	n.marb=10;
+n.padl=n.padt=5;
+n.marb=10;
 
-	const l = mkdv();//list
-	m.add(n,l);
+const l = mkdv();//list
+m.add(n,l);
 //log(m);
-	m.mar=2;
-	this.onenter=()=>{
-		if (ALL[0]) ALL[0].main.focus();
-	};
+m.mar=2;
+this.onenter=()=>{
+	if (ALL[0]) ALL[0].main.focus();
+};
 
-	this.add = (num, item)=>{
-		let rv = new Item(item, num, m, item.id||_storyid, _paritem)
-		rv.list = this;
+this.add = (item)=>{
+	let rv = new Item(item, ALL.length, m, item.id||_storyid, _paritem)
+	rv.list = this;
 //log(rv.main);
-		m.add(rv.main);
-		ALL.push(rv);
-	};
-	this.replace=(old, nw)=>{
+	m.add(rv.main);
+	ALL.push(rv);
+};
+this.replace=(old, nw)=>{
 
 //let which = ALL.indexOf(old);
 
@@ -573,44 +527,56 @@ ALL.splice(old.number, 1, nw);
 old.main.replaceWith(nw.main);
 nw.main.focus();
 
-	};
-	m.onfocus=()=>{
-		cur_elem = this;
+};
+m.onfocus=()=>{
+	cur_elem = this;
 if (!_storyid){
 m.bor="1px solid #fff";
 }
 
-	};
-m.onblur=()=>{
-	if (!_storyid) {
-		m.bor="1px solid transparent";
-		cur_elem = null;
-	}
 };
-	if (!_storyid) {
-		m.onescape=()=>{
-			if (cur_elem == this){
-				m.blur();
-				return true;
-			}
-		};
-	}
-	this.focus=()=>{
-		m.focus();
+m.onblur=()=>{
+if (!_storyid) {
+	m.bor="1px solid transparent";
+	cur_elem = null;
+}
+};
+if (!_storyid) {
+	m.onescape=()=>{
+		if (cur_elem == this){
+			m.blur();
+			return true;
+		}
 	};
+}
+this.focus=()=>{
+	m.focus();
+};
+
+};//»
+const Notice = function(_mess, _item, _path){//«
+
+let pathstr = JSON.stringify(_path);
+
+const update=(add)=>{//«
+
+//cwarn(`Updating ${id} => +${nnewkids}`);
+	numsp.innerHTML=`(${nkids}<span style="color:#0f0">+${nnewkids}</span>)`;
+	total_new+=add;
+	stat_total();
 
 };//»
 
-const Notice = function(_mess, _item, _path){//«
+this.type="notice";//«
 let id = _item.id;
 let kids=[];
+let newkids;
 if (_item.kids) kids = _item.kids;
-
 let nkids = kids.length;
-
+let nnewkids;
 this.item = _item;
-
-let m = mkdv();
+//»
+let m = mkdv();//«
 let numsp = mksp();
 numsp.marr=5;
 numsp.innerText=`(${nkids})`;
@@ -623,79 +589,147 @@ m.tabIndex="-1";
 //m.innerText = 	`(${nkids})\xa0\xa0${_mess}`;
 m.add(numsp, messp);
 Notif.childNodes[0].add(m);
+//»
 
-m.onfocus=()=>{
-	cur_elem = this;
-};
+m.onfocus=()=>{cur_elem=this;};
+this.delete = async()=>{//«
 
-this.onenter=()=>{
+//log("DELETE", _path);
+//log(REFS, JSON.stringify(_path));
+let s=JSON.stringify(_path);
+let ind = notices.indexOf(s);
+if (ind < 0) return cerr("The path was not in notices!!!",notices, s);
+notices.splice(ind, 1);
+if (!await fs.writeFile(NOTICESFILEPATH, JSON.stringify(notices))){
+	cwarn(`There was a problem writing the file ${NOTICESFILEPATH}`);
+}
+ref.off();
+m.del();
+notiflist.focus();
 
-//log(_path);
+};//»
+this.onenter=async()=>{//«
+	let no_refresh = false;
+	if (newkids.length <= kids.length) no_refresh = true;
 
-	goto_item(_path);
+	if (!await goto_item(JSON.parse(pathstr), !no_refresh)){
+cwarn("Failed to goto item so not updating notification status");
+return;
+	}
+	if (no_refresh) return;
+	_item.kids = newkids;
+	if (!await add_db_item(_item)){
+		_item.kids=kids;
+cerr("Could not add the updated item!");
+		return;
+	}
 
-};
-this.focus=()=>{
-	m.focus();
-};
-///*
-let refpath = `/v0/item/${_item.id}/kids`;
-//log(refpath);
+	kids = newkids;
+	nkids = kids.length;
+	newkids = null;
+	total_new-=nnewkids;
+	stat_total();
+	nnewkids = 0;
+	numsp.innerHTML=`(${nkids})`;
+};//»
+this.focus=()=>{m.focus();};
+
+let refpath = `/v0/item/${_item.id}/kids`;//«
 let ref = get_ref(refpath);
 if (!ref) return cerr(`No ref from: ${refpath}`);
-
 REFS.push(ref);
 
-/*
-ref.once("value",snap=>{
-let arr = snap.val();
-let len = 0;
-if (arr) len = arr.length;
-let diff = len - nkids;
-if (diff){
-log(`New: ${diff}`);
-}
-});
-*/
-//*/
+ref.once("value",snap=>{//«
 
-///*
-let newkids = 0;
+	newkids = snap.val();
+	if (!newkids) newkids = [];
+	nnewkids = newkids.length - nkids;
+	if (nnewkids < 0){
+		cerr(`nnewkids(${nnewkids}) < 0 !?!?!?!`);
+		return;
+	}
+	if (nnewkids>0) update(nnewkids);
+	ref.on("child_added",snap=>{
+		let messid = snap.val();
+		if (kids.includes(messid)||newkids.includes(messid)) return;
+		nnewkids++;
+		update(1);
+	});
 
-ref.on("child_added",snap=>{
-//	y(snap.val());
-let messid = snap.val();
-if (kids.includes(messid)){
-//log("OLD", id, messid);
-}
-else{
+});//»
 
-newkids++;
-
-numsp.innerHTML=`(${nkids}<span style="color:#0f0">+${newkids}</span>)`;
-//cwarn("NEW", id, messid);
-
-}
-
-});
-//*/
-
-//let ref = get_fbase(`item/${_item.id}/kids`)
-
-//log(ref);
-
-
+//»
 
 }//»
-
 const User =function() {//«
 
 };//»
+
+
+/*Old«
+const Time = function(SECS,par){//«
+const time_arr=(secs)=>{//«
+	let arr;
+	if (secs) arr = new Date(secs*1000).toString().split(" ");
+	else arr = new Date().toString().split(" ");
+	let tm = arr[4].split(":");
+	return [arr[3],arr[1],arr[2].replace(/^0/,""),tm[0],tm[1],tm[2]];
+};//»
+let d = mksp();
+let TMARR = time_arr(SECS);
+this.update=()=>{
+if (!d.isConnected) return;
+let now = Math.floor(Date.now()/1000);
+let diff = now - SECS;
+let num, unit;
+let val;
+let pref="";
+if (diff <= 15) val = "just now";
+else if (diff < 60){
+	pref="<";
+	num = 1;
+	unit = "min";
+}
+else if (diff < 3600){
+	num = Math.floor(diff/60);
+	unit="min";
+}
+else if (diff < 86400){
+	num = Math.floor(diff/3600);
+	unit = "hr";
+}
+else{
+	num = Math.floor(diff/86400);
+	unit = "day";
+}
+if (!val) {
+	if (num!==1) unit = unit+"s";
+	val = `${pref}${num}\xa0${unit}\xa0ago`
+}
+d.innerText = val;
+};
+this.kill=()=>{
+	TIMES.splice(TIMES.indexOf(this), 1);
+};
+par.add(d);
+TIMES.push(this);
+this.update();
+};//»
+»*/
 
 //»
 
 //Funcs«
 
+//Util«
+
+//const update_times=()=>{for(let t of TIMES)t.update();}
+const stat_total=()=>{
+	let sty="";
+	if (total_new) sty=' style="color:#0d0;font-weight:900;"';
+	stat(`<span${sty}>${total_new}</span> messages`);
+};
+const stat=(s)=>{statbar.innerHTML=s;};
 const mkbut = (str, par, fn, opts={})=>{//«
 	let butcol="e7e7e7";
 	let butborcol="#ccc";
@@ -718,7 +752,7 @@ const mkbut = (str, par, fn, opts={})=>{//«
 	d.tcol="#000";
 //	d.active_message = opts.message;
 	d.onfocus=(e)=>{
-		cur_elem = d;
+//		cur_elem = d;
 //		d.tcol="#00c";
 		stat();
 	};
@@ -794,6 +828,31 @@ const is_visible = which => {//«
 
 	return (r.top >= mr.top-5 && r.bottom <= mr.bottom+5);
 };//»
+const cache_file=path=>{//«
+	return new Promise(async(y,n)=>{
+		let ent = await fs.getFsEntryByPath(`${CACHE_PATH}/${path}`);
+		if (!ent) return y();
+		ent.file(y);
+	});
+};//»
+const file_to_buf=(file)=>{//«
+	return new Promise((y,n)=>{
+		let reader = new FileReader();
+		reader.onloadend = function(e) {
+			y(this.result);
+		};
+		reader.readAsArrayBuffer(file);
+	});
+};//»
+const file_to_ints = (file)=>{//«
+	return new Promise(async(y,n)=>{
+		y(new Uint32Array(await file_to_buf(file)));
+	});
+};//»
+
+
+//»
+//Idb«
 const open_db=()=>{//«
 	return new Promise(async(y,n)=>{
 		let req = indexedDB.open(HN_DB_NAME, HN_DB_VERS);
@@ -873,6 +932,8 @@ cerr(e);
 	});
 };
 //»
+//»
+//Fbase«
 const get_ref = (path) =>{//«
 	let app = get_hn();
 	if (!app) return nofb();
@@ -995,48 +1056,25 @@ cwarn("firebase is disconnected: "+HN_APPNAME);
 		});
 	});
 };//»
-const cache_file=path=>{//«
-	return new Promise(async(y,n)=>{
-		let ent = await fs.getFsEntryByPath(`${CACHE_PATH}/${path}`);
-		if (!ent) return y();
-		ent.file(y);
-	});
-};//»
-const file_to_buf=(file)=>{//«
-	return new Promise((y,n)=>{
-		let reader = new FileReader();
-		reader.onloadend = function(e) {
-			y(this.result);
-		};
-		reader.readAsArrayBuffer(file);
-	});
-};//»
-const file_to_ints = (file)=>{//«
-	return new Promise(async(y,n)=>{
-		y(new Uint32Array(await file_to_buf(file)));
-	});
-};//»
-const update_times=()=>{for(let t of TIMES)t.update();}
-const reget_item = async item=>{//«
 
-//log(item);
-//return;
+//»
+//App«
+
+const reget_item = async (item, if_override)=>{//«
+
 if (item.data.fetched) {
-let then = new Date(item.data.fetched).getTime();
-let now = new Date().getTime();
+	let then = new Date(item.data.fetched).getTime();
+	let now = new Date().getTime();
 
-let diff_mins = (now-then)/60000;
-if (diff_mins< MIN_REGET_MINS) {
-//cwarn();
-await popup(`${diff_mins.toFixed(1)} < MIN_REGET_MINS(${MIN_REGET_MINS})`);
-//log("DONE");
-item.main.focus();
-return;
+	if (!if_override) {
+		let diff_mins = (now-then)/60000;
+		if (diff_mins< MIN_REGET_MINS) {
+			await popup(`${diff_mins.toFixed(1)} < MIN_REGET_MINS(${MIN_REGET_MINS})`);
+			item.main.focus();
+			return;
+		}
+	}
 }
-
-}
-//return;
-///*
 	if (is_getting){
 cwarn("is_getting == true");
 		return;
@@ -1054,36 +1092,72 @@ log("RV", rv);
 
 
 };//»
+const goto_item=(path, if_refresh)=>{//«
 
-const goto_item=async(path)=>{//«
+return new Promise(async(Y,N)=>{
+	const getitem=(list, id)=>{
+		for (let itm of list.kids){
+			if (itm.data.id == id) return itm;
+		}
+	};
+	let screen;
+	let parid = path.shift();
 
-const getitem=(list, id)=>{
-	for (let itm of list.kids){
-		if (itm.data.id == id) return itm;
+	let par = getitem(toplist, parid);
+	if (par) screen = Online;
+	else{
+//cwarn("Parent not in 'toplist'");
+		par = getitem(offlist, parid);
+		if (!par){
+//cwarn("Parent not in 'offlist'");
+			let item = await get_db_item(parid);
+			if (!item) {
+cerr(`Could not get main item ${parid} from the db`);
+				return Y();
+			}
+			offlist.add(item);
+			par = getitem(offlist, parid);
+			if (!par){
+cerr("Wut, could not get par after JUST ADDING THATT ITEMMM???");
+				return Y();
+			}
+		}
+		screen = Offline;
 	}
-};
-
-let parid = path.shift();
-
-let par = getitem(toplist, parid);
-if (!par){
-	cerr("Parent not in 'toplist'");
-	return;
-}
-switch_to_screen(Online);
-let cur = par;
-let id = path.shift();
-await cur.open();
-cur.focus();
-while(id){
-	cur = getitem(cur.list, id);
+	switch_to_screen(screen);
+	goto_main_list();
+	let cur = par;
 	await cur.open();
 	cur.focus();
-	id = path.shift();
-}
+	let id = path.shift();
+	while(id){
+		cur = getitem(cur.list, id);
+		await cur.open();
+		cur.focus();
+		id = path.shift();
+	}
+
+	if (if_refresh) reget_item(cur, true);
+	Y(true);
+});
+
 
 }//»
-
+const focus_main_list=()=>{//«
+	if (Main===Online) toplist.focus();
+	else if (Main===Offline) offlist.focus();
+	else notiflist.focus();
+};//»
+const goto_main_list=()=>{//«
+	if (!cur_elem) return focus_main_list();
+	if (cur_elem === toplist || cur_elem === offlist || cur_elem === notiflist) return;
+	let iter=0;
+	while (!(cur_elem === toplist || cur_elem === offlist || cur_elem === notiflist)){
+		iter++;
+		if (iter > 100) throw new Error("!?!?!?!?");
+		this.onescape();
+	}
+};//»
 const switch_screen=()=>{//«
 
 	if (Main===Online){
@@ -1113,7 +1187,6 @@ const switch_screen=()=>{//«
 	if (cur_elem) cur_elem.focus();
 
 }//»
-
 const switch_to_screen=(which)=>{//«
 
 	if (Main===which) return;
@@ -1124,6 +1197,51 @@ const switch_to_screen=(which)=>{//«
 	switch_screen();
 
 }//»
+const set_notice=async(path)=>{//«
+	let str = JSON.stringify(last_path);
+	if (notices.includes(str)){
+cwarn("Already being notified for the message!");
+	}
+	else{
+		notices.push(str);
+	}
+	if (await fs.writeFile(NOTICESFILEPATH, JSON.stringify(notices))) 
+log(notices);
+	else 
+cwarn(`Could not write to the file: ${NOTICESFILEPATH}`);
+
+}//»
+const await_notices=async()=>{//«
+
+//switch_to_screen(Notif);
+
+let MESSLEN = 66;
+
+for (let n of notices) {
+
+	let note = JSON.parse(n);
+	let messid = note[note.length-1];
+	let item = await get_db_item(messid);
+	let nodes = Array.from((new DOMParser()).parseFromString(item.text||item.url, "text/html").body.childNodes);
+	let s="";
+	while (nodes.length && s.length < MESSLEN){
+		let node = nodes.shift();
+		s+=node.textContent+" ";
+	}
+	let dots="...";
+	if (s.length <= MESSLEN) dots="";
+	s = s.slice(0,MESSLEN).chomp()+dots;
+	let notice = new Notice(s, item, note);
+//log(notice);
+
+}
+
+//log(Notif);
+
+};//»
+
+//»
+//Init«
 
 const init_stories=async(which)=>{//«
 
@@ -1168,67 +1286,20 @@ cwarn(`GET: ${which}stories`);
 			is_getting = false;
 			return;
 		}
-		if (item.type=="story"||item.type=="comment") toplist.add(i, item);
+		if (item.type=="story"||item.type=="comment") toplist.add(item);
 	}
 	toplist.focus();
 	is_getting = false;
 
 }//»
-
 const init_offline=()=>{//«
-	offlist = new List(`Offline\xa0stories`, Offline, 0);
+	offlist = new List(`Watched\xa0stories`, Offline, 0);
 	offline_elem_hold = offlist;
 };//»
-
 const init_notif=()=>{//«
 	notiflist = new List(`Notifications`, Notif, 0);
 	notif_elem_hold = notiflist;
 };//»
-
-const set_notice=async(path)=>{//«
-	let str = JSON.stringify(last_path);
-	if (notices.includes(str)){
-cwarn("Already being notified for the message!");
-	}
-	else{
-		notices.push(str);
-	}
-	if (await fs.writeFile(NOTICESFILEPATH, JSON.stringify(notices))) 
-log(notices);
-	else 
-cwarn(`Could not write to the file: ${NOTICESFILEPATH}`);
-
-}//»
-
-const await_notices=async()=>{
-
-//switch_to_screen(Notif);
-
-let MESSLEN = 66;
-
-for (let n of notices) {
-
-	let note = JSON.parse(n);
-	let messid = note[note.length-1];
-	let item = await get_db_item(messid);
-	let nodes = Array.from((new DOMParser()).parseFromString(item.text||item.url, "text/html").body.childNodes);
-	let s="";
-	while (nodes.length && s.length < MESSLEN){
-		let node = nodes.shift();
-		s+=node.textContent+" ";
-	}
-	let dots="...";
-	if (s.length <= MESSLEN) dots="";
-	s = s.slice(0,MESSLEN).chomp()+dots;
-	let notice = new Notice(s, item, note);
-//log(notice);
-
-}
-
-//log(Notif);
-
-};
-
 const init = async()=>{//«
 	let rv;
 
@@ -1254,22 +1325,26 @@ const init = async()=>{//«
 			notices = JSON.parse(rv);
 		}
 		catch(e){
-			cwarn(`Could not parse the file at ${USERDATAPATH}`);
-			cerr(e);
+cwarn(`Could not parse the file at ${USERDATAPATH} (string below)`);
+log(rv);
+//			cerr(e);
 			notices=[];
 		}
 	}
-//	setTimeout(await_notices, 100);
 	await_notices();
 
 };//»
 
 //»
 
+//»
+
 //Obj/CB«
 
-
 this.onkeydown=async(e,s)=>{//«
+
+//log(s);
+if (s=="ESC_C") return goto_main_list();
 
 let act=document.activeElement;
 
@@ -1279,6 +1354,7 @@ if (s=="TAB_"||s=="TAB_S"){//«
 		if(cur_elem){
 			if (cur_elem.focus) cur_elem.focus();
 		}
+		focus_main_list();
 		return;
 	}
 	let arr;
@@ -1355,18 +1431,11 @@ switch_screen();
 return;
 }
 
-else if (s=="i_"){
-if (!last_path) return;
-//goto_item(toplist,last_path);
-//log(notices);
-//let got = JSON.parse(notices[2]);
-//log(got);
-goto_item(last_path);
-}
 
 if (!cur_elem) return;
+//log(cur_elem);
 
-if (s=="r_") {
+if (s=="r_") {//«
 //log(cur_elem);
 	if (cur_elem.type==="item") reget_item(cur_elem);
 	else if (cur_elem.type=="list" && !cur_elem.id){
@@ -1381,6 +1450,13 @@ init_stories(DEF_STORY_TYPE);
 
 	}
 	return;
+}//»
+if (s=="x_"){
+if (cur_elem.type=="notice"){
+//	remove_notice(cur_elem);
+	cur_elem.delete();
+}
+return;
 }
 
 if (cur_elem.type!=="item") return;
@@ -1418,7 +1494,7 @@ this.onescape = ()=>{//«
 
 };//»
 this.onkill=()=>{
-	clearInterval(time_interval);
+//	clearInterval(time_interval);
 	for (let ref of REFS) ref.off();
 };
 this.onresize=()=>{};
@@ -1437,8 +1513,6 @@ this.onappinit=init;
 
 //»
 
-
-}
-
+}//»
 
 

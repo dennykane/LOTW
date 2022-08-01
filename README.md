@@ -121,7 +121,7 @@ the LOTW file system).
 Other than high level control flow structures (like if..then and for..in), the syntax of
 [the POSIX Shell Command Language](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html)
 should mostly work. The reason why control flow idioms are not supported is because they add to
-the complexity of the codebase (much more risk) without enough of a payoff in terms of added value (not much more reward).
+the complexity of the codebase (significant risks) without enough of a payoff in terms of added value (insignificant rewards).
 Since the underlying JavaScript itself offers extremely effective algorithmic support,
 those users who need to invoke their own non-supported, non-trivial functions via the command line will be
 directed to the development side of LOTW.
