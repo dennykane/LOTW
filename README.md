@@ -54,13 +54,13 @@ a default application will be invoked as the handler. The default application
 is currently 'util.BinView' (code at 
 [root/code/apps/util/BinView.js](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/util/BinView.js)).
 
-2) Using the command `$ open path/to/somefile.ext` in the terminal. 
+2) Using the command <code>$&nbsp;open path/to/somefile.ext</code> in the terminal. 
 
-3) Creating an application icon via the terminal like this: `$ mkappicon
-audio.Synth > ~/Desktop/MyAppIcon.app`, and then using either of the above
+3) Creating an application icon via the terminal like this: <code>$&nbsp;mkappicon
+audio.Synth > ~/Desktop/MyAppIcon.app</code>, and then using either of the above
 methods to open the application.
 
-4) Opening the application directly with the `app` command like such: `$ app audio.Synth`. This method allows for tab
+4) Opening the application directly with the `app` command like such: <code>$&nbsp;app audio.Synth</code>. This method allows for tab
 completion of the command's argument, making it a *very* simple way to search for available applications.
 
 
@@ -138,10 +138,10 @@ tapping the Tab key in the terminal with nothing at the prompt.  Since, however,
 there may be an arbitrary number of commands (1,000+) in a given LOTW installation,
 an early design decision was to work out a concept of "command libraries", such that
 the commands in a given library may be imported into the current shell's execution context;
-so, to import all of the commands in the 'fs' command library, run: `$ import
-fs`. 
+so, to import all of the commands in the 'fs' command library, run: <code>$&nbsp;import
+fs</code>. 
 
-Here is the way that you can see which commands are in a given library: `$ lib <libname>`.
+Here is the way that you can see which commands are in a given library: <code>$&nbsp;lib &lt;libname&gt;</code>.
 Also, since the `lib` command supports autocompletion for its argument, you can 
 use it as a quick way to search for the available libraries in the LOTW system. 
 Other than certain commands in certain libraries (like `vim` in 'fs'), though, 
