@@ -1,12 +1,15 @@
-/*Perfectly centering stuff...
+/*Idea for repositioning windows after the console window is reclosed«
 
-position: absolute;
-top: 50%;
-left: 50%;
-transform: translate(-50%, -50%);
+Currently, windows are repositioned by check_all_wins() to fit in the available
+area when the console is opened (or after any resize). But once it is reclosed,
+the windows stay where they were, possibly ruining the layout that you wanted
+to have.  I think I want to save the geometries (locations and sizes) of all
+the windows, so that they can be put back where they were once it is reclosed
+(you can tell when it is closed because (window.innerHeight === window.outerHeight &&
+window.innerWidth === window.outerWidth)).
 
-*/
-/*				XXX				Major change in early July 2022				XXX
+»*/
+/*				XXX				Major change in early July 2022				XXX//«
 
 We are making the distinction between an APPOBJ (which the app module gets called with, and contains
 handles to Core, Main, and Top) and APPARGS (which is an object that gets called when the app is
@@ -32,8 +35,18 @@ openApp looks like:
 this.openApp = (appname, force_open, winargs, appobj).
 
 
-*/
-/*!!! Errpr !!!
+»*/
+//«
+
+/*How to perfectly center stuff...«
+
+position: absolute;
+top: 50%;
+left: 50%;
+transform: translate(-50%, -50%);
+
+»*/
+/*!!! Errpr !!!//«
 
 I had a deeply embedded folder icon that I moved onto the desktop, which had a window connected to it.
 Window minimization status did not affect it.
@@ -45,9 +58,7 @@ Solution: @JEIOMPTY
 If the window is a folder, I called reload with a path argument, which causes the sys.Folder app
 to reset its internal 'path' variable and reinit the gui.
 
-*/
-//«
-
+//»*/
 //!!!!!!!!!!!!!     Commented out warning     !!!!!!!!!!!!!!«
 //			cwarn("Make_icon():\x20have link,we have an extension too! " + arg.EXT);
 /*!!!!!!!!!!!!!!!!!!!!    !IMPORTANTT   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -73,7 +84,6 @@ with r_CAS, everything was AOK.
 
 This is all about the perils of swapping out icon images.
 //»*/
-
 /*Issues«
 
 For development purposes:
@@ -98,9 +108,6 @@ around.
 
 Seems to be working with just doing icon_off && ICONS=[] when doing moves onto
 folder icons.
-
-
-
 
 Moving icons onto a folder's drop zone works the first time, but not the
 second.  Once it gets working, remove the if(loc){...} thing from the beginning

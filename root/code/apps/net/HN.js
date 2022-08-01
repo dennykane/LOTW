@@ -1,5 +1,15 @@
 
-/*xTODOx//«
+/*xTODOx«
+
+
+First, do a ref.once to get the entire new kids list, and then wait on incoming new messages 
+with ref.on('child_added').
+
+
+
+For all refs we are waiting on with ref.on/ref.once, we need to save them in an array 
+and then in onkill, we need to do a ref.off
+
 
 
 We need 3 screens (at least);
@@ -49,7 +59,7 @@ and then save this to the datastore.
 await_notices() is where we are going to either: 
 
 1) Find the top story items in the "live list", 
-2) or get it from the db if not in it, and then add it it into the Offline list.
+2) or get it from the db (or reget if not in it for some reason), and then add it to into the Offline list.
 
 
 
@@ -95,7 +105,7 @@ const fs=NS.api.fs;
 //»
 
 //Var«
-
+const REFS=[];
 let notices=[];
 
 let offlist;
@@ -121,7 +131,7 @@ let time_interval;
 const TIMES=[];
 
 //let GET_NUM_STORIES = 30;
-let GET_NUM_STORIES = 1;
+let GET_NUM_STORIES = 3;
 
 let MAX_CACHE_DIFF_MINUTES = 1000;
 
@@ -440,48 +450,51 @@ do_links(main);
 
 //»
 
-this.toggle = async()=>{//«
-	if (cont.dis==="none") {
-		cont.dis="";
-		main.is_active=true;
-		if (comprev) comprev.dis="none";
-	}
-	else {
-		cont.dis="none";
-		main.is_active=false;
-		if (comprev) comprev.dis="";
-		main.scrollIntoView();
-		return;
-	}
-	if (arg.type==="story"||arg.type=="comment"){
-		if (coms) return;
-	}
-	else return cwarn(`Toggle: ${arg.type}`);
-
-	coms = mkdv();
-	foot.add(coms);
-	coms.mart=10;
-
-	let kids = arg.kids||[];
-	let len = kids.length;
-
-	let list = new List(`Comments\x20(${len})`, coms, level+1, _storyid, this);
-	this.list = list;
-	list.item = this;
-	for (let i=0; i < len;i++){
-		let id=kids[i];
-		let item = await get_item(id);
-		if (!item){
-			poperr(`Error getting item: ${id}`);
+this.toggle = ()=>{//«
+	return new Promise(async(Y,N)=>{
+		if (cont.dis==="none") {
+			cont.dis="";
+			main.is_active=true;
+			if (comprev) comprev.dis="none";
+		}
+		else {
+			cont.dis="none";
+			main.is_active=false;
+			if (comprev) comprev.dis="";
+			main.scrollIntoView();
 			return;
 		}
-		list.add(i, item);
-	}
+		if (arg.type==="story"||arg.type=="comment"){
+			if (coms) return;
+		}
+		else return cwarn(`Toggle: ${arg.type}`);
+
+		coms = mkdv();
+		foot.add(coms);
+		coms.mart=10;
+
+		let kids = arg.kids||[];
+		let len = kids.length;
+
+		let list = new List(`Comments\x20(${len})`, coms, level+1, _storyid, this);
+		this.list = list;
+		list.item = this;
+		for (let i=0; i < len;i++){
+			let id=kids[i];
+			let item = await get_item(id);
+			if (!item){
+				poperr(`Error getting item: ${id}`);
+				return;
+			}
+			list.add(i, item);
+		}
+		Y();
+	});
 };//»
 
 this.open=()=>{
 
-if (cont.dis==="none") this.toggle();
+if (cont.dis==="none") return this.toggle();
 
 }
 
@@ -587,6 +600,93 @@ m.onblur=()=>{
 	};
 
 };//»
+
+const Notice = function(_mess, _item, _path){//«
+let id = _item.id;
+let kids=[];
+if (_item.kids) kids = _item.kids;
+
+let nkids = kids.length;
+
+this.item = _item;
+
+let m = mkdv();
+let numsp = mksp();
+numsp.marr=5;
+numsp.innerText=`(${nkids})`;
+
+let messp = mksp();
+messp.innerText = _mess;
+m.mar=2;
+m.classList.add("tabbable");
+m.tabIndex="-1";
+//m.innerText = 	`(${nkids})\xa0\xa0${_mess}`;
+m.add(numsp, messp);
+Notif.childNodes[0].add(m);
+
+m.onfocus=()=>{
+	cur_elem = this;
+};
+
+this.onenter=()=>{
+
+//log(_path);
+
+	goto_item(_path);
+
+};
+this.focus=()=>{
+	m.focus();
+};
+///*
+let refpath = `/v0/item/${_item.id}/kids`;
+//log(refpath);
+let ref = get_ref(refpath);
+if (!ref) return cerr(`No ref from: ${refpath}`);
+
+REFS.push(ref);
+
+/*
+ref.once("value",snap=>{
+let arr = snap.val();
+let len = 0;
+if (arr) len = arr.length;
+let diff = len - nkids;
+if (diff){
+log(`New: ${diff}`);
+}
+});
+*/
+//*/
+
+///*
+let newkids = 0;
+
+ref.on("child_added",snap=>{
+//	y(snap.val());
+let messid = snap.val();
+if (kids.includes(messid)){
+//log("OLD", id, messid);
+}
+else{
+
+newkids++;
+
+numsp.innerHTML=`(${nkids}<span style="color:#0f0">+${newkids}</span>)`;
+//cwarn("NEW", id, messid);
+
+}
+
+});
+//*/
+
+//let ref = get_fbase(`item/${_item.id}/kids`)
+
+//log(ref);
+
+
+
+}//»
 
 const User =function() {//«
 
@@ -954,30 +1054,30 @@ log("RV", rv);
 
 
 };//»
-const goto_item=(path)=>{//«
+
+const goto_item=async(path)=>{//«
 
 const getitem=(list, id)=>{
-
-for (let itm of list.kids){
-	if (itm.data.id == id) return itm;
-}
-
+	for (let itm of list.kids){
+		if (itm.data.id == id) return itm;
+	}
 };
 
 let parid = path.shift();
 
 let par = getitem(toplist, parid);
 if (!par){
-	cwarn("Parent not in 'toplist'");
+	cerr("Parent not in 'toplist'");
 	return;
 }
-
+switch_to_screen(Online);
 let cur = par;
 let id = path.shift();
-cur.open();
+await cur.open();
+cur.focus();
 while(id){
 	cur = getitem(cur.list, id);
-	cur.open();
+	await cur.open();
 	cur.focus();
 	id = path.shift();
 }
@@ -1012,7 +1112,16 @@ const switch_screen=()=>{//«
 	}
 	if (cur_elem) cur_elem.focus();
 
+}//»
 
+const switch_to_screen=(which)=>{//«
+
+	if (Main===which) return;
+	switch_screen();
+	if (Main===which) return;
+	switch_screen();
+	if (Main===which) return;
+	switch_screen();
 
 }//»
 
@@ -1091,9 +1200,32 @@ cwarn(`Could not write to the file: ${NOTICESFILEPATH}`);
 
 }//»
 
-const await_notices=()=>{
+const await_notices=async()=>{
 
-log("AWAIT", notices);
+//switch_to_screen(Notif);
+
+let MESSLEN = 66;
+
+for (let n of notices) {
+
+	let note = JSON.parse(n);
+	let messid = note[note.length-1];
+	let item = await get_db_item(messid);
+	let nodes = Array.from((new DOMParser()).parseFromString(item.text||item.url, "text/html").body.childNodes);
+	let s="";
+	while (nodes.length && s.length < MESSLEN){
+		let node = nodes.shift();
+		s+=node.textContent+" ";
+	}
+	let dots="...";
+	if (s.length <= MESSLEN) dots="";
+	s = s.slice(0,MESSLEN).chomp()+dots;
+	let notice = new Notice(s, item, note);
+//log(notice);
+
+}
+
+//log(Notif);
 
 };
 
@@ -1120,14 +1252,15 @@ const init = async()=>{//«
 	if (rv){
 		try{
 			notices = JSON.parse(rv);
-			await_notices();
-//log(notices);
 		}
 		catch(e){
 			cwarn(`Could not parse the file at ${USERDATAPATH}`);
 			cerr(e);
+			notices=[];
 		}
 	}
+//	setTimeout(await_notices, 100);
+	await_notices();
 
 };//»
 
@@ -1176,6 +1309,7 @@ if (s=="TAB_"||s=="TAB_S"){//«
 	if (is_list||!act_is_vis){
 		if (s=="TAB_S") arr.reverse();
 		let elm = arr[0];
+		if (!elm) return;
 		if (!is_visible(elm)) elm.scrollIntoView();
 		act.onescape&&act.onescape();
 		elm.focus();
@@ -1223,6 +1357,10 @@ return;
 
 else if (s=="i_"){
 if (!last_path) return;
+//goto_item(toplist,last_path);
+//log(notices);
+//let got = JSON.parse(notices[2]);
+//log(got);
 goto_item(last_path);
 }
 
@@ -1260,7 +1398,8 @@ else if (s=="n_"){
 
 
 last_path = cur_elem.path();
-
+log(last_path);
+//log(last_path);
 set_notice(last_path);
 
 
@@ -1278,7 +1417,10 @@ this.onescape = ()=>{//«
 	return focus_parent(act.parentNode);
 
 };//»
-this.onkill=()=>{clearInterval(time_interval);};
+this.onkill=()=>{
+	clearInterval(time_interval);
+	for (let ref of REFS) ref.off();
+};
 this.onresize=()=>{};
 this.onfocus=()=>{//«
 	if(cur_elem&&cur_elem.focus) cur_elem.focus();
@@ -1298,12 +1440,5 @@ this.onappinit=init;
 
 }
 
-
-
-
-
-
-/*
-*/
 
 
