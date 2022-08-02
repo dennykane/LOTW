@@ -76,10 +76,10 @@ const DEL_LIBS=[
 //	"net",
 //	"fs",
 	"net.hn",
-	"dev.testing"
+	"dev.testing",
 //	"js",
 //	"iface",
-//	"av"
+	"av"
 //	"crypto",
 //	"imap"
 ];

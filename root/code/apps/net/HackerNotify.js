@@ -1,9 +1,31 @@
 
-/*xTODOx«
+/*xTODOx
+
+XXX On deleting notifications, need to update the bottom status!!!!! XXX
+
+
+XXX GETTING LAST KEY!!! XXX
+
+let ref = get_ref(`/v0/item/${cur_elem.id}/kids`);
+ref.limitToLast(1).once('value',snap=>{
+	let k = parseInt((Object.keys(snap.val()))[0]);
+	log(k); //<-- Number
+});
+
+
+
+
+This ref.on.child_added does not seem great/reliable. Let's just use once.value on the kids,
+but do an exponential backoff, depending on certain velocity/expectation calculations.
+
+
+
+
+If an item is hotkey refreshed that is being waited for in notifications, then we have to
+update the notification and deduct it from the total_new that is in the status_bar
+
 
 When we goto_item(), we need to check if 
-
-
 
 First, do a ref.once to get the entire new kids list, and then wait on incoming new messages 
 with ref.on('child_added').
@@ -73,8 +95,13 @@ await_notices() is where we are going to either:
 //												 goto=item ? id = 22514004 # 22514747
 //																  original 
 //																    story
-»*/
+*/
 
+//const DEVMODE = true;
+const DEVMODE = false;
+const MIN_POLL_SECS = 10;
+const MIN_POLL_MS = MIN_POLL_SECS*1000;
+let MAX_NOTICE_LIMIT = 5;
 
 export const app=function(arg){//«
 
@@ -83,41 +110,33 @@ export const app=function(arg){//«
 const {Core,Main:_Main,Desk,NS}=arg;
 
 const Topwin=_Main.top;
-const {log,cwarn,cerr,globals}=Core;
-//log(Core,Main,Desk);
-//const{fs,util,widgets,dev_env,dev_mode}=globals;
+const{log,cwarn,cerr,globals}=Core;
 const{util,dev_env,dev_mode}=globals;
 const{isarr,isobj,isstr,mkdv,mksp,mk}=util;
-const {popup:_popup,popok:_popok,poperr:_poperr,popyesno:_popyesno, popin:_popin,popinarea:_popinarea}=NS.api.widgets;
-const popup=(s,opts={})=>{
-	return new Promise((y,n)=>{
-		opts.win = Topwin;
-		opts.cb = y;
-		_popup(s,opts);
-	});
-};
-const popin=(s)=>{return _popin(s,{win:Topwin});};
-const popinarea=(tit)=>{return _popinarea("",tit,{win:Topwin});};
-const popok=(s)=>{return new Promise((y,n)=>{_popok(s,{win:Topwin,cb:y});});};
-const poperr=(s)=>{return new Promise((y,n)=>{_poperr(s,{win:Topwin,cb:y});});};
-const popyesno=(s)=>{return new Promise((y,n)=>{_popyesno(s,{win:Topwin,cb:y});});};
 
-const fs=NS.api.fs;
+let popup, popok, poperr,popyesno, popin, popinarea;
+let widgets;
 
+let fs;
 
 //»
 
 //Var«
 
+let poll_interval;
+let poll_interval_ms = 60000;
+
+const NOTICES={};
+let MESSLEN = 100;
 let total_new = 0;
 let MIN_REGET_MINS = 3;
-//let GET_NUM_STORIES = 30;
-let GET_NUM_STORIES = 1;
+let GET_NUM_STORIES = 30;
+//let GET_NUM_STORIES = 1;
 
-let MAX_CACHE_DIFF_MINUTES = 200;
+let MAX_CACHE_DIFF_MINUTES = 10;
 
 
-const REFS=[];
+//const REFS=[];
 let notices=[];
 
 let toplist;
@@ -129,7 +148,7 @@ let offline_elem_hold;
 
 let last_path;
 
-let FS = 24;
+let FS = 18;
 
 let last_get;
 let is_getting = false;
@@ -148,8 +167,12 @@ let POPUP_HGT=window.outerHeight-100;
 let ifapi;
 let db;
 
-const USERDATAPATH =`${globals.home_path}/.data/apps/net/HN`
-const NOTICESFILEPATH =`${USERDATAPATH}/notices`
+//const USERDATAPATH =`${globals.home_path}/.data/apps/net/HN`
+//const NOTICESFILEPATH =`${USERDATAPATH}/notices`
+
+let USERDATAPATH;
+let NOTICESFILEPATH;
+
 const HN_DB_NAME="hackernews";
 const HN_DB_VERS=1;
 const HN_ITEM_STORE_NAME="items";
@@ -166,7 +189,7 @@ let statbar = Topwin.status_bar;
 _Main.pos="relative";
 _Main.bgcol="#030303";
 _Main.tcol="#ddd";
-_Main.fs=19;
+_Main.fs=FS;
 
 let Main;
 
@@ -237,13 +260,13 @@ this.main = main;
 
 main.classList.add("tabbable");
 
-main.onescape = ()=>{
+main.onescape = ()=>{//«
 	if (cont.dis!=="none") {
 		this.toggle();
 		return true;
 	}
 	return false;
-};
+};//»
 
 main.tabIndex="-1";
 main.onfocus=()=>{
@@ -252,15 +275,13 @@ main.onfocus=()=>{
 main.tab_level = level;
 main.mar=10;
 main.bor="1px dotted #aaa";
-main.onmousedown=()=>{
+main.onmousedown=()=>{//«
 	if (cur_elem !== this){
 		if (cur_elem&&cur_elem.blur) cur_elem.blur();
 		this.focus();
 	}
-};
-main.ondblclick=()=>{
-this.toggle();
-};
+};//»
+main.ondblclick=()=>{this.toggle();};
 
 const head = mkdv();//header
 head.pad=5;
@@ -275,13 +296,16 @@ if (is_story) {//«
 //	sc.innerHTML = `${_num+1}\xa0\xa0(${arg.score} points)`;
 	tit = mkdv();//title
 	tit.fw="bold";
-	tit.style.whiteSpace="nowrap";
+//	tit.style.whiteSpace="nowrap";
 //	tit.innerText = `${_num+1})\xa0\xa0${arg.title}||""`;
-	tit.innerText = (_num+1)+")\xa0\xa0"+(arg.title||"");
+//log(arg.title.split(/ +/))
+	if (DEVMODE) tit.innerText = (""+(_num+1)+" ").repeat(20).slice(0,20);
+	else tit.innerText = (_num+1)+"\xa0\xa0\xa0"+(arg.title||"");
 //	host = mkdv();
 //	if(arg.url) host.innerText = arg.url.split("//")[1].split("/")[0]
 //	else host.innerText = "[self]";
-	if(arg.url) host  = arg.url.split("//")[1].split("/")[0]
+	if (DEVMODE) host = (""+(_num+1)).repeat(10).slice(0,10)+".ext";
+	else if(arg.url) host  = arg.url.split("//")[1].split("/")[0]
 	else host  = "[self]";
 //	thead.add(sc,tit, host);
 }//»
@@ -295,23 +319,19 @@ user.marr=20;
 //time.marr=20;
 //new Time(arg.time, time);
 
+
 if (is_story) {//«
+
+
 //bhead.style.alignItems="end";
 //bhead.style.justifyContent="end";
 //	info.innerText = `(${arg.descendants})\xa0\xa0\xa0${host}`;
 //	info.innerText = `${arg.descendants}`;
-let tcol;
-let n = arg.descendants;
-if (n<6) tcol="#99e";//blue
-else if (n<12) tcol="#bbf";//light blue
-else if (n<25) tcol="#7ff";//turquoise
-else if (n<50) tcol="#8f8";//green
-else if (n < 100) tcol="#ff9";//yellow
-else if (n < 200) tcol="#fa5";//orange
-else tcol = "#f77";//red
-tit.tcol=tcol;
 
-	info.innerText = host;
+	tit.tcol=getcolor(arg.descendants);
+
+	info.innerText = "\xa0\xa0"+host;
+//	info.padl=3;
 	thead.add(tit,info);
 	head.add(thead);
 }//»
@@ -336,9 +356,10 @@ else{
 
 const cont = mkdv();//content
 cont.pad=5;
-cont.fs=FS;
+//cont.fs=FS;
 cont.dis="none";
 const body = mkdv();//body
+//body.style.whiteSpace ="pre-wrap";
 cont.add(body);
 body.classList.add("body");
 body.tabIndex="-1";
@@ -346,18 +367,22 @@ body.tab_level = level+1;
 body.pad=5;
 
 if (!arg.url) {
-	body.innerHTML = arg.text||"<i>[none]</i>";
+//arg.text.
+//let s
+	body.innerHTML = (arg.text&&arg.text.replace(/<\/?pre>/g, ""))||"<i>[none]</i>";
+//log(body);
 	body.style.userSelect="text";
 }
 else {
+
 let a = mk('a');
 a.href = arg.url;
 a.tabIndex="-1";
 a.innerHTML = arg.url;
 body.add(a);
-	this.gotolink=()=>{
-		a.click();
-	};
+//	this.gotolink=()=>{
+this.gotolink=()=>{a.click();};
+
 }
 //else body.innerHTML=`<span><u>${arg.url}</u></span>`;
 
@@ -401,9 +426,11 @@ if (comprev){//«
 //log(comprev);
 //log(comprev.clientHeight);
 //	comprev.h = comprev.clientHeight;
-	comprev.h = FS+1;
+//_Main.fs=FS;
+//comprev.h = FS+1;
+//	comprev.h = FS+1;
 
-	comprev.innerHTML = arg.text||"<i>[none]</i>";
+	comprev.innerHTML = html_to_str(arg.text||"<i>[none]</i>", 200);
 	comprev.flg=1;
 //	comprev.ta="right";
 }//»
@@ -456,8 +483,11 @@ this.toggle = ()=>{//«
 };//»
 this.open=()=>{if(cont.dis==="none")return this.toggle();}
 this.close=()=>{if(!cont.dis)return this.toggle();}
-this.path=()=>{//«
-	if (_path) return _path;
+this.path=(if_str)=>{//«
+	if (_path) {
+		if (if_str) return JSON.stringify(_path);
+		return _path;
+	}
 	let cur = _paritem;
 	let arr = [arg.id];
 	while(cur){
@@ -465,6 +495,7 @@ this.path=()=>{//«
 		cur = cur.parent;
 	}
 	_path = arr;
+	if (if_str) return JSON.stringify(_path);
 	return _path;
 };//»
 this.onenter=()=>{//«
@@ -472,7 +503,9 @@ this.onenter=()=>{//«
 	this.list.onenter();
 };//»
 this.focus=()=>{main.focus();};
-
+this.getkids = ()=>{
+	return (arg.kids || []).sort();
+};
 
 };//»
 const List = function( _tit, _par, _level, _storyid, _paritem) {//«
@@ -530,9 +563,10 @@ nw.main.focus();
 };
 m.onfocus=()=>{
 	cur_elem = this;
-if (!_storyid){
-m.bor="1px solid #fff";
-}
+	if (!_storyid){
+		m.bor="1px solid #fff";
+		Main.scrollTop = 0;
+	}
 
 };
 m.onblur=()=>{
@@ -554,14 +588,15 @@ this.focus=()=>{
 };
 
 };//»
-const Notice = function(_mess, _item, _path){//«
+const Notice = function(_item, _path, _ndesc){//«
 
 let pathstr = JSON.stringify(_path);
 
 const update=(add)=>{//«
 
 //cwarn(`Updating ${id} => +${nnewkids}`);
-	numsp.innerHTML=`(${nkids}<span style="color:#0f0">+${nnewkids}</span>)`;
+	if (nnewkids) numsp.innerHTML=`(${nkids}<span style="color:#0f0">+${nnewkids}</span>)`;
+	else numsp.innerHTML=`(${nkids})`;
 	total_new+=add;
 	stat_total();
 
@@ -570,11 +605,12 @@ const update=(add)=>{//«
 this.type="notice";//«
 let id = _item.id;
 let kids=[];
-let newkids;
+//let newkids=[];
 if (_item.kids) kids = _item.kids;
 let nkids = kids.length;
-let nnewkids;
+let nnewkids = 0;
 this.item = _item;
+this.id=id;
 //»
 let m = mkdv();//«
 let numsp = mksp();
@@ -582,16 +618,17 @@ numsp.marr=5;
 numsp.innerText=`(${nkids})`;
 
 let messp = mksp();
-messp.innerText = _mess;
+messp.innerHTML = get_notice_message(_item, _ndesc);
 m.mar=2;
 m.classList.add("tabbable");
 m.tabIndex="-1";
-//m.innerText = 	`(${nkids})\xa0\xa0${_mess}`;
 m.add(numsp, messp);
 Notif.childNodes[0].add(m);
+
 //»
 
 m.onfocus=()=>{cur_elem=this;};
+
 this.delete = async()=>{//«
 
 //log("DELETE", _path);
@@ -603,42 +640,120 @@ notices.splice(ind, 1);
 if (!await fs.writeFile(NOTICESFILEPATH, JSON.stringify(notices))){
 	cwarn(`There was a problem writing the file ${NOTICESFILEPATH}`);
 }
-ref.off();
+delete NOTICES[s];
+//ref.off();
 m.del();
 notiflist.focus();
+total_new -= nnewkids;
+stat_total();
 
 };//»
 this.onenter=async()=>{//«
-	let no_refresh = false;
-	if (newkids.length <= kids.length) no_refresh = true;
-
-	if (!await goto_item(JSON.parse(pathstr), !no_refresh)){
+//	let no_refresh = false;
+//	if (newkids.length <= kids.length) no_refresh = true;
+//	if (newkids.length <= kids.length) no_refresh = true;
+	let got;
+	if (! (got = await goto_item(JSON.parse(pathstr), !!nnewkids))){
 cwarn("Failed to goto item so not updating notification status");
 return;
 	}
-	if (no_refresh) return;
-	_item.kids = newkids;
+	if (!nnewkids) return;
+//	_item.kids = newkids;
+//	kids = _item.kids;
+	_item = got;
 	if (!await add_db_item(_item)){
-		_item.kids=kids;
+//		_item.kids=kids;
 cerr("Could not add the updated item!");
 		return;
 	}
 
-	kids = newkids;
+//	kids = newkids;
+	kids = _item.kids;
 	nkids = kids.length;
-	newkids = null;
+//	newkids = [];
 	total_new-=nnewkids;
 	stat_total();
 	nnewkids = 0;
 	numsp.innerHTML=`(${nkids})`;
 };//»
-this.focus=()=>{m.focus();};
+this.setkids=kidsarg=>{//«
 
+	let diff = kidsarg.length - kids.length;
+	total_new -= diff;
+	stat_total();
+
+	kids = kidsarg;
+	nkids = kids.length;
+//	newkids = [];
+	nnewkids = 0;
+	numsp.innerHTML=`(${nkids})`;
+
+};//»
+this.focus=()=>{m.focus();};
+this.getkids = ()=>{
+//	return (arg.kids || []);
+let arr=kids.concat(newkids).sort();
+return arr;
+};
+m.onmousedown=()=>{
+	m.focus();
+};
+
+
+let last_poll_time = 0;
+this.poll = ()=>{
+	let time = new Date().getTime();
+	if (last_poll_time){
+		if (time - last_poll_time < MIN_POLL_MS){
+cwarn(`${id}) Must wait > ${MIN_POLL_MS} ms between polls!`);
+			return;
+		}
+	}
+	last_poll_time = time;
+	let ref = get_ref(`/v0/item/${_item.id}/kids`);
+	ref.limitToLast(1).once('value',snap=>{
+		let totkids;
+		let val = snap.val();
+		if (!val) totkids = 0;
+		else totkids = parseInt((Object.keys(val))[0])+1;
+		let diff = totkids - (nkids+nnewkids);
+log(`${id}) Diff: ${diff}`);
+//		if (!diff) return;
+		nnewkids+=diff;
+		update(diff);
+//if (diff > nnewkids){
+//}
+//		if (nnewkids) update(nnewkids);
+	});
+}
+//this.poll();
+
+/*
 let refpath = `/v0/item/${_item.id}/kids`;//«
 let ref = get_ref(refpath);
 if (!ref) return cerr(`No ref from: ${refpath}`);
-REFS.push(ref);
 
+
+ref.on("child_added",snap=>{
+	let messid = snap.val();
+//log(messid);
+	if (kids.includes(messid)){
+//cwarn("INKIDS", messid);
+		return;
+	}
+	else if (newkids.includes(messid)) {
+//cwarn("INNEW", messid);
+		return;
+	}
+//log("IN",messid);
+	newkids.push(messid);
+	nnewkids++;
+	update(1);
+});
+*/
+//REFS.push(ref);
+
+/*
 ref.once("value",snap=>{//«
 
 	newkids = snap.val();
@@ -649,6 +764,7 @@ ref.once("value",snap=>{//«
 		return;
 	}
 	if (nnewkids>0) update(nnewkids);
+
 	ref.on("child_added",snap=>{
 		let messid = snap.val();
 		if (kids.includes(messid)||newkids.includes(messid)) return;
@@ -657,6 +773,7 @@ ref.once("value",snap=>{//«
 	});
 
 });//»
+*/
 
 //»
 
@@ -723,13 +840,35 @@ this.update();
 
 //Util«
 
-//const update_times=()=>{for(let t of TIMES)t.update();}
-const stat_total=()=>{
-	let sty="";
-	if (total_new) sty=' style="color:#0d0;font-weight:900;"';
-	stat(`<span${sty}>${total_new}</span> messages`);
+const getcolor = n=>{
+	let tcol;
+//	let n = arg.descendants;
+	if (n<6) tcol="#99e";//blue
+	else if (n<12) tcol="#bbf";//light blue
+	else if (n<25) tcol="#7ff";//turquoise
+	else if (n<50) tcol="#8f8";//green
+	else if (n < 100) tcol="#ff9";//yellow
+	else if (n < 200) tcol="#fa5";//orange
+	else tcol = "#f77";//red
+	return tcol;	
 };
-const stat=(s)=>{statbar.innerHTML=s;};
+//const update_times=()=>{for(let t of TIMES)t.update();}
+const stat_total=()=>{//«
+	let sty="";
+	let s = "s";
+	if (total_new) {
+		sty=' style="color:#ffffff;font-weight:900;"';
+		if (total_new==1) s = "";
+	}
+	stat(`<span${sty}>${total_new}</span> new message${s}`);
+};//»
+const stat=(s)=>{
+if (!s){
+cerr("Got nothing in stat!!?!");
+return;
+}
+	statbar.innerHTML=s;
+};
 const mkbut = (str, par, fn, opts={})=>{//«
 	let butcol="e7e7e7";
 	let butborcol="#ccc";
@@ -742,7 +881,7 @@ const mkbut = (str, par, fn, opts={})=>{//«
 	d.dis="inline-flex";
 	d.ali="center";
 	d.jsc="center";
-	d.fs=15;
+//	d.fs=15;
 	d.innerText=str;
 	d.bor=`3px outset ${butborcol}`;
 	d.onmousedown=()=>{if(disabled)return;d.bor=`3px inset ${butborcol}`;};
@@ -849,6 +988,7 @@ const file_to_ints = (file)=>{//«
 		y(new Uint32Array(await file_to_buf(file)));
 	});
 };//»
+const set_widgets=()=>{({popup, popok,poperr,popyesno, popin,popinarea}=widgets);};
 
 
 //»
@@ -1060,36 +1200,49 @@ cwarn("firebase is disconnected: "+HN_APPNAME);
 //»
 //App«
 
-const reget_item = async (item, if_override)=>{//«
-
-if (item.data.fetched) {
-	let then = new Date(item.data.fetched).getTime();
-	let now = new Date().getTime();
-
-	if (!if_override) {
-		let diff_mins = (now-then)/60000;
-		if (diff_mins< MIN_REGET_MINS) {
-			await popup(`${diff_mins.toFixed(1)} < MIN_REGET_MINS(${MIN_REGET_MINS})`);
-			item.main.focus();
+const reload = ()=>{//«
+	if (cur_elem.type==="item") reget_item(cur_elem);
+	else if (cur_elem.type=="list" && !cur_elem.id){
+		if (Main!==Online) return popup("Cannot reload this screen!");
+		let dm = Math.floor((Date.now() - last_get)/60000);
+		if (dm < MAX_CACHE_DIFF_MINUTES) {
+//log(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
+popup(`Still have ${MAX_CACHE_DIFF_MINUTES-dm} minutes left!`);
 			return;
 		}
+Main.innerHTML="";	
+init_stories(DEF_STORY_TYPE);
 	}
-}
-	if (is_getting){
-cwarn("is_getting == true");
-		return;
-	}
-	is_getting = true;
-	let got = await get_item(item.id, true);
-	let rv = new Item(got, item.number, item.tabpar, item.id, item.parent)
-log("RV", rv);
-	item.list.replace(item, rv);
-	rv.toggle();	
-	is_getting = false;
-	
-
-//*/
-
+};//»
+const reget_item = (item, if_override)=>{//«
+	return new Promise(async(Y,N)=>{
+		if (item.data.fetched) {
+			let then = new Date(item.data.fetched).getTime();
+			let now = new Date().getTime();
+			if (!if_override) {
+				let diff_mins = (now-then)/60000;
+				if (diff_mins< MIN_REGET_MINS) {
+					await popup(`${diff_mins.toFixed(1)} < MIN_REGET_MINS(${MIN_REGET_MINS})`);
+					item.main.focus();
+					return;
+				}
+			}
+		}
+		if (is_getting){
+	cwarn("is_getting == true");
+			return;
+		}
+		is_getting = true;
+		let got = await get_item(item.id, true);
+		let rv = new Item(got, item.number, item.tabpar, item.id, item.parent)
+		item.list.replace(item, rv);
+		rv.toggle();	
+		let strpath = rv.path(true);
+		let note = NOTICES[strpath];
+		if (note) note.setkids(got.kids);
+		is_getting = false;
+		Y(rv);
+	});
 
 };//»
 const goto_item=(path, if_refresh)=>{//«
@@ -1136,9 +1289,9 @@ cerr("Wut, could not get par after JUST ADDING THATT ITEMMM???");
 		cur.focus();
 		id = path.shift();
 	}
-
-	if (if_refresh) reget_item(cur, true);
-	Y(true);
+	let got;
+	if (if_refresh) Y(await reget_item(cur, true));
+	else Y(true);
 });
 
 
@@ -1197,46 +1350,66 @@ const switch_to_screen=(which)=>{//«
 	switch_screen();
 
 }//»
-const set_notice=async(path)=>{//«
-	let str = JSON.stringify(last_path);
-	if (notices.includes(str)){
-cwarn("Already being notified for the message!");
-	}
-	else{
-		notices.push(str);
-	}
-	if (await fs.writeFile(NOTICESFILEPATH, JSON.stringify(notices))) 
-log(notices);
-	else 
-cwarn(`Could not write to the file: ${NOTICESFILEPATH}`);
-
-}//»
-const await_notices=async()=>{//«
-
-//switch_to_screen(Notif);
-
-let MESSLEN = 66;
-
-for (let n of notices) {
-
-	let note = JSON.parse(n);
-	let messid = note[note.length-1];
-	let item = await get_db_item(messid);
-	let nodes = Array.from((new DOMParser()).parseFromString(item.text||item.url, "text/html").body.childNodes);
+const html_to_str=(html, lenarg)=>{//«
+	let uselen = lenarg || MESSLEN;
+	let nodes = Array.from((new DOMParser()).parseFromString(html, "text/html").body.childNodes);
 	let s="";
-	while (nodes.length && s.length < MESSLEN){
+	while (nodes.length && s.length < uselen){
 		let node = nodes.shift();
 		s+=node.textContent+" ";
 	}
 	let dots="...";
-	if (s.length <= MESSLEN) dots="";
-	s = s.slice(0,MESSLEN).chomp()+dots;
-	let notice = new Notice(s, item, note);
-//log(notice);
+	if (s.length <= uselen) dots="";
+	s = s.slice(0,uselen).chomp()+dots;
+	return s;
+};//»
+const get_notice_message=(dat, numdesc)=>{//«
+	let mess;
+	let str = html_to_str(dat.text||dat.title||"[link] "+dat.url);
+	return str;
+//	if (dat.title && Number.isFinite(numdesc)) mess = `<span style="color:${getcolor(numdesc)}">${str}</span>`;
+//	else mess = str;
+//	return mess;
+};//»
+const set_notice=async(elem)=>{//«
+	let path = elem.path();
+	let str = JSON.stringify(path);
+	if (notices.includes(str)) return popup("Already being notified for the message!");
+	if (notices.length >= MAX_NOTICE_LIMIT) return popup(`You have reached MAX_NOTICE_LIMIT (${MAX_NOTICE_LIMIT})`);
+	notices.push(str);
+	if (!await fs.writeFile(NOTICESFILEPATH, JSON.stringify(notices))) {
+cwarn(`Could not write to the file: ${NOTICESFILEPATH}`);
+	}
+	let dat = elem.data;
+	NOTICES[str]=new Notice(dat, path, elem.descendants);
+	await popup("The notice has been set!");
+	elem.focus();
+}//»
+const poll_notices=()=>{//«
+
+cwarn(`Polling ${notices.length} notices @${new Date().toTimeString().split(" ")[0]}`);
+for (let n of notices) NOTICES[n].poll();
+
+};//»
+const await_notices=async()=>{//«
+
+//switch_to_screen(Notif);
+
+
+for (let n of notices) {
+
+	let fullpath = JSON.parse(n);
+	let messid = fullpath[fullpath.length-1];
+	let item = await get_db_item(messid);
+//	NOTICES[n]=new Notice(html_to_str(item.text||item.title||"[link] "+item.url), item, fullpath);
+	NOTICES[n] = new Notice(item, fullpath, item.descendants);
 
 }
 
-//log(Notif);
+poll_notices();
+
+poll_interval = setInterval(poll_notices, poll_interval_ms);
+//let poll_interval_ms = 60000;
 
 };//»
 
@@ -1302,14 +1475,41 @@ const init_notif=()=>{//«
 };//»
 const init = async()=>{//«
 	let rv;
-
-	if (!await open_db()) return poperr("Could not open the database!");
-
+	if (!NS.api.widgets) {
+		stat("Loading 'widgets'...");
+		await Core.api.loadMod('sys.widgets');
+//		globals.widgets = new NS.mods["sys.widgets"](Core);
+		let mod = new NS.mods["sys.widgets"](Core);
+//		mod.set_desk(Topwin);
+		widgets = NS.api.widgets;
+		widgets.setDesk(Topwin);
+	}
+	else widgets = NS.api.widgets;
+	
+	set_widgets();
+	if (!NS.api.fs){
+		stat("Loading 'fs'...");
+        await Core.api.loadFs();
+	}
+	fs = NS.api.fs;
+//log(fs);
+	if (!globals.home_path) {
+		stat("Getting current user...");
+		await Core.api.getCurrentUser(fs);
+	}
+	USERDATAPATH =`${globals.home_path}/.data/apps/net/HN`
+	NOTICESFILEPATH =`${USERDATAPATH}/notices`
+	
+	stat("Opening the database...");
+	if (!await open_db()) {
+		return poperr("Could not open the database!");
+	}
+	stat("Loading firebase...");
 	rv = await load_firebase();
 	if (rv!==true) return poperr(rv);
 	if (!await fs.mkHtml5Dir(CACHE_PATH)) {
-		await poperr (`Could not create '${CACHE_PATH}'!`);
-		return;
+		cerr (`Could not create '${CACHE_PATH}'!`);
+//		return;
 	}
 	init_stories(DEF_STORY_TYPE);
 	init_offline();
@@ -1331,7 +1531,12 @@ log(rv);
 			notices=[];
 		}
 	}
-	await_notices();
+	if (notices.length) {
+//		stat(`Awaiting ${notices.length} items`);
+		await_notices();
+		stat_total();
+	}
+	else stat("Ready!");
 
 };//»
 
@@ -1343,8 +1548,14 @@ log(rv);
 
 this.onkeydown=async(e,s)=>{//«
 
-//log(s);
+if(s=="=_S"){FS++;_Main.fs=FS;return;}
+if(s=="-_"){if(FS<=10)return;FS--;_Main.fs=FS;return;}
+
 if (s=="ESC_C") return goto_main_list();
+if (s=="1_") return switch_to_screen(Online);
+if (s=="2_") return switch_to_screen(Offline);
+if (s=="3_") return switch_to_screen(Notif);
+if (s=="p_") return poll_notices();
 
 let act=document.activeElement;
 
@@ -1384,11 +1595,30 @@ if (s=="TAB_"||s=="TAB_S"){//«
 
 	if (is_list||!act_is_vis){
 		if (s=="TAB_S") arr.reverse();
-		let elm = arr[0];
-		if (!elm) return;
-		if (!is_visible(elm)) elm.scrollIntoView();
-		act.onescape&&act.onescape();
-		elm.focus();
+//		let elm = arr[0];
+//		if (!elm) return;
+//		if (!is_visible(elm)) elm.scrollIntoView();
+		let elm;
+		for (let i = next_ind; i < arr.length; i++){
+			if (is_visible(arr[i])) {
+				elm = arr[i];
+				elm.scrollIntoViewIfNeeded();
+				break;
+			}
+		}
+		if (!elm){
+			for (let i = 0; i < arr.length; i++){
+				if (is_visible(arr[i])) {
+					elm = arr[i];
+					elm.scrollIntoViewIfNeeded();
+					break;
+				}
+			}
+		}
+		if (elm) {
+			act.onescape&&act.onescape();
+			elm.focus();
+		}
 		return;
 	}
 	if (s=="TAB_"){
@@ -1419,8 +1649,9 @@ else if(s=="ENTER_"){//«
 		return;
 	}
 
-	if (cur_elem.onenter) cur_elem.onenter();
-	else if (cur_elem.onclick) cur_elem.click();
+	if (cur_elem.gotolink) cur_elem.gotolink();
+	else if (cur_elem.onenter) cur_elem.onenter();
+	else if (cur_elem.click) cur_elem.click();
 	else {
 cwarn("What is this cur_elem", cur_elem);
 	}
@@ -1431,55 +1662,42 @@ switch_screen();
 return;
 }
 
-
 if (!cur_elem) return;
-//log(cur_elem);
 
-if (s=="r_") {//«
-//log(cur_elem);
-	if (cur_elem.type==="item") reget_item(cur_elem);
-	else if (cur_elem.type=="list" && !cur_elem.id){
-		let dm = Math.floor((Date.now() - last_get)/60000);
-		if (dm < MAX_CACHE_DIFF_MINUTES) {
-log(`${dm}/${MAX_CACHE_DIFF_MINUTES} mins`);
-return;
-		}
-
-Main.innerHTML="";	
-init_stories(DEF_STORY_TYPE);
-
-	}
+if (s=="ENTER_A"){
+	if (cur_elem.comment) cur_elem.comment();
 	return;
-}//»
-if (s=="x_"){
-if (cur_elem.type=="notice"){
-//	remove_notice(cur_elem);
-	cur_elem.delete();
 }
-return;
+
+if (s=="r_") return reload();
+
+if (s=="x_"){
+	if (cur_elem.type=="notice") cur_elem.delete();
+	return;
+}
+if (s=="k_"){
+	if (!cur_elem.getkids) return;
+
+	let ref = get_ref(`/v0/item/${cur_elem.id}/kids`);
+	ref.limitToLast(1).once('value',snap=>{
+	let k = parseInt((Object.keys(snap.val()))[0]);
+	log(k);
+	});
+//	let got = await get_fbase(`item/${cur_elem.id}/kids`);
+//log("CUR",cur_elem.getkids().length);
+//log("RET",got?got.length:0);
+	return;
 }
 
 if (cur_elem.type!=="item") return;
 if (s=="c_"){
 	if (cur_elem.comment) cur_elem.comment();
 }
-else if (s=="k_"){
-if (!cur_elem.id) return;
-let got = await get_fbase(`item/${cur_elem.id}/kids`);
-}
-else if (s=="g_") cur_elem.gotolink&&cur_elem.gotolink();
+//else if (s=="g_") cur_elem.gotolink&&cur_elem.gotolink();
 else if (s=="u_") get_user();
-else if (s=="n_"){
-//n == Notify
+else if (s=="n_") set_notice(cur_elem);
 
 
-last_path = cur_elem.path();
-log(last_path);
-//log(last_path);
-set_notice(last_path);
-
-
-}
 
 
 };//»
@@ -1494,8 +1712,9 @@ this.onescape = ()=>{//«
 
 };//»
 this.onkill=()=>{
-//	clearInterval(time_interval);
-	for (let ref of REFS) ref.off();
+	/*	clearInterval(time_interval);*/
+	clearInterval(poll_interval);
+//	for (let ref of REFS) ref.off();
 };
 this.onresize=()=>{};
 this.onfocus=()=>{//«

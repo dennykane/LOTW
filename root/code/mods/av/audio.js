@@ -45,6 +45,8 @@ service down
 
 »*/
 
+export const mod = function(Core){
+
 //Imports«
 const{log,cwarn,cerr,globals,NS}=Core;
 const{audio,util,fs}=globals;
@@ -359,4 +361,4 @@ var noteToScaleIndex = {//«
 
 //»
 
-
+}

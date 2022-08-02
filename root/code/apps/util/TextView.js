@@ -225,4 +225,7 @@ this.onkeydown=(e,k)=>{
 
 statbar.innerHTML="Use the paging keys to scroll: Up, Down, PgUp, PgDown, Home and End";
 
+log(topwin);
+//log(statbar);
+
 }

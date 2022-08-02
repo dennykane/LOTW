@@ -1656,6 +1656,8 @@ let cerr = _.cerr;
 let xget = _.xget;
 
 let globals = _.globals;
+if (!globals.audio) Core.api.mkAudio();
+
 let audio_ctx = globals.audio.ctx;
 let util = globals.util;
 _ = util;

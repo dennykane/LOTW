@@ -1737,7 +1737,10 @@ _.ael = function(which, fun){this.addEventListener(which, fun, false);}
 _.attset = function(key, val) {this.setAttribute(key,val);}
 _.attget = function(key) {return this.getAttribute(key);}
 _.html = function(str) {this.innerHTML = str;}
-_.add=function(kid){this.appendChild(kid);}
+//_.add=function(kid){this.appendChild(kid);}
+_.add = function(...args) {
+	for (let kid of args) this.appendChild(kid);
+}
 _.vcenter=function(amount){if(!amount)amount="50%";this.pos="relative";this.y=amount;this.style.transform="translateY(-"+amount+")";}
 _.flexcol=function(if_off){if(if_off){this.style.display="";this.style.alignItems="";this.style.justifyContent="";this.style.flexDirection="";}else{this.style.display="flex";this.style.alignItems="center";this.style.justifyContent="center";this.style.flexDirection="column";}}
 
@@ -1790,9 +1793,12 @@ if (winpath=="/shell") is_shell = true;
 else if (winpath == "/desk") is_desk = true;
 else if (marr = winpath.match(/^\/(.+)\.app$/)) {
 //	is_app=marr[1].replace(/\x2f/g,".");
-	is_app=marr[1];
+	app_path = marr[1]+".js";
+	is_app = app_path.replace(/\x2f/,".");
+//	is_app=marr[1];
 //	is_app = true;
-	app_path = `${marr[1].replace(/\./g,"/")}.js`;
+//	app_path = `${marr[1].replace(/\./g,"/")}.js`;
+//	is_app = `${marr[1].replace(/\//g,"/")}.js`;
 }
 else {
 console.error("Path no good: " + winpath);
@@ -1884,7 +1890,7 @@ window.addEventListener("drop",function(e){e =e||event;e.preventDefault();},fals
 
 //Init«
 
-const get_current_user=()=>{//«
+const get_current_user=(fsarg)=>{//«
 	return new Promise(async(y,n)=>{
 		get_username();
 		get_users();
@@ -1900,10 +1906,11 @@ const get_current_user=()=>{//«
 		globals.home_path = home_path;
 		try{
 			step=await initstep("Creating all the system directories");
-			await fsapi.touchHtml5Dirs([home_path],{reject:true});
-			await fsapi.touchHtml5Dirs([desk_path],{reject:true});
+			let fs = fsapi || fsarg;
+			await fs.touchHtml5Dirs([home_path],{reject:true});
+			await fs.touchHtml5Dirs([desk_path],{reject:true});
 //			await fsapi.touchHtml5File(desk_path+"/.",{reject:true});
-			await fsapi.popHtml5Dirs(['/home']);
+			await fs.popHtml5Dirs(['/home']);
 			step.ok();
 		} catch (e) {
 console.error(e);
@@ -1913,7 +1920,9 @@ console.error(e);
 		}
 		y(true);
 	});
-}//»
+}
+api.getCurrentUser = get_current_user;
+//»
 const make_app = (num_or_name, arg) => {//«
 	const noop = () => {};
 	let id;
@@ -1979,7 +1988,19 @@ console.error(e);
 	}
 //	arg.TOPWIN = win;
 //	arg.topwin = win;
-	win.status_bar=make('div');
+	let statdiv = make('div');
+	statdiv.tcol="#ddd";
+	statdiv.fs=14;
+	statdiv.padl=3;
+	statdiv.padt=1;
+	statdiv.over="hidden";
+	statdiv.pos="relative";
+	statdiv.w="100%";
+	statdiv.x=0;
+	statdiv.b=2;
+	statdiv.h=14;
+	win.status_bar=statdiv;
+	
 	win.loc(0, 0);
 	win.style.zIndex = 1;
 	win.pos = "fixed";
@@ -1991,9 +2012,10 @@ console.error(e);
 	main.pos = "relative";
 	main.loc(0, 0);
 	main.w = winw();
-	main.h = winh();
+	main.h = winh()-16;
 	main.top=win;
 	win.appendChild(main);
+	win.appendChild(statdiv);
 	body.appendChild(win);
 	win.set_winname = noop;
 	name = name.replace(/\x2f/g, ".");
@@ -2262,7 +2284,7 @@ const init_app = async() => {//«
 				if (e.shiftKey) mod_str += "S";
 				let chr = KC[code];
 				let kstr = chr + "_" + mod_str;
-				let cpr = win.CPR;
+				let cpr = win.CPR||Desk.CPR;
 				if (cpr) {
 					if (cpr.key_handler) {
 						if (kstr == "ENTER_A") kstr = "ENTER_";
@@ -2286,6 +2308,7 @@ const init_app = async() => {//«
 					}
 					return;
 				}
+				if (kstr==="ESC_") return obj.onescape();
 				keydown(e, kstr);
 			};//»
 			document.onkeyup = keyup;
@@ -2374,7 +2397,8 @@ const init_app = async() => {//«
 
 //if (is_shell && qobj.nosyslock){}
 //else if (!is_app) {
-//if (!is_app) {
+
+if (!is_app) {
 
 if ('BroadcastChannel' in window) {
 
@@ -2420,7 +2444,7 @@ console.log(mess);
 
 }
 
-
+}
 
 
 	if (is_desk) init_desk();

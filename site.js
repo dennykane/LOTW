@@ -109,9 +109,24 @@ LOTW - Main
 </body>
 </html>
 `;
-//HTML_TOP«
+const ext_to_mime = {
+	"js": "application/javascript",
+	"json": "application/javascript",
+	"html": "text/html",
+	"txt": "text/plain",
+	"synth": "text/plain",
+	"sh": "text/plain",
+	"gz": "application/gzip",
+	"wav": "audio/wav",
+	png:"image/png"
+};
 
-const HTML_TOP=`
+//»
+
+//Blog HTML«
+
+const BLOG_TOP=`
+
 <html>
 <head>
 <title>
@@ -125,6 +140,9 @@ body{
 	background-color: #000;
 }
 .header{
+	text-align:center;
+}
+h2{
 	text-align:center;
 }
 .content{
@@ -159,25 +177,12 @@ a:visited{
 <hr>
 `;
 
-const HTML_BOT=`
+const BLOG_BOT=`
 <hr>
 </div>
 </body>
 </html>
 `;
-
-//»
-const ext_to_mime = {
-	"js": "application/javascript",
-	"json": "application/javascript",
-	"html": "text/html",
-	"txt": "text/plain",
-	"synth": "text/plain",
-	"sh": "text/plain",
-	"gz": "application/gzip",
-	"wav": "audio/wav",
-	png:"image/png"
-};
 
 //»
 
@@ -189,14 +194,14 @@ const OS_HTML=`
 </title>
 <meta name="description" content="This is an operating system that runs inside of most modern web browsers">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<link href="www/css/os.css" rel="stylesheet">
+<link href="/www/css/os.css" rel="stylesheet">
 <link rel="icon" href="/www/img/favicon.ico">
 </head>
 <body style="overscroll-behavior-x: none;">
 <div style="z-index:100000000;position:absolute;left:0;top:0;overflow:hidden;">
 <table style="font-family:monospace;font-size:18;" id="initlog"></table>
 </div>
-<script src="root/code/mods/sys/core.js" type="module"></script>
+<script src="/root/code/mods/sys/core.js" type="module"></script>
 <a name="_"></a>
 </body>
 </html>
@@ -447,7 +452,7 @@ log(e);
 			if (is_live && FS_CACHE[url]) str = FS_CACHE[url];
 			else {
 				try {
-					if (isblog && !usemime) str = HTML_TOP + execSync(`markdown ${dots+decodeURIComponent(url)}`) + HTML_BOT;
+					if (isblog && !usemime) str = BLOG_TOP + execSync(`markdown ${dots+decodeURIComponent(url)}`) + BLOG_BOT;
 					else str = fs.readFileSync(dots+decodeURIComponent(url), 'utf8');
 					FS_CACHE[url] = str;
 				}
@@ -518,7 +523,7 @@ const app =(req,res)=>{//«
 	}
 };//»
 
-if (process.env.LOTW_LIVE) {
+if (process.env.LOTW_LIVE) {//«
 
 	https.createServer({
 		key: fs.readFileSync(KEY_PATH),
@@ -535,7 +540,7 @@ else {
 	http.createServer(app).listen(port, hostname);
 	log(`Site server listening at http://${hostname}:${port}`);
 
-}
+}//»
 
 
 

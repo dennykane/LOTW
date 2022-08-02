@@ -5,9 +5,11 @@ export const mod = function(Core) {
 
 const api={};
 let Desk=Core.Desk;
-this.set_desk = arg=>{
+const set_desk=arg=>{
 	Desk = arg;
-}
+};
+this.set_desk = set_desk;
+api.setDesk = set_desk;
 //const {globals}=Core;
 //const log=(...args)=>{console.log(...args);}
 //const cwarn=(...args)=>{console.warn(...args);}

@@ -288,10 +288,12 @@ const api={//«
 	init:(opts={})=>{//«
 		return new Promise(async(Y,N)=>{
 			if (did_init) return Y(true);
-			if (!await capi.makeScripts([
-				"https://cdnjs.cloudflare.com/ajax/libs/firebase/9.1.1/firebase-app-compat.min.js",
-				"https://cdnjs.cloudflare.com/ajax/libs/firebase/9.1.1/firebase-database-compat.min.js"
-			])) {
+//			if (!await capi.makeScripts([
+//				"https://cdnjs.cloudflare.com/ajax/libs/firebase/9.1.1/firebase-app-compat.min.js",
+//				"https://cdnjs.cloudflare.com/ajax/libs/firebase/9.1.1/firebase-database-compat.min.js"
+//			]))
+			if (!(await capi.makeScript("https://cdnjs.cloudflare.com/ajax/libs/firebase/9.1.1/firebase-app-compat.min.js")&&await capi.makeScript("https://cdnjs.cloudflare.com/ajax/libs/firebase/9.1.1/firebase-database-compat.min.js")))
+			{
 				if (opts.reject) return N("Could not load firebase scripts!");
 				else return Y(false);
 			}
