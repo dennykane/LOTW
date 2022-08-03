@@ -854,13 +854,14 @@ const getcolor = n=>{
 };
 //const update_times=()=>{for(let t of TIMES)t.update();}
 const stat_total=()=>{//«
-	let sty="";
+	let sty=' style="padding-left:5px;padding-right:5px;';
 	let s = "s";
 	if (total_new) {
-		sty=' style="color:#ffffff;font-weight:900;"';
+		sty+=`background-color: #ccc;color: #000;font-weight: 900;"`;
 		if (total_new==1) s = "";
 	}
-	stat(`<span${sty}>${total_new}</span> new message${s}`);
+	else sty+='"';
+	stat(`<span${sty}>${total_new} new message${s}</span>`);
 };//»
 const stat=(s)=>{
 if (!s){
