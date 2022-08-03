@@ -1531,12 +1531,16 @@ log(rv);
 			notices=[];
 		}
 	}
+	await_notices();
+	stat_total();
+/*
 	if (notices.length) {
 //		stat(`Awaiting ${notices.length} items`);
 		await_notices();
 		stat_total();
 	}
 	else stat("Ready!");
+*/
 
 };//»
 
