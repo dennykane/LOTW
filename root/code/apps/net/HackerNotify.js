@@ -123,6 +123,7 @@ let fs;
 
 //Var«
 
+let working = false;
 let poll_interval;
 let poll_interval_ms = 60000;
 
@@ -183,6 +184,15 @@ const HN_APPNAME = "hackernews";
 //»
 
 //DOM«
+const nopropdef=(e)=>{
+	e.preventDefault();
+	e.stopPropagation();
+};
+const allnopropdef=(elem)=>{
+	elem.onmousedown = nopropdef;
+	elem.onclick = nopropdef;
+	elem.ondblclick = nopropdef;
+};
 
 let statbar = Topwin.status_bar;
 
@@ -201,6 +211,7 @@ Online.loc(0,0);
 Online.overy="scroll";
 Online.tabIndex="-1";
 Online.style.outline="none";
+allnopropdef(Online);
 
 let Offline = mkdv();
 Offline.pos="absolute";
@@ -210,6 +221,7 @@ Offline.loc(0,0);
 Offline.overy="scroll";
 Offline.tabIndex="-1";
 Offline.dis="none";
+allnopropdef(Offline);
 
 
 let Notif = mkdv();
@@ -220,6 +232,7 @@ Notif.loc(0,0);
 Notif.overy="scroll";
 Notif.tabIndex="-1";
 Notif.dis="none";
+allnopropdef(Notif);
 
 _Main.add(Online);
 _Main.add(Offline);
@@ -254,6 +267,7 @@ let comprev;
 let coms;
 let comwin;
 const main = mkdv();//main
+allnopropdef(main);
 main.is_active=false;
 
 this.main = main;
@@ -275,13 +289,15 @@ main.onfocus=()=>{
 main.tab_level = level;
 main.mar=10;
 main.bor="1px dotted #aaa";
+/*
 main.onmousedown=()=>{//«
 	if (cur_elem !== this){
 		if (cur_elem&&cur_elem.blur) cur_elem.blur();
 		this.focus();
 	}
 };//»
-main.ondblclick=()=>{this.toggle();};
+*/
+//main.ondblclick=()=>{this.toggle();};
 
 const head = mkdv();//header
 head.pad=5;
@@ -361,11 +377,12 @@ cont.dis="none";
 const body = mkdv();//body
 //body.style.whiteSpace ="pre-wrap";
 cont.add(body);
+cont.onmousedown
 body.classList.add("body");
 body.tabIndex="-1";
 body.tab_level = level+1;
 body.pad=5;
-
+//log(body);
 if (!arg.url) {
 //arg.text.
 //let s
@@ -385,7 +402,9 @@ this.gotolink=()=>{a.click();};
 
 }
 //else body.innerHTML=`<span><u>${arg.url}</u></span>`;
-
+//if (_num===0){
+//log(main);
+//}
 body.onenter=()=>{//«
 	if (arg.url){
 		if (win&&!win.closed){
@@ -395,6 +414,7 @@ body.onenter=()=>{//«
 		win = window.open(arg.url, arg.url,`width=${POPUP_WID},height=${POPUP_HGT}`)
 	}
 };//»
+
 body.onfocus=()=>{
 log("BODYFOCUS!");
 //	cur_elem = body;
@@ -695,9 +715,9 @@ this.getkids = ()=>{
 let arr=kids.concat(newkids).sort();
 return arr;
 };
-m.onmousedown=()=>{
-	m.focus();
-};
+//m.onmousedown=()=>{
+//	m.focus();
+//};
 
 
 let last_poll_time = 0;
@@ -839,7 +859,6 @@ this.update();
 //Funcs«
 
 //Util«
-
 const getcolor = n=>{
 	let tcol;
 //	let n = arg.descendants;
@@ -894,24 +913,24 @@ const mkbut = (str, par, fn, opts={})=>{//«
 	d.onfocus=(e)=>{
 //		cur_elem = d;
 //		d.tcol="#00c";
-		stat();
+//		stat();
 	};
 	d.onblur=(e)=>{
 //		d.tcol="#000";
-		stat();
+//		stat();
 	};
 	d.onclick=(e)=>{
 		if (disabled) return;
 		if (e.isTrusted||e===true) {
 			fn();
-			stat();
+//			stat();
 			return 
 		}
 		d.bor="3px inset #aaa";
 		setTimeout(() => {
 			d.bor = "3px outset #aaa";
 			fn();
-			stat();
+//			stat();
 		}, 200);
 	};
 //	if (par) par.add(d);
@@ -1201,8 +1220,8 @@ cwarn("firebase is disconnected: "+HN_APPNAME);
 //»
 //App«
 
-const reload = ()=>{//«
-	if (cur_elem.type==="item") reget_item(cur_elem);
+const reload = async()=>{//«
+	if (cur_elem.type==="item") await reget_item(cur_elem);
 	else if (cur_elem.type=="list" && !cur_elem.id){
 		if (Main!==Online) return popup("Cannot reload this screen!");
 		let dm = Math.floor((Date.now() - last_get)/60000);
@@ -1211,8 +1230,8 @@ const reload = ()=>{//«
 popup(`Still have ${MAX_CACHE_DIFF_MINUTES-dm} minutes left!`);
 			return;
 		}
-Main.innerHTML="";	
-init_stories(DEF_STORY_TYPE);
+		Main.innerHTML="";	
+		await init_stories(DEF_STORY_TYPE);
 	}
 };//»
 const reget_item = (item, if_override)=>{//«
@@ -1244,7 +1263,6 @@ const reget_item = (item, if_override)=>{//«
 		is_getting = false;
 		Y(rv);
 	});
-
 };//»
 const goto_item=(path, if_refresh)=>{//«
 
@@ -1301,7 +1319,9 @@ const focus_main_list=()=>{//«
 	if (Main===Online) toplist.focus();
 	else if (Main===Offline) offlist.focus();
 	else notiflist.focus();
+	
 };//»
+const unwork=()=>{working = false;};
 const goto_main_list=()=>{//«
 	if (!cur_elem) return focus_main_list();
 	if (cur_elem === toplist || cur_elem === offlist || cur_elem === notiflist) return;
@@ -1388,9 +1408,10 @@ cwarn(`Could not write to the file: ${NOTICESFILEPATH}`);
 }//»
 const poll_notices=()=>{//«
 
-cwarn(`Polling ${notices.length} notices @${new Date().toTimeString().split(" ")[0]}`);
+//cwarn(`Polling ${notices.length} notices @${new Date().toTimeString().split(" ")[0]}`);
 for (let n of notices) NOTICES[n].poll();
 
+	working = false;
 };//»
 const await_notices=async()=>{//«
 
@@ -1475,6 +1496,7 @@ const init_notif=()=>{//«
 	notif_elem_hold = notiflist;
 };//»
 const init = async()=>{//«
+
 	let rv;
 	if (!NS.api.widgets) {
 		stat("Loading 'widgets'...");
@@ -1552,25 +1574,57 @@ log(rv);
 //Obj/CB«
 
 this.onkeydown=async(e,s)=>{//«
-
+let code = e.keyCode;
+if (code>=16&&code<=18) return;
+//if (s==="SPACE_"||s==="TAB_"||s==="ENTER_"){}
+//else if (s.match(/^[A-Z]+_$/)) return;
+//log(s);
 if(s=="=_S"){FS++;_Main.fs=FS;return;}
 if(s=="-_"){if(FS<=10)return;FS--;_Main.fs=FS;return;}
 
-if (s=="ESC_C") return goto_main_list();
-if (s=="1_") return switch_to_screen(Online);
-if (s=="2_") return switch_to_screen(Offline);
-if (s=="3_") return switch_to_screen(Notif);
-if (s=="p_") return poll_notices();
+if (working){
+cwarn("!!!!!!!!!! WORKING !!!!!!!!!!");
+return;
+}
+//log(s);
+working = true;
+
+if (s=="ESC_C") {
+	await goto_main_list();
+	working = false;
+	return;
+}
+if (s=="1_") {
+	await switch_to_screen(Online);
+	working = false;
+	return;
+}
+if (s=="2_") {
+	await switch_to_screen(Offline);
+	working = false;
+	return;
+}
+if (s=="3_") {
+	await switch_to_screen(Notif);
+	working = false;
+	return;
+}
+if (s=="p_") {
+	await poll_notices();
+	working = false;
+	return;
+}
 
 let act=document.activeElement;
-
+//log(s);
 if (s=="TAB_"||s=="TAB_S"){//«
 	e.preventDefault();
 	if (!Main.contains(act)) {
 		if(cur_elem){
 			if (cur_elem.focus) cur_elem.focus();
 		}
-		focus_main_list();
+		await focus_main_list();
+		working = false;
 		return;
 	}
 	let arr;
@@ -1584,7 +1638,8 @@ if (s=="TAB_"||s=="TAB_S"){//«
 		act_is_vis = is_visible(act);
 		arr = act.parentNode.getElementsByClassName("tabbable");
 		if (cur_elem && cur_elem.main && cur_elem.main.is_active && cur_elem.onenter){
-			cur_elem.onenter();
+			await cur_elem.onenter();
+			working = false;
 			return;
 		}
 	}
@@ -1624,6 +1679,7 @@ if (s=="TAB_"||s=="TAB_S"){//«
 			act.onescape&&act.onescape();
 			elm.focus();
 		}
+		working = false;
 		return;
 	}
 	if (s=="TAB_"){
@@ -1636,21 +1692,28 @@ if (s=="TAB_"||s=="TAB_S"){//«
 		act.onescape&&act.onescape();
 		arr[prev_ind].focus();
 	}
+	working = false;
 	return;
 }//»
+
 else if(s=="SPACE_"){//«
 	e.preventDefault();
 	if (!Main.contains(act)) {
 		if(cur_elem) cur_elem.focus();
+		working = false;
 		return;
 	}
-	if (cur_elem.toggle) cur_elem.toggle();
+	if (cur_elem.toggle) {
+		await cur_elem.toggle();
+	}
+	working = false;
 	return;
 }//»
 else if(s=="ENTER_"){//«
 
 	if (!Main.contains(act)) {
 		if(cur_elem) cur_elem.focus();
+		working = false;
 		return;
 	}
 
@@ -1660,49 +1723,66 @@ else if(s=="ENTER_"){//«
 	else {
 cwarn("What is this cur_elem", cur_elem);
 	}
+	working = false;
 	return;
 }//»
 else if(s=="/_"){
 switch_screen();
+working = false;
 return;
 }
 
-if (!cur_elem) return;
+if (!cur_elem) return unwork();
 
 if (s=="ENTER_A"){
-	if (cur_elem.comment) cur_elem.comment();
+	if (cur_elem.comment) await cur_elem.comment();
+	working = false;
 	return;
 }
 
-if (s=="r_") return reload();
-
+if (s=="r_") {
+	await reload();
+	working = false;
+	return 
+}
 if (s=="x_"){
-	if (cur_elem.type=="notice") cur_elem.delete();
+	if (cur_elem.type=="notice") await cur_elem.delete();
+	working = false;
 	return;
 }
 if (s=="k_"){
-	if (!cur_elem.getkids) return;
+	if (!cur_elem.getkids) return unwork();
 
 	let ref = get_ref(`/v0/item/${cur_elem.id}/kids`);
 	ref.limitToLast(1).once('value',snap=>{
 	let k = parseInt((Object.keys(snap.val()))[0]);
-	log(k);
+log(k);
 	});
 //	let got = await get_fbase(`item/${cur_elem.id}/kids`);
 //log("CUR",cur_elem.getkids().length);
 //log("RET",got?got.length:0);
+	working = false;
 	return;
 }
 
-if (cur_elem.type!=="item") return;
+if (cur_elem.type!=="item") return unwork();
 if (s=="c_"){
 	if (cur_elem.comment) cur_elem.comment();
+	working = false;
 }
 //else if (s=="g_") cur_elem.gotolink&&cur_elem.gotolink();
-else if (s=="u_") get_user();
-else if (s=="n_") set_notice(cur_elem);
+else if (s=="u_") {
+	get_user();
+	working = false;
+}
+else if (s=="n_") {
+	await set_notice(cur_elem);
+	working = false;
+}
 
-
+else{
+working = false;
+}
 
 
 };//»
