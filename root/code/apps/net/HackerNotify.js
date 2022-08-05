@@ -1,5 +1,5 @@
 
-/*xTODOx
+/*xTODOx//«
 
 XXX On deleting notifications, need to update the bottom status!!!!! XXX
 
@@ -95,7 +95,7 @@ await_notices() is where we are going to either:
 //												 goto=item ? id = 22514004 # 22514747
 //																  original 
 //																    story
-*/
+»*/
 
 //const DEVMODE = true;
 const DEVMODE = false;
@@ -286,6 +286,9 @@ main.tabIndex="-1";
 main.onfocus=()=>{
 	cur_elem = this;
 };
+//main.onblur=()=>{
+//	this.close();
+//};
 main.tab_level = level;
 main.mar=10;
 main.bor="1px dotted #aaa";
@@ -371,6 +374,9 @@ else{
 }
 
 const cont = mkdv();//content
+cont.item = this;
+cont.className="container";
+allnopropdef(cont);
 cont.pad=5;
 //cont.fs=FS;
 cont.dis="none";
@@ -491,12 +497,11 @@ this.toggle = ()=>{//«
 		for (let i=0; i < len;i++){
 			let id=kids[i];
 			let item = await get_item(id);
-
-			if (!item){
-				poperr(`Error getting item: ${id}`);
-				return;
-			}
-			list.add(item);
+//			if (!item){
+//				poperr(`Error getting item: ${id}`);
+//				return;
+//			}
+			if (item) list.add(item);
 		}
 		Y();
 	});
@@ -523,6 +528,7 @@ this.onenter=()=>{//«
 	this.list.onenter();
 };//»
 this.focus=()=>{main.focus();};
+this.blur=()=>{main.blur();};
 this.getkids = ()=>{
 	return (arg.kids || []).sort();
 };
@@ -595,6 +601,9 @@ if (!_storyid) {
 	cur_elem = null;
 }
 };
+this.blur = ()=>{
+	m.blur();
+};
 if (!_storyid) {
 	m.onescape=()=>{
 		if (cur_elem == this){
@@ -648,6 +657,7 @@ Notif.childNodes[0].add(m);
 //»
 
 m.onfocus=()=>{cur_elem=this;};
+m.onblur=()=>{cur_elem=null;};
 
 this.delete = async()=>{//«
 
@@ -710,6 +720,9 @@ this.setkids=kidsarg=>{//«
 
 };//»
 this.focus=()=>{m.focus();};
+this.blur=()=>{
+m.blur();
+};
 this.getkids = ()=>{
 //	return (arg.kids || []);
 let arr=kids.concat(newkids).sort();
@@ -737,7 +750,7 @@ cwarn(`${id}) Must wait > ${MIN_POLL_MS} ms between polls!`);
 		if (!val) totkids = 0;
 		else totkids = parseInt((Object.keys(val))[0])+1;
 		let diff = totkids - (nkids+nnewkids);
-log(`${id}) Diff: ${diff}`);
+//log(`${id}) Diff: ${diff}`);
 //		if (!diff) return;
 		nnewkids+=diff;
 		update(diff);
@@ -1220,6 +1233,12 @@ cwarn("firebase is disconnected: "+HN_APPNAME);
 //»
 //App«
 
+const hard_reset=()=>{//«
+	let arr = Array.from(_Main.getElementsByClassName("container"));
+	for (let cont of arr) cont.item.close();
+	if (cur_elem) cur_elem.blur();
+	cur_elem = null;
+}//»
 const reload = async()=>{//«
 	if (cur_elem.type==="item") await reget_item(cur_elem);
 	else if (cur_elem.type=="list" && !cur_elem.id){
@@ -1259,7 +1278,7 @@ const reget_item = (item, if_override)=>{//«
 		rv.toggle();	
 		let strpath = rv.path(true);
 		let note = NOTICES[strpath];
-		if (note) note.setkids(got.kids);
+		if (note && got.kids) note.setkids(got.kids);
 		is_getting = false;
 		Y(rv);
 	});
@@ -1297,7 +1316,8 @@ cerr("Wut, could not get par after JUST ADDING THATT ITEMMM???");
 		screen = Offline;
 	}
 	switch_to_screen(screen);
-	goto_main_list();
+	await goto_main_list();
+//	goto_main_list();
 	let cur = par;
 	await cur.open();
 	cur.focus();
@@ -1473,15 +1493,26 @@ cwarn(`GET: ${which}stories`);
 
 	toplist = new List(`${which.firstup()}\xa0stories`, Main, 0);
 
-	for (let i=0; i < GET_NUM_STORIES;i++){
+	let donum = GET_NUM_STORIES;
+	for (let i=0; i < donum ;i++){
 		let id=arr[i];
+		if (!id) {
+cwarn(`Ran out of items @i=${i}`);
+			break;
+		}
 		let item = await get_item(id);
 		if (!item){
-			poperr(`Error getting item: ${id}`);
-			is_getting = false;
-			return;
+//			poperr(`Error getting item: ${id}`);
+//			is_getting = false;
+//			return;
+			donum++;
+			continue;
 		}
-		if (item.type=="story"||item.type=="comment") toplist.add(item);
+		if (item.type=="story"||item.type=="comment") {
+			if (item.title.match(/^Launch HN:/)) donum++;
+			else toplist.add(item);
+		}
+		else donum++;
 	}
 	toplist.focus();
 	is_getting = false;
@@ -1576,9 +1607,6 @@ log(rv);
 this.onkeydown=async(e,s)=>{//«
 let code = e.keyCode;
 if (code>=16&&code<=18) return;
-//if (s==="SPACE_"||s==="TAB_"||s==="ENTER_"){}
-//else if (s.match(/^[A-Z]+_$/)) return;
-//log(s);
 if(s=="=_S"){FS++;_Main.fs=FS;return;}
 if(s=="-_"){if(FS<=10)return;FS--;_Main.fs=FS;return;}
 
@@ -1586,8 +1614,12 @@ if (working){
 cwarn("!!!!!!!!!! WORKING !!!!!!!!!!");
 return;
 }
-//log(s);
 working = true;
+if (s=="l_A"){
+hard_reset();
+working = false;
+return;
+}
 
 if (s=="ESC_C") {
 	await goto_main_list();
