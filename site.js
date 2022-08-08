@@ -118,7 +118,8 @@ const ext_to_mime = {
 	"sh": "text/plain",
 	"gz": "application/gzip",
 	"wav": "audio/wav",
-	png:"image/png"
+	png:"image/png",
+	wasm:"application/wasm"
 };
 
 //»
@@ -359,6 +360,7 @@ const handle_request=async(req, res, url, args)=>{//«
 	let body, path, enc, pos;
 	let marr;
 	let isblog = false;
+//log(req);
 	if (meth == "GET") {//«
 		if (url=="/") {
 			if (args.path){//«
@@ -434,7 +436,15 @@ log(e);
 		let parts = url.split("/");
 		parts.shift();
 		let dir = parts.shift();
-		if (!(dir&&OKAY_DIRS.includes(dir))) return nogo(res,"Not found");
+		if (!(dir&&OKAY_DIRS.includes(dir))) {
+//			if ((req.headers.host.match(/^ilp\./)) || url=="/ilp"){
+			if (url=="/ilp"){
+				res.writeHead(302, {Location: `https://ilovephilosophy.com/viewtopic.php?f=2&t=198108`});
+				res.end();
+				return;
+			}
+			return nogo(res,"Not found");
+		}
 		let dots = ".";
 		if (dir==="blog") {
 			isblog = true;
@@ -472,7 +482,7 @@ log(e);
 			}
 		}
 		else {
-			if (marr = url.match(/\.(wav|gz|png)$/)) usemime = ext_to_mime[marr[1]];
+			if (marr = url.match(/\.(wav|gz|png|wasm)$/)) usemime = ext_to_mime[marr[1]];
 			if (is_live && FS_CACHE[url]) str = FS_CACHE[url];
 			else {
 				try {

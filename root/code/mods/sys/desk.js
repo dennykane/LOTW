@@ -5920,7 +5920,7 @@ const dokeydown = function(e, usecode) {//«
 	kstr = chr + "_" + mod_str;
 	e._sym = kstr;
 	if (debug_keydown) {
-		log(e, e.keyCode, e.code);
+		log(kstr, e.keyCode, e.code, e);
 //		log(kstr);
 	}
 if (keydiv){
@@ -6301,12 +6301,12 @@ maxed/fullscreened wins).
 
 */
 		if (!(cobj.overrides && cobj.overrides[kstr])){
-			if (kstr==="r_A") return win_reload();
-			if (kstr==="p_CAS") {
-cwarn("Please use 'Alt+r'!!!");
-//win_reload();
-return;
-			}
+			if (kstr==="r_A"||kstr==="p_CAS") return win_reload();
+//			if (kstr==="p_CAS") {
+//cwarn("Please use 'Alt+r'!!!");
+////win_reload();
+//return;
+//			}
 			if (!is_full) {
 				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
 					if (is_max) return;
