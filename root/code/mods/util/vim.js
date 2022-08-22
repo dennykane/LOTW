@@ -467,6 +467,9 @@ last_render = performance.now();
 //»
 //«Obj/CB
 
+
+
+
 const trysave=(if_saveas)=>{
 //	if (edit_fullpath) return editsave();
 	if (edit_fullpath&&!if_saveas) return editsave();
@@ -805,6 +808,7 @@ const cancel=()=>{
 	stat_render("Cancelled!");
 };
 const quit=()=>{
+	termobj.is_dirty = false;
 	termobj.onescape = onescape;
 	termobj.overrides = hold_overrides;
 	modequit();
@@ -1027,6 +1031,7 @@ const prepend_visual_line_space=(ch)=>{//«
 	for (let i=seltop; i<= selbot; i++) lines[i].splice(0,0,ch);
 	render();
 	dirty_flag = true;
+	termobj.is_dirty = true;
 };//»
 const maybequit=()=>{//«
 return quit();
@@ -1083,6 +1088,7 @@ const printch = ch =>{//«
 	x++;
 	render();
 	dirty_flag = true;
+	termobj.is_dirty = true;
 }//»
 
 const geteditlines=()=>{//«
@@ -1176,6 +1182,7 @@ const seldel=()=>{//«
 		if (ch==" "||ch=="\t") ln.splice(0, 1);
 	}
 	dirty_flag = true;
+	termobj.is_dirty = true;
 	render();
 }//»
 
@@ -2867,6 +2874,7 @@ const linecopy=(if_kill)=>{//«
 //		}
 		render();
 		dirty_flag = true;
+		termobj.is_dirty = true;
 	}
 	else {
 		creturn();
@@ -3232,6 +3240,7 @@ const enter=(if_ctrl)=>{//«
 	no_render=false;
 	render();
 	dirty_flag = true;
+	termobj.is_dirty = true;
 	do_syntax_timer();
 }//»
 const del_mark=m=>{//«
@@ -3302,6 +3311,7 @@ const do_ch_del = is_change =>{//«
 	lines[y+scroll_num] = ln.slice();
 	render();
 	dirty_flag = true;
+	termobj.is_dirty = true;
 	if (is_change) return;
 	update_syntax_delch(have_ch);
 };//»
@@ -3350,6 +3360,7 @@ const do_backspace=is_change=>{//«
 		let arr = ln.splice(x, 1);
 		lines[y+scroll_num] = ln;
 		dirty_flag = true;
+		termobj.is_dirty = true;
 		update_syntax_delch(have_ch);
 	}
 	else if (y > 0||scroll_num > 0) {
@@ -3424,6 +3435,7 @@ dokeypress @ sys.desk.js:3025
 		zlncols.splice(rno_1,1);
 		x = len;
 		dirty_flag = true;
+		termobj.is_dirty = true;
 		if (foldmode){
 			real_lines.copyWithin(cy(), cy()+1);
 			for (let i=cy(); i < lines.length; i++) real_lines[i]-=1;
@@ -4165,6 +4177,7 @@ const editsave=async(if_version)=>{//«
 				stat_message = `${edit_fname} ${numlines}L, ${err_or_pos}C written`;
 			}
 			dirty_flag = false;
+			termobj.is_dirty = false;
 			delete_state_from_db();
 		}
 		else stat_message = err_or_pos || "The file could not be saved";
@@ -5097,6 +5110,7 @@ cb(`linesarg.length (${linesarg.length}) >= REAL_LINES_SZ (${REAL_LINES_SZ})`);
 	edit_ftype = typearg;
 	edit_insert = false;
 	dirty_flag = false;
+	termobj.is_dirty = false;
 	visual_line_mode = visual_mode = visual_block_mode = false;
 	edit_cut_continue = false;
 	cut_buffer = [];

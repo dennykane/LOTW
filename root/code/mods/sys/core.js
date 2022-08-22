@@ -1880,7 +1880,12 @@ window.onbeforeunload = () => {//«
 	if (Desk){
 		let wins = Desk.get_windows(true);
 		for (let w of wins){
-			if (w.obj&&w.obj.onkill) w.obj.onkill();
+			if (w.obj) {
+				if (w.obj.is_dirty) return "There is an unsaved application!";
+				if (w.obj.onkill){
+					w.obj.onkill();
+				}
+			}
 		}
 	}
 	else if (app_win&&app_win.obj&&app_win.obj.onkill){

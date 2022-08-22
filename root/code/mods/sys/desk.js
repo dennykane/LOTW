@@ -3346,7 +3346,7 @@ const toggle_win_layout = (winarg) => {//«
 			let r = w.gbcr();
 			odiv.w = r.width;
 			odiv.h = r.height;
-			statdiv.innerHTML = r.width + "x" + r.height + "+" + r.left + "+" + r.top;
+			statdiv.innerHTML = Math.round(r.width) + "x" + Math.round(r.height) + "+" + Math.round(r.left) + "+" + Math.round(r.top);
 			statdiv.w = odiv.w - 40;
 		};
 		odiv.add(statdiv);
