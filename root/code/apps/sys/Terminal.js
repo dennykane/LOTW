@@ -1964,7 +1964,7 @@ const respsuccblob=(blob, if_no_cur, cb, if_clear, noarg, if_nonl)=>{//«
 	response({"SUCC": [blob.toString()]}, {NOEND: true, NOCUR: if_no_cur, CLEAR: if_clear, NONL: if_nonl});
 	if (cb) cb(1);
 };//»
-const response=(outarg, opts)=>{//«
+const response = (outarg, opts)=>{//«
 	if (!opts) opts = {};
 	let if_noend = opts.NOEND;//1
 	let next_cb = opts.NEXTCB;//3

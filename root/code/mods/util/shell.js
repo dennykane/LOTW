@@ -261,7 +261,7 @@ const constant_vars = {'USER': true, 'EMAIL': true, 'WINID': true};
 //»
 //Gen/Util Funcs«
 
-const toks_to_string = (arr, if_nospace) => {
+const toks_to_string = (arr, if_nospace) => {//«
 	let str = "";
 	for (let i = 0; i < arr.length; i++) {
 		let tok = arr[i];
@@ -317,7 +317,7 @@ const toks_to_string = (arr, if_nospace) => {
 		if (!if_nospace && !is_nl && i + 1 < arr.length) str = str + " ";
 	}
 	return str;
-}
+}//»
 const tok_to_string=t=>{return toks_to_string([t]);}
 const wrap_line = str=>{//«
 	str = str.replace(/\t/g,"\x20".rep(termobj.tabsize));
@@ -3483,6 +3483,7 @@ const com_cat = (args, opts) => {
 	let dostringify = opts.STRINGIFY;
 	let iserr = opts.ISERR;
 	let isbin = opts.BINARY;
+	let wraplines = opts.WRAPLINES;
 	let iter = 0;
 	let error_flag = false;
 	read_file_args_or_stdin(args, (ret, fname, errmess) => {
@@ -3552,7 +3553,12 @@ const com_cat = (args, opts) => {
 					wout(arr.join("\n"));
 				} else {
 					if (opts.NUMBERLINES) ret = Core.api.numberLines(ret);
-					woutarr(ret);
+					if (wraplines){
+						let out = [];
+						for (let ln of ret) out.push(...(wrap_line(ln).split("\n")));
+						woutarr(out);
+					}
+					else woutarr(ret);
 				}
 			}
 		} else if (isobj(ret) && objok) woutobj(ret);
@@ -4187,7 +4193,7 @@ cbok();
 },
 //»*/
 
-'get':async(args)=>{
+'get':async(args)=>{//«
 
 	let opts = failopts(args, {
 		LONG: {
@@ -4218,8 +4224,8 @@ log(doc);
 	wout(str);
 	cbok();
 
-},
-'hncomments':async()=>{
+},//»
+/*//«'hncomments':async()=>{
 const kid = (elem, ...arr)=>{
 let cur = elem;
 for (let num of arr){
@@ -4245,6 +4251,7 @@ log(user.innerText);
 //log(coms);
 cbok();
 },
+»*/
 'midiup':async()=>{
 	if (await capi.initMidi()) return cbok();
 	return cberr("Midi could not be enabled!");
@@ -4538,6 +4545,7 @@ cerr("Dropping", ret);
 'cat': args => {
 	let sws = failopts(args, {
 		SHORT: {
+			w: 1,
 			b: 1,
 			e: 1,
 			n: 1,
@@ -4549,7 +4557,8 @@ cerr("Dropping", ret);
 			binary: 1,
 			objok: 1,
 			"force-text": 1,
-			number: 1
+			number: 1,
+			wrap: 1
 		}
 	});
 	if (!sws) return;
@@ -4561,8 +4570,13 @@ cerr("Dropping", ret);
 	opts.BINARY = sws.binary || sws.b;
 	opts.ISERR = sws.e;
 	opts.SETFNAME = sws.f;
+	opts.WRAPLINES = sws.wrap||sws.w;
 	if (opts.BINARY && opts.NUMBERLINES) return cberr("Incompatible arguments:\x20line numbering and binary output!");
 	com_cat(args, opts);
+},
+'wrap': args=>{
+	if (!failnoopts(args)) return cberr();
+	com_cat(args, {WRAPLINES: true});
 },
 'bcat': args=>{
 	if (!failnoopts(args)) return cberr();

@@ -160,7 +160,7 @@ let letters=[//«
 "s",
 "t",
 "u",
-"q",
+"f",
 "x",
 "y",
 "w"
@@ -282,7 +282,7 @@ else if (s=="s_S"){ch="ς"}
 else if (s=="s_"){ch="σ"}
 else if (s=="t_"){ch="τ"}
 else if (s=="u_"){ch="υ"}
-else if (s=="q_"){ch="φ"}
+else if (s=="f_"){ch="φ"}
 else if (s=="x_"){ch="χ"}
 else if (s=="y_"){ch="ψ"}
 else if (s=="w_"){ch="ω"}
