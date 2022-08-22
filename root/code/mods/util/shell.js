@@ -3556,9 +3556,13 @@ const com_cat = (args, opts) => {
 					if (wraplines){
 						let out = [];
 						for (let ln of ret) out.push(...(wrap_line(ln).split("\n")));
-						woutarr(out);
+						if (opts.COPY) capi.clipCopy(out.join("\n"));
+						else woutarr(out);
 					}
-					else woutarr(ret);
+					else {
+						if (opts.COPY) capi.clipCopy(ret.join("\n"));
+						else woutarr(ret);
+					}
 				}
 			}
 		} else if (isobj(ret) && objok) woutobj(ret);
@@ -4262,7 +4266,6 @@ cbok();
 	cbok(await rv.text());
 },
 //*/
-
 'id':()=>{
 	wout(termobj.winid);
 	cbok();
@@ -4551,14 +4554,16 @@ cerr("Dropping", ret);
 			n: 1,
 			o: 1,
 			t: 1,
-			f: 1
+			f: 1,
+			c: 1
 		},
 		LONG: {
 			binary: 1,
 			objok: 1,
 			"force-text": 1,
 			number: 1,
-			wrap: 1
+			wrap: 1,
+			copy: 1
 		}
 	});
 	if (!sws) return;
@@ -4571,12 +4576,17 @@ cerr("Dropping", ret);
 	opts.ISERR = sws.e;
 	opts.SETFNAME = sws.f;
 	opts.WRAPLINES = sws.wrap||sws.w;
+	opts.COPY = sws.copy||sws.c;
 	if (opts.BINARY && opts.NUMBERLINES) return cberr("Incompatible arguments:\x20line numbering and binary output!");
 	com_cat(args, opts);
 },
 'wrap': args=>{
 	if (!failnoopts(args)) return cberr();
 	com_cat(args, {WRAPLINES: true});
+},
+'copy': args=>{
+	if (!failnoopts(args)) return cberr();
+	com_cat(args, {COPY: true});
 },
 'bcat': args=>{
 	if (!failnoopts(args)) return cberr();
