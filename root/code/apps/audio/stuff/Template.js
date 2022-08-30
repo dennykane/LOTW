@@ -1,5 +1,4 @@
 //Holding the space bar turns the gain on
-const APPNAME="MusicTemplate";
 
 export const app = function(arg) {
 
@@ -8,7 +7,6 @@ export const app = function(arg) {
 const {Core, Main, NS}=arg;
 const{log,cwarn,cerr,api:capi, globals, Desk}=Core;
 
-Main.top.title=APPNAME;
 const{fs,util}=globals;
 const{make,mkdv,mk,mksp}=util;
 
