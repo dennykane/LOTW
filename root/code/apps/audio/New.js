@@ -415,6 +415,8 @@ statvol();
 
 //»
 
+const KEYDOWNS = {};
+
 //OBJ/CB«
 
 this.onappinit=init;
@@ -432,17 +434,21 @@ if (s==="SPACE_") return toggle_volume();
 //if (got) got.trigger();
 //}
 
+if (KEYDOWNS[s]) return;
 if (s=="a_"){
 	if (NOTES[CENTER_NOTE]) NOTES[CENTER_NOTE].stop();
 	NOTES[CENTER_NOTE] = multi_osc(note_to_midi(CENTER_NOTE), NUM_OSC, MIDI_SPREAD, NOTE_DUR);
 	NOTES[CENTER_NOTE].trigger();
+	KEYDOWNS[s] = true;;
 }
 //if ()
 
 	
 }//»
-this.onkeyup=(e)=>{//«
-//	if (e.code=="Space") vol(0);
+this.onkeyup=(e, s)=>{//«
+
+KEYDOWNS[s] = null;
+
 };//»
 
 this.onkeypress=e=>{//«
