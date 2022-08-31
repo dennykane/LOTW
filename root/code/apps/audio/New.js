@@ -1,5 +1,10 @@
 /*
 
+
+_TODO_ @WPMHDYET: Want to initialize/cache these kinds of arrays so we don't need to build
+them every time we trigger a note!
+
+
 Initial foray into sound quality (ie, no robotic beeping sounds!)
 
 Now: To make an instrument note, do an ADSR (setValueCurveAtTime) and do a lowpass filter
@@ -22,24 +27,12 @@ Changing the "modg" gain's value from the current default of 7 (which gives each
 a 14 cent total detune range) to something wacky like 100 (or more) is interesting. Since
 this is a trivially settable parameter...
 
-TODO: update the multiplier @AIUMNEJUB:
+diditTODO: update the multiplier @AIUMNEJUB:
 let mult = 1/(i-1);
 ... in order to control how the higher harmonics decay.
 
 */
 export const app = function(arg) {
-
-//false = buzzy, true = hollow
-//let USE_ODD_HARMS = true; 
-let USE_ODD_HARMS = false; 
-
-let CENTER_MIDI = 48;
-let NUM_OSC = 5;
-let FREQ_SPREAD = 0.5;
-
-let OSC_MOD_DEPTH = 10;
-let OSC_MOD_FREQ = 10;
-
 
 //Imports«
 
@@ -51,16 +44,50 @@ const{make,mkdv,mk,mksp}=util;
 
 const Win = Main.top;
 
+const status_bar = Win.status_bar;
+
 //»
 
+
+const NOTES={};
+
+let RANDOMIZE_IMAG_TERM = true;
+//let RANDOMIZE_IMAG_TERM = false;
+
+//false = buzzy, true = hollow
+
+let USE_ODD_HARMS = true; 
+//let USE_ODD_HARMS = false; 
+
+let NUM_OSC_HARMS = 16;
+
+//let MIDI_CENTER = 60;
+let CENTER_NOTE = "C2";
+let MIDI_SPREAD = 0.33;//How wide the spectrum (in midi units) around the central freq.
+let NUM_OSC = 5;
+
+let OSC_MOD_DEPTH = 10;
+let OSC_MOD_FREQ = 10;
+
+let NOTE_DUR = 15;
+
+//Larger means faster fall off
+let FREQ_SWEEP_DECAY_FACTOR = 15;
+
+const CHARMAP={
+	a:CENTER_NOTE
+};
+
 //Var«
+
+
 
 //WebAudio«
 if (!globals.audio) Core.api.mkAudio();
 const {mixer, ctx}=globals.audio;
 const LINEOUT = ctx.createGain();
 const OUTGAIN = LINEOUT.gain;
-OUTGAIN.value=0;
+//OUTGAIN.value=0;
 const PLUG = mixer.plug_in(LINEOUT);
 //»
 
@@ -139,10 +166,29 @@ const midi_cents_to_freq=(val)=>{//«
 	let num = Math.floor(val*100);
 	return MIDINOTES[num];
 };//»
+const mctf = midi_cents_to_freq;
 
 //»
 
 //Funcs«
+
+//Status/Volume«
+const stat=s=>{
+	status_bar.innerHTML=s;
+};
+const vol=val=>{//«
+	if(OUTGAIN.value===val) return;
+	OUTGAIN.value=val;
+};//»
+const statvol=()=>{
+	stat(`Volume: ${OUTGAIN.value}`);
+};
+const toggle_volume=()=>{
+	if (OUTGAIN.value==1) OUTGAIN.value = 0;
+	else OUTGAIN.value = 1;
+	statvol();
+};
+//»
 
 const note_to_midi=(which)=>{//«
 //note_to_midi("Db-1") -> 1
@@ -156,11 +202,6 @@ const note_to_midi=(which)=>{//«
     let freq = NOTEMAP[`${first}${rest}`];
     if (!freq) return;
     return (MIDINOTES.indexOf(freq))/100;
-};//»
-
-const vol=val=>{//«
-	if(OUTGAIN.value===val) return;
-	OUTGAIN.value=val;
 };//»
 const conp=(arg1,arg2)=>{//«
 	let arr1;
@@ -179,7 +220,25 @@ const conp=(arg1,arg2)=>{//«
 };//»
 
 
-const osc=(freq, gain, mod_freq_arg)=>{//«
+const Note = function(freq, amp, filt, num_secs){//«
+	let now = ctx.currentTime;
+	this.trigger=()=>{
+		filt.frequency.setValueCurveAtTime(filt._freqs, now, num_secs/FREQ_SWEEP_DECAY_FACTOR);
+		amp.gain.setValueCurveAtTime([0,1,3/4,2/3,1/2,1/3,1/4,1/5,1/6,1/7,1/8,1/9,1/10,1/11,1/12,1/13], now, num_secs);
+		amp.gain.setTargetAtTime(0, now+num_secs, num_secs/2)
+	};
+	this.stop=()=>{
+		amp.gain.cancelScheduledValues(now);
+		amp.gain.setTargetAtTime(0, now, 0.1)
+		setTimeout(()=>{
+			amp.disconnect();
+		}, 1000);
+	};
+
+};//»
+
+
+const osc=(midi_cents, gain, mod_freq_arg)=>{//«
 
 /*const make_rand_curve=()=>{//«
 	let rands1=[];
@@ -198,7 +257,8 @@ const osc=(freq, gain, mod_freq_arg)=>{//«
 	let real, imag;
 {
 	let use_odd_harms = USE_ODD_HARMS;
-	let n_harms = 10;
+	let n_harms = NUM_OSC_HARMS;
+
 	let reals=[0,1];
 	let imags=[0,0];
 //Higher number means slower drop off
@@ -209,7 +269,8 @@ const osc=(freq, gain, mod_freq_arg)=>{//«
 		let mult = Math.pow(1/(i), mult_exp); //AIUMNEJUB
 		if (use_odd_harms) reals[i] = (i%2)*mult;
 		else reals[i] = 1*mult;
-		imags[i] = 0;
+		if (RANDOMIZE_IMAG_TERM) imags[i] = Math.random();
+		else imags[i] = 0;
 	}
 //log(reals);
 	real = new Float32Array(reals);
@@ -217,7 +278,7 @@ const osc=(freq, gain, mod_freq_arg)=>{//«
 }
    
 	let o = ctx.createOscillator();
-	o.frequency.value = freq;
+	o.frequency.value = midi_cents_to_freq(midi_cents);
 
 //	if (if_curve) o.detune.setValueCurveAtTime(make_rand_curve(), ctx.currentTime, 1000);
 //  else: More efficient that hard wiring a curve. With enough oscillators being detuned at low
@@ -250,23 +311,11 @@ const osc=(freq, gain, mod_freq_arg)=>{//«
 //	return o;
 
 };//»
-
-
-const multi_osc = (center, num, spread)=>{//«
+const multi_osc = (center, num, spread, num_secs)=>{//«
 
 let nodes = [];
-/*
-let g0 = osc(midi_cents_to_freq(57.75), 0.16, 1/3);
-let g1 = osc(midi_cents_to_freq(57.88), 0.2, 1/7);
-let g2 = osc(midi_cents_to_freq(58.0), 0.25, 1/11);
-let g3 = osc(midi_cents_to_freq(58.13), 0.2, 1/5);
-let g4 = osc(midi_cents_to_freq(58.25), 0.16, 1);
-conp([g0, g1, g2, g3, g4], LINEOUT);
-*/
 
-/*
-If odd, there is a node with center_freq
-*/
+//If odd, there is a node with center_freq
 let is_odd = false;
 let center_gain = 1/num;
 if (num%2){
@@ -284,7 +333,6 @@ let gains=[];
 let center_gain_delt = 1/(10*num);
 //let center_gain_delt = 0.05;
 
-cwarn(center_gain, center_gain_delt);
 let iter=0;
 //let tot
 if (is_odd) gains = [center_gain];
@@ -299,25 +347,60 @@ for (let i=0; i < num_half; i++){
 if (is_odd) {
 	freqs.push(center);
 }
-log("FREQS",freqs);
-log("GAINS",gains);
-log("GAINS TOT",gains.reduce((a, b)=>{return a + b;}, 0));
+//cwarn(center_gain, center_gain_delt);
+//log("FREQS",freqs);
+//log("GAINS",gains);
+//log("GAINS TOT",gains.reduce((a, b)=>{return a + b;}, 0));
 
 for (let i=0; i < freqs.length; i++){
-//let g4 = osc(midi_cents_to_freq(58.25), 0.16, 1);
-	nodes.push(osc(midi_cents_to_freq(freqs[i]), gains[i], PRIMES[i]));
+	nodes.push(osc(freqs[i], gains[i], PRIMES[i]));
 }
-//log(nodes);
-conp(nodes, LINEOUT);
-//log(gains);
-//log(lo, hi, delt, num_half);
+
+const f = ctx.createBiquadFilter();
+f.type = "lowpass";
+
+f.Q.value=1;
+
+let startmidi = center;
+let endmidi = freq_to_midi_cents(NUM_OSC_HARMS*midi_cents_to_freq(startmidi));
+let filter_freqs=[];
+for (let i = endmidi; i >= startmidi; i-=0.1){
+	filter_freqs.push(midi_cents_to_freq(i));
+}
+/*WPMHDYET: 
+For basic arrays like this, do:
+	-Create all of these on app startup and store them somewhere
+	-If there is too many "all", then find a place to cache them after creating them
+*/
+f._freqs = filter_freqs;
+
+conp(nodes, f);
+
+const amp = ctx.createGain();
+amp.gain.value = 0;
+f.connect(amp)
+amp.connect(LINEOUT);
+
+return new Note(center, amp, f, num_secs);
 
 };//»
 
+const freq_to_midi_cents=(freq)=>{//«
+	for (let i=0; i < MIDINOTES.length; i++){
+		let f = MIDINOTES[i];
+		if (f >= freq) return i/100;
+	}
+};//»
+const ftmc = freq_to_midi_cents;
+
 const init=()=>{//«
 
-multi_osc(CENTER_MIDI, NUM_OSC, FREQ_SPREAD);
+//multi_osc(MIDI_CENTER, NUM_OSC, MIDI_SPREAD);
+//log(NOTEMAP);
 
+//NOTES[CENTER_NOTE] = multi_osc(note_to_midi(CENTER_NOTE), NUM_OSC, MIDI_SPREAD, NOTE_DUR);
+
+//log(MIDINOTES);
 //log(MIDINOTES);
 //log(NOTEMAP);
 //cwarn("Examples");
@@ -327,7 +410,7 @@ multi_osc(CENTER_MIDI, NUM_OSC, FREQ_SPREAD);
 //log("midi_cents_to_freq(89.375) -> ", midi_cents_to_freq(89.375));
 //log("midi_cents_to_freq(89.374) -> ", midi_cents_to_freq(89.374));
 //log("midi_cents_to_freq(89.370) -> ", midi_cents_to_freq(89.370));
-
+statvol();
 }//»
 
 //»
@@ -339,12 +422,31 @@ this.onappinit=init;
 this.onloadfile=bytes=>{};
 
 this.onkeydown = function(e,s) {//«
-	if (s==="SPACE_") vol(1);
+//log(e);
+if (s==="SPACE_") return toggle_volume();
+
+//let marr;
+
+//if (marr = s.match(/^([a-z])_$/)){
+//let got = NOTES[CHARMAP[marr[1]]];
+//if (got) got.trigger();
+//}
+
+if (s=="a_"){
+	if (NOTES[CENTER_NOTE]) NOTES[CENTER_NOTE].stop();
+	NOTES[CENTER_NOTE] = multi_osc(note_to_midi(CENTER_NOTE), NUM_OSC, MIDI_SPREAD, NOTE_DUR);
+	NOTES[CENTER_NOTE].trigger();
+}
+//if ()
+
+	
 }//»
 this.onkeyup=(e)=>{//«
-	if (e.code=="Space") vol(0);
+//	if (e.code=="Space") vol(0);
 };//»
+
 this.onkeypress=e=>{//«
+//log(e);
 };//»
 this.onkill = function() {//«
 	PLUG.disconnect();
@@ -360,4 +462,55 @@ this.onblur=()=>{//«
 //»
 
 }
+
+
+
+
+/*«
+//Waveshaper example
+//const shaper = ctx.createWaveShaper();
+//shaper.curve = getcurve();
+//log(shaper.curve);
+//conp(nodes, shaper);
+
+//shaper.connect(LINEOUT);
+const getcurve=()=>{//«
+	let NUM=100;
+	let NUM_HALF=50;
+//	let USEMULT=-2.5;
+	let USEMULT=-2.5;
+	let USECLIP=false;
+	const CURVE=(x,opts={mult:1, clip:true})=>{
+		let num_half_cycles = 1;
+		let val = 1-(0.5*(1-Math.cos((num_half_cycles*x*Math.PI/NUM))));
+		let flat = (x-NUM_HALF)/NUM_HALF;
+		let got = 1+(2*-val);
+		let diff = got-flat;
+		let isneg = x < NUM_HALF;
+		let mdf = opts.mult*diff-flat;
+		if (opts.clip) {
+			if (isneg) {
+				if( mdf < 0) mdf = 0;
+			}
+			else {
+				if (mdf > 0) mdf = 0;
+			}
+		}
+
+		let rv = 0.5*(mdf)+0.5;
+		if (rv > 1 && opts.clip) rv = 1;
+		else if (rv < 0 && opts.clip) rv = 0;
+		return rv;
+	};
+    let arr = new Float32Array(NUM+1);
+    for (let i=0; i<=NUM; i++){
+        let y = CURVE(i,{mult:USEMULT, clip: USECLIP});
+        arr[i]=2*(0.5-y);
+    };
+    return arr;
+//log(arr);
+}//»
+»*/
+
+
 
