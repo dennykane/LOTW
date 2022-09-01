@@ -102,7 +102,6 @@ const MIDINOTES=(()=>{//«
 	for (let i=0; i < 128; i++) arr[i]=13.75*(2**((i-9)/12));
 	return arr;
 })();//»
-const NOTE_TO_MIDI={};
 const NOTEMAP=(()=>{//«
 	let notes=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 	let obj = {};
@@ -156,6 +155,8 @@ const NOTEMAP=(()=>{//«
 	}
 	return obj;
 })();//»
+
+const NOTE_TO_MIDI={};
 
 /*«
 const KEYMAP={//«
@@ -406,8 +407,6 @@ gp_rafId = requestAnimationFrame(gamepad_cb);
 gp_rafId = requestAnimationFrame(gamepad_cb);
 
 };//»
-
-
 
 /*
 const NOTES = {};
