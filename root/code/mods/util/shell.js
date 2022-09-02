@@ -4910,10 +4910,13 @@ log(fent);
 		if (done) return;
 		if (isobj(ret) && ret.EOF) {
 			done = true;
-			if (arr.length) {
+			if (arr.length||arr instanceof Blob) {
 				let name = args.shift();
 				if (!name) name = get_var_str("CUR_FNAME");
-				capi.download(arr.join("\n"), name);
+				let obj;
+				if (arr instanceof Blob) obj = arr;
+				else obj = arr.join("\n");
+				capi.download(obj, name);
 				cbok();
 			}
 			else cberr("Received no usable input");
@@ -4921,6 +4924,7 @@ log(fent);
 		}
 		if (isstr(ret)) arr.push(ret);
 		else if (isarr(ret)&&isstr(ret[0])) arr = arr.concat(ret);
+		else if (ret instanceof Blob) arr = ret;
 		else {
 			werr("Dropping input... (see console)");
 			log(ret);

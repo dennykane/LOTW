@@ -2992,12 +2992,20 @@ const handle_letter_press=(char_arg, if_no_render)=>{//«
 };//»
 const handle_priv=(sym, code, mod, ispress, e)=>{//«
 
-	if (ispress && (getch_cb||getch_loop_cb)){
-		if (getch_cb) {
-			getch_cb(String.fromCharCode(code));
-			getch_cb = null;
+//	if (ispress && (getch_cb||getch_loop_cb)){
+	if ((getch_cb||getch_loop_cb)){
+		if (!ispress) {
+			if (sym == "c_C") return do_ctrl_C();
+	//		if (sym == "d_C") return do_ctrl_D();
+	//		num_ctrl_d = 0;
+			if (getch_cb) {
+	//			getch_cb(String.fromCharCode(code));
+				getch_cb(sym);
+				getch_cb = null;
+			}
+	//		else if (getch_loop_cb) getch_loop_cb(String.fromCharCode(code));
+			else if (getch_loop_cb) getch_loop_cb(sym);
 		}
-		else if (getch_loop_cb) getch_loop_cb(String.fromCharCode(code));
 		return;
 	}
 	if (cur_shell&&cur_shell.stdin){}
