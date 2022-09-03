@@ -1,3 +1,17 @@
+/*
+
+@WPMJURVHYD TODO look into 
+const fileglob = (arr, cb) => {...}
+
+Want to make sure that the file globbing thing at least works halfway correct.
+
+Before 9/3/2022, it was barfing on:
+$ echo http://www.youtube.com/watch?v=1234556780a
+It was looking at the "?" and then trying to match based on files in PWD, and it
+wasn't finding any like that, but it did not put the string back into the return array!!!!
+In the end, the argument was taken out, and nothing was echo'd!!!
+
+*/
 /*Change: July 13, 2022 9am @TSPOIKRBH
 Escaping spaces in arguments (like in filenames) with backslashes was not working. The escapes were
 being stripped out and multiple arguments were sent to the command. Hopefully, the fix @TSPOIKRBH fixes
@@ -1595,6 +1609,7 @@ const do_red = async (com, redir_arr, cbarg, background_id) => {
 
 //Execute Helpers: Expansions/Subs/Vars«
 
+//WPMJURVHYD
 const fileglob = (arr, cb) => {
 	const get_file_and_dir_from_str = str => {
 		let arr, fname;
@@ -1664,6 +1679,7 @@ const fileglob = (arr, cb) => {
 				return;
 			}
 			let farr = get_file_and_dir_from_str(tryword);
+//cwarn(str);
 			dirstr = farr[0];
 			fstr = farr[1];
 			realdir = farr[2];
@@ -1671,10 +1687,10 @@ const fileglob = (arr, cb) => {
 				gotdir = dircache[dirstr];
 				dodir();
 			} else {
-				path_to_obj(dirstr, ret => {
-					if (ret && ret.KIDS) {
-						if (!ret.done) {
-							fs.popdir(ret, kids => {
+				path_to_obj(dirstr, dirret => {
+					if (dirret && dirret.KIDS) {
+						if (!dirret.done) {
+							fs.popdir(dirret, kids => {
 								if (kids) {
 									gotdir = getkeys(kids).sort();
 									dircache[dirstr] = gotdir;
@@ -1682,11 +1698,16 @@ const fileglob = (arr, cb) => {
 								} else dodir();
 							});
 						} else {
-							gotdir = getkeys(ret.KIDS).sort();
+							gotdir = getkeys(dirret.KIDS).sort();
 							dircache[dirstr] = gotdir;
 							dodir();
 						}
-					} else dodir();
+					} 
+					else {
+						ret.push(tryword);
+//cwarn("YIBIBIB", tryword);
+						dodir();
+					}
 				});
 			}
 		} else if (typeof arr[i] == "string" || arr[i].quote_string) {
@@ -2572,10 +2593,12 @@ else if (opcode == "com") { //«
 		} else if (redir.r_op == "<<<") herestring = redir.redir_arg;
 	}
 	const docom = async() => {//«
+//jlog(args);
 		if (!par_env) tmp_env = {};
 		else tmp_env = JSON.parse(JSON.stringify(par_env));
 //		all_expansions(args, ret => {
 		let ret = await all_expansions(args);
+//jlog(ret);
 		if (sys_abort) {
 			if (next_arg_cb) next_arg_cb(true);
 			else cerr("no next_arg_cb");
@@ -4006,6 +4029,12 @@ const do_ls = (args)=>{
 
 builtins = {//«
 
+blah:(args)=>{
+wout(`BLAH: ${args.length}`);
+//log(args);
+cbok();
+},
+
 //Synth stuff«
 
 //Midi file«
@@ -4118,12 +4147,11 @@ wout(`Tracks: ${tracks.length}`);
 let temps = head.tempos;
 wout("Tempos (ms per tick):");
 for (let i=0; i < temps.length; i++){
-//The formula is 60000 / (BPM * PPQ) (milliseconds).
-let tmp = temps[i];
-//log(tmp);
-let ms_per_tick = 60000/(tmp.bpm*ppq);
-wout(`${i}) ${ms_per_tick}`);
-
+	//The formula is 60000 / (BPM * PPQ) (milliseconds).
+	let tmp = temps[i];
+	//log(tmp);
+	let ms_per_tick = 60000/(tmp.bpm*ppq);
+	wout(`${i}) ${ms_per_tick}`);
 }
 log(head);
 log(tracks);
