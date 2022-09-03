@@ -14,7 +14,7 @@ const COMS={
 	}
 */
 
-URL:()=>{
+URL:()=>{//«
 let arg = args.shift();
 if (!arg) return cberr("NAAH");
 let url;
@@ -34,14 +34,25 @@ let ind = params.get("index");
 
 cbok();
 
-},
+},//»
 
-YTDL:async()=>{
+YTDL:async()=>{//«
 
+let chunks=[];
+let fname;
 
+const saveit=async()=>{//«
+	let path = `/home/${ENV.USER}/Downloads`;
+	let fullpath = `${path}/${fname}`;
+	await fs.mkDir(path);
+	wout(`Saving to: '${fullpath}'...`);
+	await fs.writeFile(fullpath, new Blob(chunks));
+	cbok();
+};//»
 const startws=()=>{//«
 let killed = false;
 let ws;
+
 killreg(cb=>{//«
 	killed = true;
 	if (ws) {
@@ -53,13 +64,12 @@ killreg(cb=>{//«
 
 ws = new WebSocket(`ws://${window.location.hostname}:${port}/`);
 
-ws.onopen=()=>{
+ws.onopen=()=>{//«
 ws.send(`VID:${vid}`);
 //wout('connected');
 //ws.send(Date.now());
-};
-
-ws.onclose = ()=>{
+};//»
+ws.onclose = ()=>{//«
 
 log('disconnected');
 if (!killed) {
@@ -67,15 +77,66 @@ if (!killed) {
 	cberr();
 }
 
-};
+};//»
+ws.onmessage = e =>{//«
 
-ws.onmessage = e =>{
-log("IN", e);
-};
+let dat = e.data;
+if (dat instanceof Blob) {
+	chunks.push(dat);
+	return 
+}
+else if (!(typeof dat === 'string')){
+	cerr("What the hell in onmessage???");
+	log(dat);
+	return;
+}
+let obj;
+try{
+	obj = JSON.parse(dat);
+}
+catch(e){
+	cerr("What the hell no good JSON in onmessage???");
+	log(dat);
+	return;
+}
+
+if (obj.out){
+	let s = obj.out.replace(/\n$/,"");
+	if (s.match(/^\[download\]/)) {
+		wclerr(s.split("\n").pop());
+	}
+	else {
+log("NODL");
+log(s);
+		werr(s);
+	}
+}
+else if (obj.err){
+log("ERR");
+log(obj.err);
+werr(obj.err);
+}
+else if (obj.name){
+	fname = obj.name;
+}
+else if (obj.done){
+
+saveit();
+//log(fname);
+//let blob = new Blob(chunks);
+//log(blob);
+
+}
+//log(obj);
+
+//	log(e.data);
+
+};//»
 
 }//»
 
 let port = 20003;
+
 let opts=failopts(args,{s:{p:3},l:{port:3}});
 if (!opts) return;
 let portarg = opts.port||opts.p;
@@ -84,7 +145,6 @@ if (portarg){
 	if (!Number.isFinite(portnum)) return cberr("Invalid port");
 	port = portnum;
 }
-
 
 let arg = args.shift();
 if (!arg) return cberr("No arg given!");
@@ -107,8 +167,7 @@ if (vid && vid.match(/^[-_a-zA-Z0-9]{11}$/)){
 else cberr("BARFID");
 
 
-
-},
+},//»
 
 MIDITRACKS:async()=>{//«
 
@@ -438,9 +497,9 @@ then doing the ffmpeg command, and sending back over to LOTW.
 	let ok_exts=["webm","wav"];
 	let fileext="webm";
 	let fmt = opts.format||opts.f
-	if (!fmt) werr(`Defaulting tp ${fileext}`);
+	if (!fmt) werr(`Defaulting to ${fileext}`);
 	else if (!ok_exts.includes(fmt)) return cberr(`${fmt}: Invalid file extension`);
-	fileext = fmt;
+	else fileext = fmt;
 	let path = args.shift();
 	if (!path) return cberr("No path");
 	let node = await fs.pathToNode(normpath(path));

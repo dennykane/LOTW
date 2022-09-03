@@ -4,6 +4,9 @@
 const http = require('http');
 const spawn = require('child_process').spawn;
 const WebSocketServer = require('ws').WebSocketServer;
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 //»
 
@@ -98,17 +101,132 @@ const wss = new WebSocketServer({ server });
 
 wss.on('connection', function connection(ws) {
 
+let tmpdir;
+let ac;
+
 ws.on('message', function message(data) {
+
 let mess = data.toString();
 //console.log('received: %s', data);
 //log(mess);
 let marr;
 if (marr = mess.match(/^VID:([-_a-zA-Z0-9]+)$/)){
+let vidid = marr[1];
+log(`Get vid: '${marr[1]}'`);
 
-log("Get vid: ", marr[1]);
+fs.mkdtemp(path.join(os.tmpdir(), 'ytdl-'), (err, directory) => {
+
+if (err) {
+	log("Could not create temporary directory... aborting!");
+	process.exit();
+	return;
+}
+tmpdir = directory;
+//log(`Created directory: ${directory}`);
+let template = `${directory}/%(title)s.%(ext)s`;
+//log(template);
+/*
+youtube-dl -f 140 -i --restrict-filenames -o "%(playlist_index)s-%(title)s.%(ext)s" $1;
+*/
+
+{//«
+
+ac = new AbortController();
+let { signal } = ac;
+//let com = spawn('youtube-dl', ["-f","140","--restrict--filenames", "-o", `'${template}'`, {signal}]);
+
+//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames", "-o", `'${template}'`, vidid], {signal});
+
+//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames"], {signal});
+//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames"], {signal});
+//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames", "-o", `'${template}'`], {signal});
+
+let com = spawn('youtube-dl', ["-f", "140", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
+let path;
+let part_path;
+let cur_off = 0;
+let fd;
+const read=path=>{
+	let stats = fs.statSync(path);
+	if (!fd) fd = fs.openSync(path);
+	let sz = stats.size - cur_off;
+	if (sz < 1) return;
+//log("SZ", sz);
+	let buf = Buffer.alloc(sz);
+	fs.readSync(fd, buf, 0, sz, cur_off)
+	cur_off = stats.size;
+log(`Read: ${path} ${sz}`);
+	ws.send(buf);
+};
+com.stdout.on('data',dat=>{
+
+let str = dat.toString();
+let marr;
+if (str.match(/^\[download\]/)) {
+
+ws.send(JSON.stringify({out: str}));
+if (marr = str.match(/Destination: (\/tmp\/.+)\n?$/)) {
+	path = marr[1];
+	part_path = `${path}.part`;
+	ws.send(JSON.stringify({name: path.split("/").pop()}));
+}
+else{
+	try {
+		read(part_path);
+		return;
+	}
+	catch(e){
+		log("Caught", e);
+	}
+	try{
+		read(path);
+		return;
+	}
+	catch(e){
+		log("Caught", e);
+	}
+}
+
 
 }
-else log(mess);
+ws.send(JSON.stringify({out: str}));
+});
+com.stderr.on('data', (dat) => {
+	ws.send(JSON.stringify({err: dat.toString()}));
+});
+com.on('error',(e)=>{
+//	log("Not found... aborting!");
+//	process.exit();
+	log("SPAWN ERROR!?!?!");
+	log(e);
+});
+com.on('close',(code)=>{
+	log(`Closed with code: ${code}`);
+	try{
+		read(path);
+	}
+	catch(e){
+		log("Caught", e);
+	}
+});
+com.on('exit',(code)=>{
+	log(`Exited`);
+	ws.send(JSON.stringify({done: true}));
+});
+
+}//»
+
+});
+
+}
+
+else if (mess==="Abort"){
+log(mess);
+	if (ac) ac.abort();
+}
+else{
+	log("???",mess);
+}
 
 });
 //ws.send('something');

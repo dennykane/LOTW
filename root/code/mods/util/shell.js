@@ -8,8 +8,9 @@ Want to make sure that the file globbing thing at least works halfway correct.
 Before 9/3/2022, it was barfing on:
 $ echo http://www.youtube.com/watch?v=1234556780a
 It was looking at the "?" and then trying to match based on files in PWD, and it
-wasn't finding any like that, but it did not put the string back into the return array!!!!
-In the end, the argument was taken out, and nothing was echo'd!!!
+wasn't finding any like that, but it did not put the argument string 
+(http://www.youtube.com/watch?v=1234556780a) back into the return array!!!!
+In the end, the argument was taken out, and no arguments were sent to  echo!!!
 
 */
 /*Change: July 13, 2022 9am @TSPOIKRBH
