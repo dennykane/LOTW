@@ -9,7 +9,6 @@ const path = require('path');
 const os = require('os');
 
 //»
-
 //Var«
 
 const SERVICE_NAME = "ytdl";
@@ -18,7 +17,6 @@ const hostname = "localhost";
 let portnum = 20003;
 
 //»
-
 //Args«
 
 try{
@@ -36,7 +34,6 @@ catch(e){
 }
 
 //»
-
 //Funcs«
 
 const log = (...args)=>{console.log(...args);}
@@ -59,7 +56,6 @@ const okay=(res, usemime)=>{//«
 }//»
 
 //»
-
 const handle_request=(req,res)=>{//«
 
 let meth = req.method;
@@ -93,71 +89,49 @@ else nogo(res);
 
 }//»
 
-const init=()=>{
+const init=()=>{//«
 
 const server = http.createServer(handle_request).listen(portnum, hostname);
 
 const wss = new WebSocketServer({ server });
-
 wss.on('connection', function connection(ws) {
-
 let tmpdir;
 let ac;
-
-ws.on('message', function message(data) {
+let file_path;
+ws.on('message', function message(data) {//«
 
 let mess = data.toString();
-//console.log('received: %s', data);
-//log(mess);
 let marr;
 if (marr = mess.match(/^VID:([-_a-zA-Z0-9]+)$/)){
 let vidid = marr[1];
 log(`Get vid: '${marr[1]}'`);
-
 fs.mkdtemp(path.join(os.tmpdir(), 'ytdl-'), (err, directory) => {
-
 if (err) {
 	log("Could not create temporary directory... aborting!");
 	process.exit();
 	return;
 }
 tmpdir = directory;
-//log(`Created directory: ${directory}`);
 let template = `${directory}/%(title)s.%(ext)s`;
-//log(template);
-/*
-youtube-dl -f 140 -i --restrict-filenames -o "%(playlist_index)s-%(title)s.%(ext)s" $1;
-*/
-
 {//«
 
 ac = new AbortController();
 let { signal } = ac;
-//let com = spawn('youtube-dl', ["-f","140","--restrict--filenames", "-o", `'${template}'`, {signal}]);
-
-//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames", "-o", `'${template}'`, vidid], {signal});
-
-//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames"], {signal});
-//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames"], {signal});
-//let com = spawn('youtube-dl', ["-f","249-0","--restrict--filenames", "-o", `'${template}'`], {signal});
-
 let com = spawn('youtube-dl', ["-f", "140", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
 let path;
 let part_path;
 let cur_off = 0;
 let fd;
-const read=path=>{
+const read=path=>{//«
 	let stats = fs.statSync(path);
 	if (!fd) fd = fs.openSync(path);
 	let sz = stats.size - cur_off;
 	if (sz < 1) return;
-//log("SZ", sz);
 	let buf = Buffer.alloc(sz);
 	fs.readSync(fd, buf, 0, sz, cur_off)
 	cur_off = stats.size;
-log(`Read: ${path} ${sz}`);
 	ws.send(buf);
-};
+};//»
 com.stdout.on('data',dat=>{
 
 let str = dat.toString();
@@ -167,6 +141,7 @@ if (str.match(/^\[download\]/)) {
 ws.send(JSON.stringify({out: str}));
 if (marr = str.match(/Destination: (\/tmp\/.+)\n?$/)) {
 	path = marr[1];
+	file_path = path;
 	part_path = `${path}.part`;
 	ws.send(JSON.stringify({name: path.split("/").pop()}));
 }
@@ -195,8 +170,6 @@ com.stderr.on('data', (dat) => {
 	ws.send(JSON.stringify({err: dat.toString()}));
 });
 com.on('error',(e)=>{
-//	log("Not found... aborting!");
-//	process.exit();
 	log("SPAWN ERROR!?!?!");
 	log(e);
 });
@@ -215,28 +188,27 @@ com.on('exit',(code)=>{
 });
 
 }//»
-
 });
-
 }
-
 else if (mess==="Abort"){
-log(mess);
 	if (ac) ac.abort();
+}
+else if (mess==="Cleanup"){
+log("Cleanup!!!");
+
+	fs.unlinkSync(file_path);
+	fs.rmdirSync(tmpdir);
+
 }
 else{
 	log("???",mess);
 }
-
+});//»
 });
-//ws.send('something');
-
-});
-
 log(`${SERVICE_NAME} service listening at wss://${hostname}:${portnum}`);
+}//»
 
-}
-
+//Startup«
 if (process.env.LOTW_TEST) init();
 else {
 	let com = spawn('youtube-dl', ["--version"]);
@@ -253,4 +225,5 @@ else {
 		process.exit();
 	});
 }
+//»
 

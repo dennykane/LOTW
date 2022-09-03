@@ -12,6 +12,9 @@ wasn't finding any like that, but it did not put the argument string
 (http://www.youtube.com/watch?v=1234556780a) back into the return array!!!!
 In the end, the argument was taken out, and no arguments were sent to  echo!!!
 
+
+@EOMHDLUNVS TODO No more backgrounding???
+
 */
 /*Change: July 13, 2022 9am @TSPOIKRBH
 Escaping spaces in arguments (like in filenames) with backslashes was not working. The escapes were
@@ -2911,6 +2914,7 @@ else if (opcode == "pipeline") {//«
 }//»
 else if (opcode == "loglist") {//«
 	if (obj.list_op && obj.list_op.c_op == "&") {
+//EOMHDLUNVS
 		let str = "";
 		for (let pipeobj of obj.loglist) {
 			for (let comobj of pipeobj.pipeline) str += toks_to_string(comobj.com, 1);

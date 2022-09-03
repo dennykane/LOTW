@@ -38,8 +38,12 @@ cbok();
 
 YTDL:async()=>{//«
 
+//xTODOx Clean up everything in svcs/ytdl.js (remove the /tmp/yt-dl upon finishing the download...)
+
+
 let chunks=[];
 let fname;
+let ws;
 
 const saveit=async()=>{//«
 	let path = `/home/${ENV.USER}/Downloads`;
@@ -48,17 +52,19 @@ const saveit=async()=>{//«
 	wout(`Saving to: '${fullpath}'...`);
 	await fs.writeFile(fullpath, new Blob(chunks));
 	cbok();
+	if (ws) {
+		ws.send("Cleanup");
+		setTimeout(()=>{
+			ws.close();
+		}, 250);
+	}
 };//»
 const startws=()=>{//«
 let killed = false;
-let ws;
 
 killreg(cb=>{//«
 	killed = true;
-	if (ws) {
-		ws.send("Abort");
-		ws.close();
-	}
+	if (ws) ws.close();
 	cb&&cb();
 });//»
 
@@ -102,34 +108,12 @@ catch(e){
 
 if (obj.out){
 	let s = obj.out.replace(/\n$/,"");
-	if (s.match(/^\[download\]/)) {
-		wclerr(s.split("\n").pop());
-	}
-	else {
-log("NODL");
-log(s);
-		werr(s);
-	}
+	if (s.match(/^\[download\]/)) wclerr(s.split("\n").pop());
+	else werr(s);
 }
-else if (obj.err){
-log("ERR");
-log(obj.err);
-werr(obj.err);
-}
-else if (obj.name){
-	fname = obj.name;
-}
-else if (obj.done){
-
-saveit();
-//log(fname);
-//let blob = new Blob(chunks);
-//log(blob);
-
-}
-//log(obj);
-
-//	log(e.data);
+else if (obj.err) werr(obj.err);
+else if (obj.name) fname = obj.name;
+else if (obj.done) saveit();
 
 };//»
 
