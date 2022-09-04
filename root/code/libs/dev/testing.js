@@ -87,6 +87,7 @@ if (!killed) {
 ws.onmessage = e =>{//«
 
 let dat = e.data;
+log(dat);
 if (dat instanceof Blob) {
 	chunks.push(dat);
 	return 
