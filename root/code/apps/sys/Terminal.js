@@ -1,7 +1,20 @@
+/*
 
-const ENV = {
-PATH:"/bin"
-}
+Looking for a way, in normal shell mode, to subract n (1, maybe 2) lines from the bottom of
+the screen to use it as a output area for instructions/status related to the given 
+'getch_loop' mode that a command might be doing. How does vim/less do the status line thing
+anyway?
+
+OK: In this.getch_loop, we added an nstatlns arg (like in this.init_edit_mode), which lets us
+use the bottom nstatlns of the screen as a quick and dirty status/app messaging area.
+Now we have a this.stat_render, which lets us set the stat_lines array, then do a render.
+
+In the render loop @PDJNUWLKH, we do a regex to negative lookahead with <'s, to see that
+it is not a span tag (slosing or opening). So, all non-span-tag <'s get replaced with "&lt;".
+
+Also, all &'s are being turned into &amp;'s.
+
+*/
 //METACHAR_ESCAPE: This escapes the shell's metacharacters when autocompleting
 /*
 
@@ -142,6 +155,8 @@ termobj.num_prompts=0;
 //»
 //Var«
 
+const ENV = {PATH:"/bin"}
+
 let is_scrolling = false;
 let wheel_iter;
 let dblclick_timeout;
@@ -188,6 +203,7 @@ let overlay_str = '<div style="opacity: '+OVERLAYOP+';border-radius: 15px; font-
 
 let getch_cb=null;
 let getch_loop_cb=null;
+let min_height;
 
 let com_scroll_mode = false;
 
@@ -368,7 +384,26 @@ console.error("Could not find the funcarg");
 	kill_funcs.splice(which, 1);
 }//»
 this.getch = (cb)=>{getch_cb = cb;}
-this.getch_loop = (cb)=>{getch_loop_cb = cb;}
+this.getch_loop = (cb, nstatlns, minhgt)=>{
+	if (cb){
+		if (nstatlns) {
+			if (y+nstatlns >= h){
+				let diff = h - (y + nstatlns+1);
+				y+=diff;
+				scroll_num-=diff;
+			}
+			num_stat_lines = nstatlns;
+		}
+		if (minhgt) min_height = minhgt;
+	}
+	else {
+		num_stat_lines = 0;
+		stat_lines = null;
+		min_height = null;
+	}
+	getch_loop_cb = cb;
+	render();
+}
 /*
 this.lock_term = ()=>{//«
 //	if (TERMINAL_IS_LOCKED) return;
@@ -565,7 +600,7 @@ this.mainwin = main;
 
 //»
 //Render«
-
+let stat_lines;
 const render=()=>{//«
 
 const diagnose=n=>{
@@ -603,7 +638,6 @@ log(real_lines);
 	if (editor) ({macro_mode,visual_block_mode,visual_line_mode,visual_mode,show_marks,seltop,selbot,selleft,selright,selmark,error_cursor,real_lines, opts}=editor);
 	if (!(ncols&&nrows)) return;
 
-
 	let docursor = false;
 	if (opts.nocursor){}
 	else if (!TERMINAL_IS_LOCKED) docursor = true;
@@ -631,28 +665,20 @@ log(real_lines);
 	for (let i=slicefrom; i < sliceto; i++) {
 		let ln = lines[i];
 		if (!ln) {
-
-
 			if (editor) {
-//				if (reclines) reclines.push(["~"]);
 				if (reclines) uselines.push(['~']);
 				else uselines.push(['<span style="color: #6c97c4;">~</span>']);
 			}
-			else {
-				uselines.push([""]);
-			}
-//			if (reclines) reclines.push([""]);
+			else uselines.push([""]);
 		}
 		else {
 			let arr = ln.slice(xoff,xoff+w);
-//			if(reclines) reclines.push(arr.join(""));
 			let newln = arr;
 			newln.tcolor = ln.tcolor;
 			newln.marks = ln.marks;
 			uselines.push(newln);
 		}
 	}
-
 
 	let outarr = [];
 	let donum;
@@ -722,7 +748,6 @@ log(real_lines);
 			arr[0]=`<span style="color:rgb(95,215,255);">${arr[0]}`
 			arr[arr.length-1]=`${arr[arr.length-1]}</span>`;
 		}
-///*
 		else if (colobj){//«
 			let nums = Object.keys(colobj);
 			for (let numstr of nums) {
@@ -745,7 +770,6 @@ if (num2 > w) {
 }
 			}
 		}//»
-//*/
 		if (marks){//«
 			for (let s of marks){
 				let pos = s.ln.indexOf(s);
@@ -765,8 +789,8 @@ if (num2 > w) {
 			}
 		}//»
 
-//		if (!(pager||is_buf_scroll||stat_input_mode||scroll_cursor_mode)) {
 		if (!(pager||is_buf_scroll||stat_input_mode||is_scrolling)) {//«
+//		if (!(pager||is_buf_scroll||stat_input_mode||scroll_cursor_mode)) {
 //			if (docursor && i==y && topwin_focused) {
 			if (docursor && i==y) {
 				if (!arr[usex]||arr[usex]=="\x00") {
@@ -866,11 +890,8 @@ if (num2 > w) {
 			else if (b) per = "Bot";
 			else {
 				if (real_lines) {
-//log(real_lines);
-//log(real_lines[lines.length-1]);
 					let val = Math.floor(100*real_lines[scroll_num]/(real_lines[lines.length-1]||real_lines[lines.length-2]));
 					if (isNaN(val)) {
-//						throw new Error("NAN1");
 						diagnose(1);
 					}
 					per = (val)+"%";
@@ -880,7 +901,6 @@ if (num2 > w) {
 					if (isNaN(val)) {
 						diagnose(2);
 					}
-//throw new Error("NAN2");
 					per = (val)+"%";
 				}
 			}
@@ -905,7 +925,6 @@ if (num2 > w) {
 			if (real_lines) {
 				let val = real_lines[y+usescroll]+add_one;
 				if (isNaN(val)) diagnose(3);
-//throw new Error("NAN3");
 				lncol = (val)+","+(x+add_one);
 			}
 			else lncol = (y+usescroll+add_one)+","+(x+add_one);
@@ -937,7 +956,20 @@ if (num2 > w) {
 		outarr.push(usestr);
 		if (reclines) reclines.push(recstr);		
 	}//»
-	tabdiv.innerHTML = outarr.join("\n");
+	if (stat_lines){
+		//for (let ln of stat_lines) outarr.push(ln.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"));
+		for (let i=0; i < num_stat_lines; i++){
+			let ln = stat_lines[i];
+			if (!ln) ln = "";
+//PDJNUWLKH
+//			outarr.push(ln.replace(/&(?!amp)/g,"&amp;").replace(/<(?!\/?span)/ig,"&lt;").replace(/>/g,"&gt;"));
+			outarr.push(ln.replace(/&/g,"&amp;").replace(/<(?!\/?span)/ig,"&lt;"));
+		}
+	}
+	if (min_height && h < min_height){
+		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${min_height}</span></center>`;
+	}
+	else tabdiv.innerHTML = outarr.join("\n");
 	if (reclines){
 		globals.termrec_snap({
 			cols:reccols,
@@ -952,6 +984,14 @@ if (num2 > w) {
 		});
 	}
 };//»
+this.stat_render=(arr)=>{
+if (arr.length > num_stat_lines){
+console.error(`the arr argument has length ${arr.length} (expected <= ${num_stat_lines})`);
+return;
+}
+	stat_lines = arr;
+	render();
+};
 const getgrid=()=>{//«
 	let _ = wrapdiv;
 	let tdiv = tabdiv;

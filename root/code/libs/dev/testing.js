@@ -690,13 +690,31 @@ cwarn(e.data.msg);
 
 LOOPDOOP:async()=>{//«
 
+let minh = 3;
+if (termobj.h < minh){
+	cberr(`Need height >= ${minh}!`);
+	return;
+}
+
 killreg(cb=>{
     termobj.getch_loop(null);
 	cb&&cb();
 })
 termobj.getch_loop(ch=>{
-	log("IN",ch);
-});
+	if (termobj.h < minh) return;
+	if (ch.match(/^[a-z]_$/)){
+		termobj.stat_render(["<blar>&& &amp; &&</blar>",'   <span style="color: #770">Fooey!!!</span>']);
+	}
+	else if (ch.match(/^[a-z]_S$/)){
+		termobj.stat_render(["?!?!?!?!?"]);
+	}
+	else if (ch.match(/^[0-9]_/)){
+		termobj.stat_render(["Blar","ZZLEEPPPPPP"]);
+	}
+	else{
+	}
+}, 2, minh);
+termobj.stat_render(["Welcomme> to the hwoinx???","[Sppek in the har on the bloan!!!]"]);
 
 },//»
 
