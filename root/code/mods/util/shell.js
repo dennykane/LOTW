@@ -1,5 +1,15 @@
 /*
 
+@FSPOEIREBG In order to make sure that we do "normal" line wrapping for
+arbitrary wout's that might have embedded newlines (strings without newlines
+are automatically wrapped), I just added a couple of
+'fmt_lines(obj).split("\n")' calls there (which now uses the termobj.fmt, in order to make
+sure that nothing is > max_fmt_len == 4997).
+
+Since cat internally calls woutarr (meaning that the lines array does not get to that point), it
+isn't affected by this.
+
+
 @WPMJURVHYD TODO look into 
 const fileglob = (arr, cb) => {...}
 
@@ -385,7 +395,6 @@ const fmt = (str, opts={})=>{//«
 	}
 	return ret.join("\n");
 }//»
-const fmt_lines=str=>{let out=[];let arr=str.split("\n");for(let ln of arr)out=out.concat(fmt(ln));return out.join("\n");};
 const clear_timeouts=()=>{//«
 	for (let t of global_timeouts) clearTimeout(t);
 	global_timeouts = [];
@@ -3221,6 +3230,12 @@ const cbok=str=>{if(str)werr(str);wout(EOF);cb(ret_true());}
 const cberr=str=>{if(str)werr(str);wout(EOF);cb(ret_false());}
 const werr=(obj,type)=>{return wout(obj,{ARG1:type,ARG2:true});}
 const wout = (obj, arg, if_no_refresh) => {
+	const fmt_lines = str => {
+		let out = [];
+		let arr = str.split("\n");
+		for (let ln of arr) out = out.concat(termobj.fmt(ln));
+		return out;
+	};
 	if (!arg) arg = {};
 	let type = arg.type||arg.ARG1,
 		if_err = arg.error || arg.ARG2 || arg.ERR,
@@ -3239,9 +3254,14 @@ const wout = (obj, arg, if_no_refresh) => {
 		retobj[type] = obj;
 		useobj = retobj;
 	}
-	else if (isstr(obj)&&col_obj){
-		col_obj.unshift(obj.length);
-		useobj = {t:"lines",lines:[obj], colors:[{"0":col_obj}]}
+	else if (isstr(obj)){
+		if (col_obj) {
+			col_obj.unshift(obj.length);
+//FSPOEIREBG					vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv ?????
+			useobj = {t:"lines",lines: fmt_lines(obj), colors:[{"0":col_obj}]}
+		}
+//													  vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv  !!!!!!!
+		else if (obj.match(/\n/)) useobj = {t:"lines",lines: fmt_lines(obj)}
 	}
 	let ret = sys_write({
 		ARG0: useobj,
@@ -3731,6 +3751,7 @@ const run_command = path => {
 shell_obj.run_command=run_command;
 
 const lookup_file = async () => {
+	const fmt_lines=str=>{let out=[];let arr=str.split("\n");for(let ln of arr)out=out.concat(fmt(ln));return out.join("\n");};
 	const notfound = () => {
 if (FS_COMS.includes(comword)){
 wout(fmt_lines(`\nThe '${comword}' command is not a shell builtin! It exists in the 'fs' command library. You can import it into the shell's execution context like this:\n\n$ import fs\n\nAlternatively, run the following command to automate the import process:\n\n$ echo 'import fs' >> ~/.bashrc\n\xa0`));

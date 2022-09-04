@@ -1,5 +1,7 @@
 /*
 
+
+
 Looking for a way, in normal shell mode, to subract n (1, maybe 2) lines from the bottom of
 the screen to use it as a output area for instructions/status related to the given 
 'getch_loop' mode that a command might be doing. How does vim/less do the status line thing
@@ -1541,6 +1543,7 @@ const fmt=(str, startx)=>{//«
 	else ret.push(ln);
 	return ret;
 };//»
+this.fmt = fmt;
 const fmt_lines_sync=(arr, startx)=>{//«
     let all = [];
 	let usestart = startx;
@@ -2127,6 +2130,8 @@ const response = (outarg, opts)=>{//«
 		else {
 //Overflow marker
 			if (w-outi.length < 0) {
+cwarn("Overflow");
+log(outi);
 				outi = outi.slice(0,w-1)+"+";
 				let col = {};
 				col[w-1+""]=[1,"#000","#cc0"];

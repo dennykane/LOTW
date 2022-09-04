@@ -1,3 +1,35 @@
+/*
+
+Trick args: "--ffmpeg-location", "/blah/place/weird/hahahaha", 
+
+youtube-dl / yt-dlp tries to find ffmpeg at --ffmpeg-location but when it
+cannot find it there, it thinks ffmpeg doesn't exist, and so can't (won't try
+to) "correct" the DASH/m4a container. THE REASON FOR THIS IS BECAUSE WE HAVE ALL OF
+THE PARTS ALREADY IN THE BROWSER, AND WE MIGHT BE DOING A RESUME OF A BIG, LONG
+DOWNLOAD THAT HAS A BUNCH OF TRASH/NULL BYTES IN IT! I DON'T KNOW YET WHAT
+FFMEG IS DOING TO THE FILE, AND I DON'T CARE BECAUSE THIS IS ALL ABOUT BROWSERS
+AND THE WEB WHICH IS WHAT THE DASH (Dynamic Adaptive Streaming over HTTP)
+FORMAT IS ALL ABOUT!
+
+
+Optimize for speed by saving onto /dev/shm. If there is a long download that is interrupted
+and the computer is turned off, this will obviously go away. 
+
+So, if we send a "suspend" command to the server, we should have the option to persist it to
+a permanent location somewhere.
+
+But, the blobs can the saved in the client (maybe indexedDb). So the client
+knows how much it has, and can just tell the server at what byte to resume
+from. All we need to do here is create an empty ".part" file that is filled
+with the relevant number of random/null bytes. This assumes that there is no
+kind of whole file checksum being done (CORRECT ASSUMPTION AT THE MOMENT).
+
+To create empty files
+
+$ truncate -s <num> filename // reduce size to num bytes. This can also extend the file.
+$ fallocate -l <num> filename // extend file to num bytes (no truncation if file is larger)
+
+*/
 
 //Imports«
 
@@ -18,6 +50,67 @@ let portnum = 20003;
 
 const COMMANDS = ["yt-dlp", "youtube-dl"];
 let COMMAND;
+
+/*Formats//«
+
+https://gist.github.com/AgentOak/34d47c65b1d28829bb17c24c04a0096f
+
+GEPOUBD 
+
+
+
+DASH Audio Formats//«
+Code	Container	Audio Codec		Audio Bitrate		Channels			Still offered?
+
+139		MP4			AAC (HE v1)		48 Kbps				Stereo (2)			Rarely, YT Music
+140		MP4			AAC (LC)		128 Kbps			Stereo (2)			Yes, YT Music
+(141)	MP4			AAC (LC)		256 Kbps			Stereo (2)			No, YT Music*
+
+249		WebM		Opus			(VBR) ~50 Kbps		Stereo (2)			Yes
+250		WebM		Opus			(VBR) ~70 Kbps		Stereo (2)			Yes
+251		WebM		Opus			(VBR) <=160 Kbps	Stereo (2)			Yes
+
+256		MP4			AAC (HE v1)		192 Kbps			Surround (5.1)		Rarely
+258		MP4			AAC (LC)		384 Kbps			Surround (5.1)		Rarely
+327		MP4			AAC (LC)		256 Kbps			Surround (5.1)		?*
+338		WebM		Opus			(VBR) ~480 Kbps (?)	Quadraphonic (4)	?*
+//»
+
+DASH Video formats//«
+Resolution	AV1 HFR High	AV1 HFR		AV1		VP9.2 HDR HFR	VP9 HFR		VP9		H.264 HFR	H.264
+			MP4				MP4			MP4		WebM			WebM		WebM	MP4			MP4
+4320p						402/571								272								138
+2160p		701				401					337				315			(313)	(305)		(266)
+1440p		700				400					336				308			(271)	(304)		(264)
+1080p		699				399					335				303			(248)	299			(137)
+720p		698				398					334				302			247		298			136
+480p		697							397		333							244					135
+360p		696							396		332							243					134
+240p		695							395		331							242					133
+144p		694							394		330							278					160
+//»
+
+//»*/
+//Different combinations of specifying the preference order of the 6 major audio formats//«
+
+//Order by quality, then container
+
+let highest_to_lowest_MP4_first="141/251/140/250/139/249";
+let highest_to_lowest_WebM_first="251/141/250/140/249/139";
+let lowest_to_highest_MP4_first="139/249/140/250/141/251";
+let lowest_to_highest_WebM_first="249/139/250/140/251/141";
+
+//Order by container, then quality
+
+let MP4_then_WebM_highest_to_lowest="141/140/139/251/250/249";
+let WebM_then_MP4_highest_to_lowest="251/250/249/141/140/139";
+let MP4_then_WebM_lowest_to_highest="139/140/141/249/250/251";
+let WebM_then_MP4_lowest_to_highest="249/250/251/139/140/141";
+
+//»
+
+//let FORMAT_LIST = MP4_then_WebM_highest_to_lowest;
+let FORMAT_LIST = highest_to_lowest_MP4_first;
 
 //»
 //Args«
@@ -97,16 +190,19 @@ const init=()=>{//«
 const server = http.createServer(handle_request).listen(portnum, hostname);
 
 const wss = new WebSocketServer({ server });
-wss.on('connection', function connection(ws) {
+
+wss.on('connection', ws=>{
 let tmpdir;
 let ac;
 let file_path;
-ws.on('message', function message(data) {//«
+let part_path;
+let vidid;
+ws.on('message', data=>{//«
 
 let mess = data.toString();
 let marr;
 if (marr = mess.match(/^VID:([-_a-zA-Z0-9]+)$/)){
-let vidid = marr[1];
+vidid = marr[1];
 log(`Get vid: '${marr[1]}'`);
 fs.mkdtemp(path.join(os.tmpdir(), 'ytdl-'), (err, directory) => {
 if (err) {
@@ -121,83 +217,10 @@ let template = `${directory}/%(title)s.%(ext)s`;
 ac = new AbortController();
 let { signal } = ac;
 
-/*//«
-
-https://gist.github.com/AgentOak/34d47c65b1d28829bb17c24c04a0096f
-
-GEPOUBD 
-
-Different combinations of specifying the preference order of the 6 major audio formats//«
-
-Order by quality, then container
-
-highest to lowest, MP4 first
-youtube-dl -f 141/251/140/250/139/249
-
-highest to lowest, WebM first
-youtube-dl -f 251/141/250/140/249/139
-
-lowest to highest, MP4 first
-youtube-dl -f 139/249/140/250/141/251
-
-lowest to highest, WebM first
-youtube-dl -f  249/139/250/140/251/141
-
-
-Order by container, then quality
-
-MP4 then WebM, highest to lowest
-141/140/139/251/250/249
-
-WebM then MP4, highest to lowest
-251/250/249/141/140/139
-
-MP4 then WebM, lowest to highest
-139/140/141/249/250/251
-
-WebM then MP4, lowest to highest
-249/250/251/139/140/141
-//»
-
-DASH Audio Formats//«
-Code	Container	Audio Codec		Audio Bitrate		Channels			Still offered?
-
-139		MP4			AAC (HE v1)		48 Kbps				Stereo (2)			Rarely, YT Music
-140		MP4			AAC (LC)		128 Kbps			Stereo (2)			Yes, YT Music
-(141)	MP4			AAC (LC)		256 Kbps			Stereo (2)			No, YT Music*
-
-249		WebM		Opus			(VBR) ~50 Kbps		Stereo (2)			Yes
-250		WebM		Opus			(VBR) ~70 Kbps		Stereo (2)			Yes
-251		WebM		Opus			(VBR) <=160 Kbps	Stereo (2)			Yes
-
-256		MP4			AAC (HE v1)		192 Kbps			Surround (5.1)		Rarely
-258		MP4			AAC (LC)		384 Kbps			Surround (5.1)		Rarely
-327		MP4			AAC (LC)		256 Kbps			Surround (5.1)		?*
-338		WebM		Opus			(VBR) ~480 Kbps (?)	Quadraphonic (4)	?*
-//»
-
-DASH Video formats//«
-Resolution	AV1 HFR High	AV1 HFR		AV1		VP9.2 HDR HFR	VP9 HFR		VP9		H.264 HFR	H.264
-			MP4				MP4			MP4		WebM			WebM		WebM	MP4			MP4
-4320p						402/571								272								138
-2160p		701				401					337				315			(313)	(305)		(266)
-1440p		700				400					336				308			(271)	(304)		(264)
-1080p		699				399					335				303			(248)	299			(137)
-720p		698				398					334				302			247		298			136
-480p		697							397		333							244					135
-360p		696							396		332							243					134
-240p		695							395		331							242					133
-144p		694							394		330							278					160
-//»
-
-//»*/
-
-//Highest to lowest, MP4 first: 141/251/140/250/139/249
-//Highest to lowest, WebM first: 251/141/250/140/249/139
-
-let com = spawn(COMMAND, ["-f", "141/251/140/250/139/249", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
+let com = spawn(COMMAND, ["-f", FORMAT_LIST, "--ffmpeg-location", "/blah/place/weird/hahahaha", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
+//let com = spawn(COMMAND, ["-f", FORMAT_LIST, "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
+//let com = spawn(COMMAND, ["-f", "141/251/140/250/139/249", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
 let path;
-let part_path;
 let cur_off = 0;
 let fd;
 const read=path=>{//«
@@ -210,7 +233,7 @@ const read=path=>{//«
 	cur_off = stats.size;
 	ws.send(buf);
 };//»
-com.stdout.on('data',dat=>{
+com.stdout.on('data',dat=>{//«
 
 let str = dat.toString();
 let marr;
@@ -247,13 +270,13 @@ ws.send(JSON.stringify({out: str}));
 });
 com.stderr.on('data', (dat) => {
 	ws.send(JSON.stringify({err: dat.toString()}));
-});
-com.on('error',(e)=>{
-	log("SPAWN ERROR!?!?!");
-	log(e);
-	ws.send(JSON.stringify({err: e.message}));
-});
-com.on('close',(code)=>{
+});//»
+com.on('error',(e)=>{//«
+log("SPAWN ERROR!?!?!");
+log(e);
+ws.send(JSON.stringify({err: e.message}));
+});//»
+com.on('close',(code)=>{//«
 //log(`Closed with code: ${code}`);
 	try{
 		read(path);
@@ -261,17 +284,22 @@ com.on('close',(code)=>{
 	catch(e){
 //		log("Caught", e);
 	}
-});
-com.on('exit',(code)=>{
+});//»
+com.on('exit',(code)=>{//«
 //log(`Exited`);
 	ws.send(JSON.stringify({done: true}));
-});
+});//»
 
 }//»
 });
 }
 else if (mess==="Abort"){
-	if (ac) ac.abort();
+	if (ac) {
+		ac.abort();
+	}
+	if (part_path) try{fs.unlinkSync(part_path)}catch(e){}
+	if (file_path) try{fs.unlinkSync(file_path)}catch(e){}
+	if (tmpdir) try{fs.rmdirSync(tmpdir)}catch(e){}
 }
 else if (mess==="Cleanup"){
 log("Received 'Cleanup' message");
@@ -286,6 +314,7 @@ else{
 });//»
 });
 log(`${SERVICE_NAME} service listening at wss://${hostname}:${portnum}`);
+
 }//»
 
 //Startup«

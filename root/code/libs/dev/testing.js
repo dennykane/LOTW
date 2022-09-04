@@ -14,6 +14,12 @@ const COMS={
 	}
 */
 
+BLAH:()=>{
+//werr("ERERERERE  1111111111111111111 111222222222222222222222 2222222222333333333 3333333333333 333333333344444444444444444444444444444444444\n555555555555555555");
+wout("a".repeat(6000)+"\nbbbbb");
+cbok();
+},
+
 URL:()=>{//«
 let arg = args.shift();
 if (!arg) return cberr("NAAH");
@@ -30,14 +36,19 @@ let vid = params.get("v");
 let list = params.get("list");
 let ind = params.get("index");
 
-
-
 cbok();
 
 },//»
 
 YTDL:async()=>{//«
 
+/*
+
+Do a nice little getch_loop here, using the bottom 1 (or 2) line(s) for "app" status/instructions.
+
+We can use
+
+*/
 //xTODOx Clean up everything in svcs/ytdl.js (remove the /tmp/yt-dl upon finishing the download...)
 
 
@@ -64,7 +75,9 @@ let killed = false;
 
 killreg(cb=>{//«
 	killed = true;
-	if (ws) ws.close();
+	if (ws) {
+		ws.close();
+	}
 	cb&&cb();
 });//»
 
@@ -87,7 +100,7 @@ if (!killed) {
 ws.onmessage = e =>{//«
 
 let dat = e.data;
-log(dat);
+//log(dat);
 if (dat instanceof Blob) {
 	chunks.push(dat);
 	return 
@@ -112,9 +125,31 @@ if (obj.out){
 	if (s.match(/^\[download\]/)) wclerr(s.split("\n").pop());
 	else werr(s);
 }
-else if (obj.err) werr(obj.err);
+else if (obj.err) {
+
+let s = obj.err;
+if (s.match(/^WARNING: ffmpeg-location \/blah/)||s.match(/^WARNING: [-_0-9a-zA-Z]{11}: writing DASH/)){}
+
+else {
+/*
+Need to handle errors:
+
+ERROR: unable to download video data: <urlopen error [Errno -3] Temporary failure in name resolution>
+
+Also, the "403 Forbidden" one...
+
+*/
+werr(obj.err);
+
+}
+
+}
 else if (obj.name) fname = obj.name;
 else if (obj.done) saveit();
+else{
+cwarn("WHAT IS THIS???");
+log(obj);
+}
 
 };//»
 
@@ -703,7 +738,7 @@ killreg(cb=>{
 termobj.getch_loop(ch=>{
 	if (termobj.h < minh) return;
 	if (ch.match(/^[a-z]_$/)){
-		termobj.stat_render(["<blar>&& &amp; &&</blar>",'   <span style="color: #770">Fooey!!!</span>']);
+		termobj.stat_render(["<blar>&& &amp; &&</blar>",'   <span style="color: #770">Fooey!!!</span> LONGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGERRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR']);
 	}
 	else if (ch.match(/^[a-z]_S$/)){
 		termobj.stat_render(["?!?!?!?!?"]);
