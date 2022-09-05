@@ -34,7 +34,9 @@ $ fallocate -l <num> filename // extend file to num bytes (no truncation if file
 //Imports«
 
 const http = require('http');
-const spawn = require('child_process').spawn;
+const child_process = require('child_process');
+const spawn = child_process.spawn;
+const spawnSync = child_process.spawnSync;
 const WebSocketServer = require('ws').WebSocketServer;
 const fs = require('fs');
 const path = require('path');
@@ -43,13 +45,31 @@ const os = require('os');
 //»
 //Var«
 
+let use_tmp = os.tmpdir();
+
+//let use_tmp="/dev/shm";
+/*Test for /dev/shm???«
+try{
+	let dev_shm = "/dev/shm";
+    fs.statSync(dev_shm);
+    use_tmp = dev_shm;
+}
+catch(e){use_tmp = os.tmpdir()};
+»*/
+
 const SERVICE_NAME = "ytdl";
 const hostname = "localhost";
 
 let portnum = 20003;
 
 const COMMANDS = ["yt-dlp", "youtube-dl"];
+//let tmp_dir = "/tmp";
+let tmp_dir = "/dev/shm";
+
+//const COMMANDS = ["youtube-dl"];
 let COMMAND;
+
+
 
 /*Formats//«
 
@@ -109,7 +129,6 @@ let WebM_then_MP4_lowest_to_highest="249/250/251/139/140/141";
 
 //»
 
-//let FORMAT_LIST = MP4_then_WebM_highest_to_lowest;
 let FORMAT_LIST = highest_to_lowest_MP4_first;
 
 //»
@@ -192,36 +211,70 @@ const server = http.createServer(handle_request).listen(portnum, hostname);
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', ws=>{
+const cleanup=()=>{//«
+	if (part_path) try{fs.unlinkSync(part_path)}catch(e){}
+	if (file_path) try{fs.unlinkSync(file_path)}catch(e){}
+	if (tmpdir) try{fs.rmdirSync(tmpdir)}catch(e){}
+};//»
 let tmpdir;
 let ac;
 let file_path;
 let part_path;
 let vidid;
+let did_abort;
+let resume_byte;
+let resume_fname;
 ws.on('message', data=>{//«
 
 let mess = data.toString();
 let marr;
-if (marr = mess.match(/^VID:([-_a-zA-Z0-9]+)$/)){
-vidid = marr[1];
-log(`Get vid: '${marr[1]}'`);
-fs.mkdtemp(path.join(os.tmpdir(), 'ytdl-'), (err, directory) => {
+let if_name_only = false;
+if (marr = mess.match(/^VID(_NAME)?:([-_a-zA-Z0-9]{11}) ?(.+)?$/)){
+
+did_abort = false;
+if_name_only = marr[1];
+vidid = marr[2];
+if (marr[3]) {
+	let arr = marr[3].split(" ");
+	resume_fname = arr[0];
+	resume_byte = parseInt(arr[1]);
+	if (!Number.isFinite(resume_byte)){
+		throw new Error("Bad resume_byte string: "+arr[1]);
+	}
+//	cur_off = resume_byte;
+}
+log(`Get vid: '${marr[2]}'`);
+
+
+fs.mkdtemp(path.join(use_tmp, 'ytdl-'), (err, directory) => {
+
 if (err) {
 	log("Could not create temporary directory... aborting!");
 	process.exit();
 	return;
 }
 tmpdir = directory;
-let template = `${directory}/%(title)s.%(ext)s`;
+let fulltmppath;
+if (resume_fname){//«
+	let fulltmppath = `${tmpdir}/${resume_fname}.part`;
+log(`Resuming to ${fulltmppath} @ ${resume_byte}`);
+	fs.writeFileSync(fulltmppath, `RESUME AT: ${resume_byte}`)
+	spawnSync("truncate", ["-s", ""+resume_byte, fulltmppath]);	
+}//»
+
 {//«
 
+let template = `${tmpdir}/%(title)s_%(format_id)s.%(ext)s`;
 ac = new AbortController();
 let { signal } = ac;
+
+let cur_off = 0;
+if (resume_byte) cur_off = resume_byte;
 
 let com = spawn(COMMAND, ["-f", FORMAT_LIST, "--ffmpeg-location", "/blah/place/weird/hahahaha", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
 //let com = spawn(COMMAND, ["-f", FORMAT_LIST, "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
 //let com = spawn(COMMAND, ["-f", "141/251/140/250/139/249", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
 let path;
-let cur_off = 0;
 let fd;
 const read=path=>{//«
 	let stats = fs.statSync(path);
@@ -243,11 +296,23 @@ if (marr = str.match(/(Destination: (\/tmp\/.+))\n?$/)) {
 	path = marr[2];
 	file_path = path;
 	part_path = `${path}.part`;
-	ws.send(JSON.stringify({name: path.split("/").pop()}));
-log(marr[1]);
+	let fname = path.split("/").pop();
+	if (resume_fname && fname !== resume_fname){
+		ws.send(JSON.stringify({err: `Received filename (${fname}) !== resumename (${resume_fname})`}));
+		ac.abort();
+		did_abort = true;
+		return;
+	}
+	ws.send(JSON.stringify({name: fname, resume: !!resume_fname}));
+	if (if_name_only) {
+		ac.abort();
+		did_abort = true;
+		return;
+	}
 }
 else{
-ws.send(JSON.stringify({out: str}));
+	if (did_abort) return;
+	ws.send(JSON.stringify({out: str}));
 	try {
 		read(part_path);
 		return;
@@ -267,16 +332,21 @@ ws.send(JSON.stringify({out: str}));
 
 }
 ws.send(JSON.stringify({out: str}));
-});
-com.stderr.on('data', (dat) => {
+});//»
+com.stderr.on('data', (dat) => {//«
 	ws.send(JSON.stringify({err: dat.toString()}));
 });//»
 com.on('error',(e)=>{//«
+
+ws.send(JSON.stringify({err: e.message}));
+if (e.constructor.name !== "AbortError"){
 log("SPAWN ERROR!?!?!");
 log(e);
-ws.send(JSON.stringify({err: e.message}));
+}
+
 });//»
 com.on('close',(code)=>{//«
+	if (did_abort) return;
 //log(`Closed with code: ${code}`);
 	try{
 		read(path);
@@ -286,27 +356,25 @@ com.on('close',(code)=>{//«
 	}
 });//»
 com.on('exit',(code)=>{//«
+	if (did_abort) return;
 //log(`Exited`);
 	ws.send(JSON.stringify({done: true}));
 });//»
 
 }//»
+
 });
 }
 else if (mess==="Abort"){
 	if (ac) {
 		ac.abort();
+		did_abort = true;
 	}
-	if (part_path) try{fs.unlinkSync(part_path)}catch(e){}
-	if (file_path) try{fs.unlinkSync(file_path)}catch(e){}
-	if (tmpdir) try{fs.rmdirSync(tmpdir)}catch(e){}
+	cleanup();
 }
 else if (mess==="Cleanup"){
 log("Received 'Cleanup' message");
-
-	fs.unlinkSync(file_path);
-	fs.rmdirSync(tmpdir);
-
+	cleanup();
 }
 else{
 	log("???",mess);

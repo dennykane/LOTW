@@ -1,9 +1,13 @@
 /*
 
-@ODJTBQIKXH Just added the math to include num_stat_lines inside of scroll_into_view().
+@ODJTBQIKXH 
+XXX IS IT CORRECT TO DO: 'if (y>=h) {' XXX???
+
+Just added the math to include num_stat_lines inside of scroll_into_view().
 Whenever we've had stat_lines before, we've never needed to call scroll_into_view(), because
 it has always been in vim or less, where we had a completely different control flow of
 how to handle keypresses and output.
+
 
 Looking for a way, in normal shell mode, to subract n (1, maybe 2) lines from the bottom of
 the screen to use it as a output area for instructions/status related to the given 
@@ -1359,11 +1363,12 @@ const shift_line=(x1, y1, x2, y2, if_shadow)=>{//«
 	return str_arr;
 };//»
 const scroll_into_view=(which)=>{//«
-//ODJTBQIKXH
 	if (!h) return;
 	const doscroll=()=>{//«
 		if (lines.length-scroll_num+num_stat_lines <= h) return false;
 		else {
+//ODJTBQIKXH
+//				vvvv // Is this correct? Everything seems to work now!!!
 			if (y>=h) {
 				scroll_num=lines.length-h+num_stat_lines;
 				y=h-1;

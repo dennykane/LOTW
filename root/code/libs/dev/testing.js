@@ -56,13 +56,70 @@ let chunks=[];
 let fname;
 let ws;
 let killed = false;
+let get_name="";
+let path = `/home/${ENV.USER}/Downloads`;
+let fullpath, partpath;
+let tot_bytes_written=0;
+let writing=false;
+let got_error=false;
+await fs.mkDir(path);
 
+const INSTRUCTIONS_LINE = `Press whatever for whatever!`;
+
+const doend=()=>{//«
+	if (ws) ws.close();
+	termobj.getch_loop(null);
+	cbok();
+	killed = true;
+};//»
+const abort=()=>{//«
+	if (ws&&!killed) {
+		ws.send("Abort");
+		setTimeout(doend, 250);
+	}
+	killed = true;
+};//»
+const stat = (s)=>{//«
+	if (s) log(s);
+	if (!s) s = "";
+	termobj.stat_render([s, INSTRUCTIONS_LINE]);
+};//»
+const trywrite=()=>{//«
+	return new Promise(async(Y,N)=>{
+		if (writing) return Y(true);
+		let chunk = chunks.shift();
+		if (!chunk) return Y();
+		writing = true;
+		if (!await fs.writeFile(partpath, chunk, {append: true})){
+cerr(`Could not write to ${partpath}`);
+		}
+		tot_bytes_written+=chunk.size;
+		writing = false;
+		Y(true);
+	})
+};//»
+const finish_writing=()=>{//«
+	return new Promise(async(Y,N)=>{
+		let iter=0;
+		while (await trywrite()){
+			iter++;
+			if (iter > 1000){
+cerr("Infinite looper????");
+				break;
+			}
+		}
+cwarn("Bytes written: ", tot_bytes_written);
+		Y();
+	});
+};//»
 const saveit=async()=>{//«
-	let path = `/home/${ENV.USER}/Downloads`;
-	let fullpath = `${path}/${fname}`;
-	await fs.mkDir(path);
-	wout(`Saving to: '${fullpath}'...`);
-	await fs.writeFile(fullpath, new Blob(chunks));
+	if (!fullpath) return doend();
+	await finish_writing();
+	werr(`Moving to: '${fullpath}'...`);
+	if (!await fs.mvFileByPath(partpath, fullpath)){
+		werr("Failed!");
+	}
+//	await fs.writeFile(fullpath, new Blob(chunks));
 	cbok();
 	if (ws) {
 		ws.send("Cleanup");
@@ -74,13 +131,12 @@ const saveit=async()=>{//«
 };//»
 const startws=()=>{//«
 
-
 ws = new WebSocket(`ws://${window.location.hostname}:${port}/`);
 
 ws.onopen=()=>{//«
-ws.send(`VID:${vid}`);
-//wout('connected');
-//ws.send(Date.now());
+//log(`VID${get_name}:${vid}`);
+ws.send(`VID${get_name}:${vid}`);
+
 };//»
 ws.onclose = ()=>{//«
 
@@ -92,12 +148,13 @@ if (!killed) {
 }
 
 };//»
-ws.onmessage = e =>{//«
+ws.onmessage = async e =>{//«
 
 let dat = e.data;
 //log(dat);
 if (dat instanceof Blob) {
 	chunks.push(dat);
+	trywrite();
 	return 
 }
 else if (!(typeof dat === 'string')){
@@ -117,8 +174,8 @@ catch(e){
 
 if (obj.out){
 	let s = obj.out.replace(/\n$/,"");
-	if (s.match(/^\[download\]/)) wclerr(s.split("\n").pop());
-	else werr(s);
+	if (s.match(/^\[download\]/)) stat((s.split("\n").pop()));
+	else stat(s);
 }
 else if (obj.err) {
 
@@ -135,13 +192,53 @@ ERROR: unable to download video data: <urlopen error [Errno -3] Temporary failur
 Also, the "403 Forbidden" one...
 
 */
+let err = obj.err;
+if (err.match(/ERROR:/)) got_error = true;
 werr(obj.err);
 
 }
 
 }
-else if (obj.name) fname = obj.name;
-else if (obj.done) saveit();
+else if (obj.name) {
+	if (obj.resume){
+cwarn("Resuming...");
+return;
+	}
+	fname = obj.name;
+	fullpath = `${path}/${fname}`;
+	partpath = `${fullpath}.part`;
+	if (get_name) {
+		wout(fname);
+		doend();
+		return;
+	}
+	
+	if (await fs.pathToNode(fullpath)){
+		werr(`The file already exists: ${fullpath}`);
+		doend();
+		return;
+	}
+
+	let rv = await fs.pathToNode(partpath);
+	if (rv){
+		if (!Number.isFinite(rv.SZ)){
+			werr(`Want to resume download, but no 'SZ' in node!`);
+			doend();
+		}
+		else {
+			tot_bytes_written = rv.SZ;
+			werr(`Resume download @${rv.SZ}`);
+			ws.send("Abort");
+			let fname = fullpath.split("/").pop();
+			setTimeout(()=>{ws.send(`VID:${vid} ${fname} ${rv.SZ}`);}, 250);
+		}
+		return;
+	}
+
+}
+else if (obj.done) {
+	saveit();
+}
 else{
 cwarn("WHAT IS THIS???");
 log(obj);
@@ -150,37 +247,42 @@ log(obj);
 };//»
 
 }//»
-
 const initloop=()=>{//«
 
-let n_scroll_lines = 1;
+let n_scroll_lines = 2;
 let minh = n_scroll_lines+1;
 if (termobj.h < minh){
 	cberr(`Need height >= ${minh}!`);
 	return;
 }
 killreg(cb=>{
-	killed = true;
-	if (ws) {
-		ws.send("Abort");
-		setTimeout(()=>{
-			ws.close();
-		}, 250);
+	if (!killed) {
+		if (ws) {
+			ws.send("Abort");
+			setTimeout(()=>{
+				ws.close();
+			}, 250);
+		}
+		termobj.getch_loop(null);
+		finish_writing();
 	}
-    termobj.getch_loop(null);
 	cb&&cb();
+	killed = true;
 })
 termobj.getch_loop(ch=>{
 	if (termobj.h < minh) return;
 }, n_scroll_lines, minh);
-termobj.stat_render([`Press whatever for whatever!`]);
+stat();
+
 
 };//»
 
+//Startup«
 let port = 20003;
 
-let opts=failopts(args,{s:{p:3},l:{port:3}});
+let opts=failopts(args,{s:{p:3, n:1},l:{port:3,name:1}});
 if (!opts) return;
+if (opts.name||opts.n) get_name = "_NAME";
 let portarg = opts.port||opts.p;
 if (portarg){
 	let portnum = portarg.pi({MIN:1024, MAX: 65535});
@@ -208,7 +310,7 @@ if (vid && vid.match(/^[-_a-zA-Z0-9]{11}$/)){
 	startws();
 }
 else cberr("BARFID");
-
+//»
 
 },//»
 

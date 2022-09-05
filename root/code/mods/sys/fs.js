@@ -1282,7 +1282,7 @@ const save_fs_by_path = (patharg, val, cb, opts) => {//«
 	patharg = patharg.replace(/\/+/g, "/");
 	if (!opts) opts = {};
 	let apparg = opts.APPARG;
-	let if_append = opts.APPEND;
+	let if_append = opts.APPEND||opts.append;
 	let mimearg = opts.MIMEARG;
 	let winid = opts.WINID;
 	let if_root = opts.ROOT;
@@ -1350,7 +1350,7 @@ console.error("dir.getFile",e);
 	if (!opts) opts = {};
 	let mimearg = opts.MIMEARG;
 	let apparg = opts.APPARG;
-	let if_append = opts.APPEND;
+	let if_append = opts.APPEND||opts.append;
 	let if_root = opts.ROOT;
 	let winid = opts.WINID;
 	let blob;
@@ -3198,6 +3198,23 @@ this.mv_desk_icon=mv_desk_icon;
 
 //API«
 
+const mvByPath=(src, dest, opts={})=>{
+	return new Promise((Y,N)=>{
+//		mv_by_path(src, dest, opts.app,Y, opts.copy, opts.root);
+		mv_by_path(src, dest, opts.app,Y, null, opts.root);
+	});
+};
+const mvFileByPath=(src, dest, opts={})=>{
+	if (opts.app) {
+console.error(`opts.app == '${opts.app}'!?!?!`);
+		return;
+	}
+	return mvByPath(src, dest, opts);
+};
+const mvDirByPath=(src, dest, opts={})=>{
+	opts.app = FOLDER_APP;
+	return mvByPath(src, dest, opts);
+};
 const populateDirObjByPath=(patharg, opts={})=>{//«
 	return new Promise((Y,N)=>{
 		let cb=(rv, e)=>{
@@ -3256,7 +3273,30 @@ const touchDirProm = (path, opts = {}) => {
 		});
 	})
 };
-const writeHtml5File=(path,val,opts={})=>{return new Promise(async(res,_rej)=>{const rej=(str)=>{if(opts.reject)_rej(str);else res(false);};let arr=path.split("/");arr.pop();let parpath=arr.join("/");let parobj=await pathToNode(parpath);if(!parobj){rej(parpath+":\x20not found");return;}if(!check_fs_dir_perm(parobj,opts.ROOT||opts.root||opts.isRoot,opts.SYS||opts.sys||opts.isSys)){rej(parpath+":\x20permission denied");return;}save_fs_by_path(path,val,ret=>{if(ret)return res(ret);rej(path+":\x20not found");},opts);})};
+const writeHtml5File = (path, val, opts = {}) => {
+	return new Promise(async (res, _rej) => {
+		const rej = (str) => {
+			if (opts.reject) _rej(str);
+			else res(false);
+		};
+		let arr = path.split("/");
+		arr.pop();
+		let parpath = arr.join("/");
+		let parobj = await pathToNode(parpath);
+		if (!parobj) {
+			rej(parpath + ":\x20not found");
+			return;
+		}
+		if (!check_fs_dir_perm(parobj, opts.ROOT || opts.root || opts.isRoot, opts.SYS || opts.sys || opts.isSys)) {
+			rej(parpath + ":\x20permission denied");
+			return;
+		}
+		save_fs_by_path(path, val, ret => {
+			if (ret) return res(ret);
+			rej(path + ":\x20not found");
+		}, opts);
+	})
+};
 const touchHtml5File=(path)=>{return new Promise((y,n)=>{touch_fs_file(path,y);});};
 const readFile = (path, opts = {}) => {//«
 	return new Promise((Y, N) => {
@@ -3325,6 +3365,8 @@ return root;
 //tryPopDirsCB, //Not externally async, so need a CB. It ignores failures and 
 
 const api_funcs = [//«
+	"mvFileByPath", mvFileByPath,
+	"mvDirByPath", mvDirByPath,
 	"getRoot", getRoot,	
 	"populateFsDirObjByPath", populateFsDirObjByPath,
 	"populateDirObjByPath", populateDirObjByPath,
