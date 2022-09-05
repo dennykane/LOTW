@@ -1882,10 +1882,14 @@ window.onbeforeunload = () => {//«
 		for (let w of wins){
 			if (w.obj) {
 				if (w.obj.is_dirty) return "There is an unsaved application!";
-				if (w.obj.onkill){
-					w.obj.onkill();
-				}
+				if (w.obj.onkill) w.obj.onkill();
 			}
+		}
+	}
+	else if (terminals){
+		let keys = getkeys(terminals);
+		for (let k of keys) {
+			if (terminals[k].obj.is_dirty) return "There is an unsaved application!";
 		}
 	}
 	else if (app_win&&app_win.obj&&app_win.obj.onkill){
@@ -2069,7 +2073,7 @@ const init_term = async () => {//«
 						"c_CS": 1,
 						"k_C": 1,
 						"a_C": 1,
-						"w_C": 1,
+//						"w_C": 1,
 						"d_A": 1,
 						"p_C": 1,
 						"j_C": 1
