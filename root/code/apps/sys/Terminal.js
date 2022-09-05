@@ -1,6 +1,9 @@
 /*
 
-
+@ODJTBQIKXH Just added the math to include num_stat_lines inside of scroll_into_view().
+Whenever we've had stat_lines before, we've never needed to call scroll_into_view(), because
+it has always been in vim or less, where we had a completely different control flow of
+how to handle keypresses and output.
 
 Looking for a way, in normal shell mode, to subract n (1, maybe 2) lines from the bottom of
 the screen to use it as a output area for instructions/status related to the given 
@@ -687,7 +690,9 @@ log(real_lines);
 	let len = uselines.length;
 	let reccols;
 	if (reclines) reccols={};
-	if (len + num_stat_lines != h) donum = h - num_stat_lines;
+	if (len + num_stat_lines != h) {
+		donum = h - num_stat_lines;
+	}
 	else donum = len;
 	for (let i = 0; i < donum; i++) {//«
 		let ind;
@@ -1354,12 +1359,13 @@ const shift_line=(x1, y1, x2, y2, if_shadow)=>{//«
 	return str_arr;
 };//»
 const scroll_into_view=(which)=>{//«
+//ODJTBQIKXH
 	if (!h) return;
-	function doscroll() {//«
-		if (lines.length-scroll_num <= h) return false;
+	const doscroll=()=>{//«
+		if (lines.length-scroll_num+num_stat_lines <= h) return false;
 		else {
 			if (y>=h) {
-				scroll_num=lines.length-h;
+				scroll_num=lines.length-h+num_stat_lines;
 				y=h-1;
 			}
 			else {
@@ -1368,7 +1374,7 @@ const scroll_into_view=(which)=>{//«
 			}
 			return true;
 		}
-	}//»
+	};//»
 	let did_scroll = false;
 	while (doscroll()) did_scroll = true;
 	return did_scroll;

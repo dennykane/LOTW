@@ -153,8 +153,7 @@ log(obj);
 
 const initloop=()=>{//«
 
-let n_scroll_lines = 1;
-let minh = n_scroll_lines+1;
+let minh = 2;
 if (termobj.h < minh){
 	cberr(`Need height >= ${minh}!`);
 	return;
@@ -172,7 +171,7 @@ killreg(cb=>{
 })
 termobj.getch_loop(ch=>{
 	if (termobj.h < minh) return;
-}, n_scroll_lines, minh);
+}, 1, minh);
 termobj.stat_render([`Press whatever for whatever!`]);
 
 };//»
@@ -761,31 +760,18 @@ killreg(cb=>{
 termobj.getch_loop(ch=>{
 	if (termobj.h < minh) return;
 	if (ch.match(/^[a-z]_$/)){
-//		termobj.stat_render(["<blar>&& &amp; &&</blar>",'   <span style="color: #770">Fooey!!!</span> LONGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGERRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR']);
-		termobj.stat_render(['   <span style="color: #770">Fooey!!!</span> LONGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGERRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR']);
+		termobj.stat_render(["<blar>&& &amp; &&</blar>",'   <span style="color: #770">Fooey!!!</span> LONGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGERRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRR']);
 	}
 	else if (ch.match(/^[a-z]_S$/)){
 		termobj.stat_render(["?!?!?!?!?"]);
 	}
 	else if (ch.match(/^[0-9]_/)){
-//		termobj.stat_render(["Blar","ZZLEEPPPPPP"]);
-		termobj.stat_render(["Blar"]);
+		termobj.stat_render(["Blar","ZZLEEPPPPPP"]);
 	}
 	else{
 	}
-}, 1, minh);
-termobj.stat_render(["Welcomme> to the hwoinx???"]);
-//termobj.stat_render(["Welcomme> to the hwoinx???","[Sppek in the har on the bloan!!!]"]);
-
-setTimeout(()=>{
-wout("Thing in the place");
-setTimeout(()=>{
-wout("Yibber ouderbbeddd!");
-setTimeout(()=>{
-wout("Zloyyyymoooooo!!!!!!!!!");
-}, 350);
-}, 350);
-}, 350);
+}, 2, minh);
+termobj.stat_render(["Welcomme> to the hwoinx???","[Sppek in the har on the bloan!!!]"]);
 
 },//»
 
