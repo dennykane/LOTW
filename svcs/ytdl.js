@@ -1,4 +1,21 @@
-/*
+/* Getting yt-dlp (recommended over youtube-dl)«
+
+From: https://github.com/yt-dlp/yt-dlp#using-the-release-binary
+
+sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+	-o /usr/local/bin/yt-dlp
+~or~
+sudo wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+	-O /usr/local/bin/yt-dlp
+
+then
+sudo chmod a+rx /usr/local/bin/yt-dlp
+
+Updating: 
+sudo yt-dlp -U
+
+»*/
+/*Notes«
 
 Trick args: "--ffmpeg-location", "/blah/place/weird/hahahaha", 
 
@@ -29,7 +46,7 @@ To create empty files
 $ truncate -s <num> filename // reduce size to num bytes. This can also extend the file.
 $ fallocate -l <num> filename // extend file to num bytes (no truncation if file is larger)
 
-*/
+»*/
 
 //Imports«
 
@@ -45,8 +62,15 @@ const os = require('os');
 //»
 //Var«
 
-let use_tmp = os.tmpdir();
+const SERVICE_NAME = "ytdl";
+const hostname = "localhost";
+let portnum = 20003;
 
+let COMMAND;
+const COMMANDS = ["yt-dlp", "youtube-dl"];
+//const COMMANDS = ["youtube-dl"];
+
+let use_tmp = os.tmpdir();
 //let use_tmp="/dev/shm";
 /*Test for /dev/shm???«
 try{
@@ -56,20 +80,6 @@ try{
 }
 catch(e){use_tmp = os.tmpdir()};
 »*/
-
-const SERVICE_NAME = "ytdl";
-const hostname = "localhost";
-
-let portnum = 20003;
-
-const COMMANDS = ["yt-dlp", "youtube-dl"];
-//let tmp_dir = "/tmp";
-let tmp_dir = "/dev/shm";
-
-//const COMMANDS = ["youtube-dl"];
-let COMMAND;
-
-
 
 /*Formats//«
 
@@ -264,7 +274,8 @@ log(`Resuming to ${fulltmppath} @ ${resume_byte}`);
 
 {//«
 
-let template = `${tmpdir}/%(title)s_%(format_id)s.%(ext)s`;
+//let template = `${tmpdir}/%(title)s_%(format_id)s.%(ext)s`;
+let template = `${tmpdir}/%(title)s-%(format_id)s.%(ext)s`;
 ac = new AbortController();
 let { signal } = ac;
 

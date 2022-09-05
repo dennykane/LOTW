@@ -3,23 +3,6 @@ export const lib = (comarg, args, Core, Shell)=>{
 
 const COMS={
 
-/*
-	BLAH:async()=>{
-
-		let dirpath =`${globals.home_path}/.data/apps/what/Cool`
-		wout(`Making directory: ${dirpath}`);
-		if (await fs.mkDir(dirpath)) return cbok();
-		cberr("Failed");
-
-	}
-*/
-
-BLAH:()=>{
-//werr("ERERERERE  1111111111111111111 111222222222222222222222 2222222222333333333 3333333333333 333333333344444444444444444444444444444444444\n555555555555555555");
-wout("a".repeat(6000)+"\nbbbbb");
-cbok();
-},
-
 URL:()=>{//«
 let arg = args.shift();
 if (!arg) return cberr("NAAH");
@@ -37,280 +20,6 @@ let list = params.get("list");
 let ind = params.get("index");
 
 cbok();
-
-},//»
-
-YTDL:async()=>{//«
-
-/*
-
-Do a nice little getch_loop here, using the bottom 1 (or 2) line(s) for "app" status/instructions.
-
-We can use
-
-*/
-//xTODOx Clean up everything in svcs/ytdl.js (remove the /tmp/yt-dl upon finishing the download...)
-
-
-let chunks=[];
-let fname;
-let ws;
-let killed = false;
-let get_name="";
-let path = `/home/${ENV.USER}/Downloads`;
-let fullpath, partpath;
-let tot_bytes_written=0;
-let writing=false;
-let got_error=false;
-await fs.mkDir(path);
-
-const INSTRUCTIONS_LINE = `Press whatever for whatever!`;
-
-const doend=()=>{//«
-	if (ws) ws.close();
-	termobj.getch_loop(null);
-	cbok();
-	killed = true;
-};//»
-const abort=()=>{//«
-	if (ws&&!killed) {
-		ws.send("Abort");
-		setTimeout(doend, 250);
-	}
-	killed = true;
-};//»
-const stat = (s)=>{//«
-	if (s) log(s);
-	if (!s) s = "";
-	termobj.stat_render([s, INSTRUCTIONS_LINE]);
-};//»
-const trywrite=()=>{//«
-	return new Promise(async(Y,N)=>{
-		if (writing) return Y(true);
-		let chunk = chunks.shift();
-		if (!chunk) return Y();
-		writing = true;
-		if (!await fs.writeFile(partpath, chunk, {append: true})){
-cerr(`Could not write to ${partpath}`);
-		}
-		tot_bytes_written+=chunk.size;
-		writing = false;
-		Y(true);
-	})
-};//»
-const finish_writing=()=>{//«
-	return new Promise(async(Y,N)=>{
-		let iter=0;
-		while (await trywrite()){
-			iter++;
-			if (iter > 1000){
-cerr("Infinite looper????");
-				break;
-			}
-		}
-cwarn("Bytes written: ", tot_bytes_written);
-		Y();
-	});
-};//»
-const saveit=async()=>{//«
-	if (!fullpath) return doend();
-	await finish_writing();
-	werr(`Moving to: '${fullpath}'...`);
-	if (!await fs.mvFileByPath(partpath, fullpath)){
-		werr("Failed!");
-	}
-//	await fs.writeFile(fullpath, new Blob(chunks));
-	cbok();
-	if (ws) {
-		ws.send("Cleanup");
-		setTimeout(()=>{
-			ws.close();
-		}, 250);
-	}
-    termobj.getch_loop(null);
-};//»
-const startws=()=>{//«
-
-ws = new WebSocket(`ws://${window.location.hostname}:${port}/`);
-
-ws.onopen=()=>{//«
-//log(`VID${get_name}:${vid}`);
-ws.send(`VID${get_name}:${vid}`);
-
-};//»
-ws.onclose = ()=>{//«
-
-log('disconnected');
-if (!killed) {
-	werr("Unexpectedly closing...");
-	cberr();
-    termobj.getch_loop(null);
-}
-
-};//»
-ws.onmessage = async e =>{//«
-
-let dat = e.data;
-//log(dat);
-if (dat instanceof Blob) {
-	chunks.push(dat);
-	trywrite();
-	return 
-}
-else if (!(typeof dat === 'string')){
-	cerr("What the hell in onmessage???");
-	log(dat);
-	return;
-}
-let obj;
-try{
-	obj = JSON.parse(dat);
-}
-catch(e){
-	cerr("What the hell no good JSON in onmessage???");
-	log(dat);
-	return;
-}
-
-if (obj.out){
-	let s = obj.out.replace(/\n$/,"");
-	if (s.match(/^\[download\]/)) stat((s.split("\n").pop()));
-	else stat(s);
-}
-else if (obj.err) {
-
-let s = obj.err;
-if (s.match(/^WARNING: ffmpeg-location \/blah/)||s.match(/^WARNING: [-_0-9a-zA-Z]{11}: writing DASH/)){}
-
-else {
-/*
-
-Need to handle errors:
-
-ERROR: unable to download video data: <urlopen error [Errno -3] Temporary failure in name resolution>
-
-Also, the "403 Forbidden" one...
-
-*/
-let err = obj.err;
-if (err.match(/ERROR:/)) got_error = true;
-werr(obj.err);
-
-}
-
-}
-else if (obj.name) {
-	if (obj.resume){
-cwarn("Resuming...");
-return;
-	}
-	fname = obj.name;
-	fullpath = `${path}/${fname}`;
-	partpath = `${fullpath}.part`;
-	if (get_name) {
-		wout(fname);
-		doend();
-		return;
-	}
-	
-	if (await fs.pathToNode(fullpath)){
-		werr(`The file already exists: ${fullpath}`);
-		doend();
-		return;
-	}
-
-	let rv = await fs.pathToNode(partpath);
-	if (rv){
-		if (!Number.isFinite(rv.SZ)){
-			werr(`Want to resume download, but no 'SZ' in node!`);
-			doend();
-		}
-		else {
-			tot_bytes_written = rv.SZ;
-			werr(`Resume download @${rv.SZ}`);
-			ws.send("Abort");
-			let fname = fullpath.split("/").pop();
-			setTimeout(()=>{ws.send(`VID:${vid} ${fname} ${rv.SZ}`);}, 250);
-		}
-		return;
-	}
-
-}
-else if (obj.done) {
-	saveit();
-}
-else{
-cwarn("WHAT IS THIS???");
-log(obj);
-}
-
-};//»
-
-}//»
-const initloop=()=>{//«
-
-let n_scroll_lines = 2;
-let minh = n_scroll_lines+1;
-if (termobj.h < minh){
-	cberr(`Need height >= ${minh}!`);
-	return;
-}
-killreg(cb=>{
-	if (!killed) {
-		if (ws) {
-			ws.send("Abort");
-			setTimeout(()=>{
-				ws.close();
-			}, 250);
-		}
-		termobj.getch_loop(null);
-		finish_writing();
-	}
-	cb&&cb();
-	killed = true;
-})
-termobj.getch_loop(ch=>{
-	if (termobj.h < minh) return;
-}, n_scroll_lines, minh);
-stat();
-
-
-};//»
-
-//Startup«
-let port = 20003;
-
-let opts=failopts(args,{s:{p:3, n:1},l:{port:3,name:1}});
-if (!opts) return;
-if (opts.name||opts.n) get_name = "_NAME";
-let portarg = opts.port||opts.p;
-if (portarg){
-	let portnum = portarg.pi({MIN:1024, MAX: 65535});
-	if (!Number.isFinite(portnum)) return cberr("Invalid port");
-	port = portnum;
-}
-
-let arg = args.shift();
-if (!arg) return cberr("No arg given!");
-let url;
-try{
-	url = new URL(arg);
-}
-catch(e){
-	return cberr(e.message);
-}
-if (!url.hostname.match(/youtube.com$/)) return cberr("Does not appear to be a youtube.com link!");
-let params = url.searchParams;
-let vid = params.get("v");
-//let list = params.get("list");
-//let ind = params.get("index");
-//if (!vid)
-if (vid && vid.match(/^[-_a-zA-Z0-9]{11}$/)){
-	initloop();
-	startws();
-}
-else cberr("BARFID");
-//»
 
 },//»
 
@@ -891,6 +600,285 @@ wout("Zloyyyymoooooo!!!!!!!!!");
 
 },//»
 
+YTDL:async()=>{//«
+
+/*
+
+Do a nice little getch_loop here, using the bottom 1 (or 2) line(s) for "app" status/instructions.
+
+We can use
+
+*/
+//xTODOx Clean up everything in svcs/ytdl.js (remove the /tmp/yt-dl upon finishing the download...)
+
+
+let chunks=[];
+let fname;
+let ws;
+let killed = false;
+let get_name="";
+let path = `/home/${ENV.USER}/Downloads`;
+let fullpath, partpath;
+let tot_bytes_written=0;
+let writing=false;
+let got_error=false;
+await fs.mkDir(path);
+
+/*
+const INSTRUCTIONS_LINE = `Press whatever for whatever!`;
+const stat = (s)=>{//«
+	if (s) log(s);
+	if (!s) s = "";
+	termobj.stat_render([s, INSTRUCTIONS_LINE]);
+};//»
+*/
+const doend=()=>{//«
+	if (ws) ws.close();
+//	termobj.getch_loop(null);
+	cbok();
+	killed = true;
+};//»
+const abort=()=>{//«
+	if (ws&&!killed) {
+		ws.send("Abort");
+		setTimeout(doend, 250);
+	}
+	killed = true;
+};//»
+
+const trywrite=()=>{//«
+	return new Promise(async(Y,N)=>{
+		if (writing) return Y(true);
+		let chunk = chunks.shift();
+		if (!chunk) return Y();
+		writing = true;
+		if (!await fs.writeFile(partpath, chunk, {append: true})){
+cerr(`Could not write to ${partpath}`);
+		}
+		tot_bytes_written+=chunk.size;
+		writing = false;
+		Y(true);
+	})
+};//»
+const finish_writing=()=>{//«
+	return new Promise(async(Y,N)=>{
+		let iter=0;
+		while (await trywrite()){
+			iter++;
+			if (iter > 1000){
+cerr("Infinite looper????");
+				break;
+			}
+		}
+//cwarn("Bytes written: ", tot_bytes_written);
+		Y();
+	});
+};//»
+const saveit=async()=>{//«
+	if (!fullpath) return doend();
+	await finish_writing();
+	werr(`Moving to: '${fullpath}'...`);
+	if (!await fs.mvFileByPath(partpath, fullpath)){
+		werr("Failed!");
+	}
+//	await fs.writeFile(fullpath, new Blob(chunks));
+	cbok();
+	if (ws) {
+		ws.send("Cleanup");
+		setTimeout(()=>{
+			ws.close();
+		}, 250);
+	}
+//    termobj.getch_loop(null);
+};//»
+const startws=()=>{//«
+
+ws = new WebSocket(`ws://${window.location.hostname}:${port}/`);
+
+ws.onopen=()=>{//«
+//log(`VID${get_name}:${vid}`);
+ws.send(`VID${get_name}:${vid}`);
+
+};//»
+ws.onclose = ()=>{//«
+
+//log('disconnected');
+if (!killed) {
+	werr("Unexpectedly closing...");
+	cberr();
+//	termobj.getch_loop(null);
+}
+
+};//»
+ws.onmessage = async e =>{//«
+
+let dat = e.data;
+//log(dat);
+if (dat instanceof Blob) {
+	chunks.push(dat);
+	trywrite();
+	return 
+}
+else if (!(typeof dat === 'string')){
+	cerr("What the hell in onmessage???");
+	log(dat);
+	return;
+}
+let obj;
+try{
+	obj = JSON.parse(dat);
+}
+catch(e){
+	cerr("What the hell no good JSON in onmessage???");
+	log(dat);
+	return;
+}
+
+if (obj.out){
+	let s = obj.out.replace(/\n$/,"");
+//	if (s.match(/^\[download\]/)) stat((s.split("\n").pop()));
+	if (s.match(/^\[download\]/)) wclerr((s.split("\n").pop()));
+	else werr(s);
+//	else stat(s);
+}
+else if (obj.err) {
+
+let s = obj.err;
+if (s.match(/^WARNING: ffmpeg-location \/blah/)||s.match(/^WARNING: [-_0-9a-zA-Z]{11}: writing DASH/)){}
+
+else {
+/*
+
+Need to handle errors:
+
+ERROR: unable to download video data: <urlopen error [Errno -3] Temporary failure in name resolution>
+
+Also, the "403 Forbidden" one...
+
+*/
+let err = obj.err;
+if (err.match(/ERROR:/)) got_error = true;
+werr(obj.err);
+
+}
+
+}
+else if (obj.name) {
+	if (obj.resume){
+cwarn("Resuming...");
+return;
+	}
+	fname = obj.name;
+	fullpath = `${path}/${fname}`;
+	partpath = `${fullpath}.part`;
+	if (get_name) {
+		wout(fname);
+		doend();
+		return;
+	}
+	
+	if (await fs.pathToNode(fullpath)){
+		werr(`The file already exists: ${fullpath}`);
+		doend();
+		return;
+	}
+
+	let rv = await fs.pathToNode(partpath);
+	if (rv){
+		if (!Number.isFinite(rv.SZ)){
+			werr(`Want to resume download, but no 'SZ' in node!`);
+			doend();
+		}
+		else {
+			tot_bytes_written = rv.SZ;
+			werr(`Resume download @${rv.SZ}`);
+			ws.send("Abort");
+			let fname = fullpath.split("/").pop();
+			setTimeout(()=>{ws.send(`VID:${vid} ${fname} ${rv.SZ}`);}, 250);
+		}
+		return;
+	}
+
+}
+else if (obj.done) {
+	saveit();
+}
+else{
+cwarn("WHAT IS THIS???");
+log(obj);
+}
+
+};//»
+
+}//»
+const initloop=()=>{//«
+
+let n_scroll_lines = 2;
+let minh = n_scroll_lines+1;
+if (termobj.h < minh){
+	cberr(`Need height >= ${minh}!`);
+	return;
+}
+killreg(cb=>{
+	if (!killed) {
+		if (ws) {
+			ws.send("Abort");
+			setTimeout(()=>{
+				ws.close();
+			}, 250);
+		}
+//		termobj.getch_loop(null);
+		finish_writing();
+	}
+	cb&&cb();
+	killed = true;
+})
+/*
+termobj.getch_loop(ch=>{
+	if (termobj.h < minh) return;
+}, n_scroll_lines, minh);
+stat();
+*/
+
+};//»
+
+//Startup«
+let port = 20003;
+
+let opts=failopts(args,{s:{p:3, n:1},l:{port:3,name:1}});
+if (!opts) return;
+if (opts.name||opts.n) get_name = "_NAME";
+let portarg = opts.port||opts.p;
+if (portarg){
+	let portnum = portarg.pi({MIN:1024, MAX: 65535});
+	if (!Number.isFinite(portnum)) return cberr("Invalid port");
+	port = portnum;
+}
+
+let arg = args.shift();
+if (!arg) return cberr("No arg given!");
+let url;
+try{
+	url = new URL(arg);
+}
+catch(e){
+	return cberr(e.message);
+}
+if (!url.hostname.match(/youtube.com$/)) return cberr("Does not appear to be a youtube.com link!");
+let params = url.searchParams;
+let vid = params.get("v");
+//let list = params.get("list");
+//let ind = params.get("index");
+//if (!vid)
+if (vid && vid.match(/^[-_a-zA-Z0-9]{11}$/)){
+	initloop();
+	startws();
+}
+else cberr("BARFID");
+//»
+
+}//»
+
 }
 
 if (!comarg) return Object.keys(COMS);
@@ -918,9 +906,8 @@ const{
 
 //»
 
-
-//const bufferToWave=(abuffer, len)=>{
 const bufferToWave=(abuffer)=>{//«
+//const bufferToWave=(abuffer, len)=>{
   const setUint16=(data)=>{view.setUint16(pos,data,true);pos+=2;};
   const setUint32=(data)=>{view.setUint32(pos,data,true);pos+=4;};
 	let numOfChan = abuffer.numberOfChannels;
@@ -966,7 +953,6 @@ const bufferToWave=(abuffer)=>{//«
   return new Blob([buffer], {type: "audio/wav"});
 
 }//»
-
 
 COMS[comarg](args);
 

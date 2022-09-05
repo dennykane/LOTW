@@ -1,13 +1,17 @@
+/*Recursive copying of remote folders!!!«
 
+@AIUTBNDHJEK
 
-/*XXX FIXED ERROR @WONTYDJPO??? XXX
+»*/
+
+/*XXX FIXED ERROR @WONTYDJPO??? XXX«
 Could not move links because mv_by_path calls get_fs_ent_by_path, which calls get_fs_by_path,
 with ENT: true. But this calls path_to_obj, which will automatically deref a link UNLESS IT
 IS INSTRUCTED NOT TO VIA THE 'GETLINK' flag passed in as an option..
 
-*/
+»*/
 
-/*If there is a desktop or shell already open, we can open in readonly mode, which means than the
+/*If there is a desktop or shell already open, we can open in readonly mode, which means than the«
 fs calls will fail:
 
 SAVE_FS_FILE
@@ -23,7 +27,8 @@ GET_OR_MAKE_DIR
 RM_FS_FILE
 MV_BY_PATH
 
-*/
+»*/
+
 export const mod = function(Core, root) {
 
 //Imports«
@@ -1634,8 +1639,10 @@ return new Promise((y,n)=>{//«
 
 };//»
 
-this.com_mv = (shell_exports, args, if_cp, dom_objects) => {//«
-	const {
+this.com_mv = (shell_exports, args, if_cp, dom_objects, recur_opts) => {//«
+
+//Init«
+	let {
 		respbr,
 		werr,
 		wout,
@@ -1648,6 +1655,14 @@ this.com_mv = (shell_exports, args, if_cp, dom_objects) => {//«
 		get_var_str,
 		termobj,
 	} = shell_exports;
+
+	let use_dest_path="";
+	if (recur_opts){
+		cbok = recur_opts.cbok;
+		cberr = recur_opts.cberr;
+//		use_dest_path = recur_opts.dest_path;
+	}
+
 	let wclerr = shell_exports.wclerr;
 	if (!wclerr) wclerr=NOOP;
 	let {
@@ -1696,11 +1711,12 @@ console.warn("NOT PASSING IN path_to_obj!!!");
 		icon_obj = dom_objects.ICONS;
 		towin = dom_objects.WIN;
 	}
-	const start_moving = (destret) => {
+//»
+	const start_moving = (destret) => {//«
 		let errarr = [];
 		let mvarr = [];
 		iter = -1;
-		const domv = async () => {
+		const domv = async () => {//«
 			iter++;
 			if (iter == mvarr.length) {
 				if (Desk && !dom_objects) Desk.update_folder_statuses();
@@ -1724,6 +1740,7 @@ console.warn("NOT PASSING IN path_to_obj!!!");
 				let gotfrom, gotto;
 				let savedirpath;
 				let savename;
+
 //»
 				if (destret) {//«
 					if (destret.APP == FOLDER_APP) {
@@ -1736,7 +1753,8 @@ console.warn("NOT PASSING IN path_to_obj!!!");
 						savedirpath = get_path_of_object(destret.par);
 						savename = destret.NAME;
 					}
-				} else {
+				}
+				else {
 					topath = topatharg;
 					gotto = _get_fullpath(topath, cur_dir);
 					let arr = gotto.split("/");
@@ -1771,6 +1789,7 @@ if (LINK_RE.test(gotto)){
 	return;
 }
 }
+
 				path_to_obj(savedirpath, async savedir => {//«
 					if (!savedir) {
 						werr(savedirpath + ":no such directory");
@@ -1788,7 +1807,51 @@ if (LINK_RE.test(gotto)){
 						return;
 					} else {
 
-if (type == "www") {
+
+if (type!=="fs" && app === FOLDER_APP){
+
+let nm = fent.NAME;
+if (savedir.KIDS[nm]){
+	gotfail=true;
+	werr(`refusing to clobber: ${nm}`);
+	domv();
+	return;
+}
+if (dom_objects){
+	gotfail=true;
+	werr(`${nm}: please copy from the terminal`);
+	domv();
+	return;
+}
+
+let newpath = `${savedir.fullpath}/${nm}`;
+if (!await touchDirProm(newpath)){
+	gotfail=true;
+	werr(`${newpath}: there was a problem creating the folder`);
+	domv();
+	return;
+}
+if (!fent.done) await popDir(fent);
+let arr = [];	
+let KIDS=fent.KIDS;
+for (let k in KIDS){
+	if (k=="."||k=="..") continue;
+	arr.push(KIDS[k].fullpath);
+}
+arr.push(newpath);
+let obj = {
+	cbok: domv,
+	cberr: () => {
+		gotfail = true;
+		domv();
+	}
+};
+this.com_mv(shell_exports, arr, true, null, obj);
+return;
+
+}
+
+if (type == "www") {//«
 	let rv = await fetch(frompath);
 	if (!rv.ok){
 		werr("Could not fetch the file");
@@ -1799,7 +1862,7 @@ if (type == "www") {
 	if (!dom_objects) mv_desk_icon(gotfrom, gotto, app);
 	domv();
 	return;
-}
+}//»
 
 						if (type == "local") {//«
 							let saver = new FileSaver();
@@ -1898,7 +1961,7 @@ if (type == "www") {
 								}, force);
 							});
 						}//»
-						else {
+						else {//«
 							mv_by_path(gotfrom, gotto, app, (parobj, kidobj) => {
 								if (!parobj) werr("Could not " + verb + " from " + frompath + " to " + topath+"!");
 								else {
@@ -1911,12 +1974,13 @@ if (type == "www") {
 								}
 								domv();
 							}, if_cp, is_root);
-						}
+						}//»
 					}
 				});//»
+
 			}
-		};
-		const getobj = () => {
+		};//»
+		const getobj = () => {//«
 			iter++;
 			if (iter == args.length) {
 				iter = -1;
@@ -1938,7 +2002,7 @@ if (type == "www") {
 				else {
 					let srctype = srcret.root.TYPE;
 					if (srcret.treeroot || (srcret.root == srcret)) mvarr.push({
-						ERR: "Skipping:\x20" + fname
+						ERR: "Skipping 'root' folder:\x20" + fname
 					});
 					else if ((srctype == "www" || srctype == "local") && !if_cp) mvarr.push({
 						ERR: com + ":\x20" + fname + ":\x20cannot move from the remote directory"
@@ -1946,13 +2010,17 @@ if (type == "www") {
 					else if (!(srctype == "fs" || srctype == "local" || srctype == "www")) mvarr.push({
 						ERR: com + ":\x20" + fname + ":\x20cannot " + verb + " from directory type:\x20" + srctype
 					});
+//AIUTBNDHJEK
+//					else if (srctype !=="fs" && srcret.APP == FOLDER_APP) mvarr.push({
+//						ERR: com + ":\x20" + fname + ":\x20cannot (yet) copy remote folders"
+//					});
 					else mvarr.push([fname, srcret]);
 				}
 				getobj();
 			}, true);//»
-		};
+		};//»
 		getobj();
-	};
+	};//»
 	path_to_obj(topatharg, destret => {//«
 		if ((args.length > 1) && (!destret || (destret.APP != FOLDER_APP))) {
 			serr("Invalid destination path:\x20" + topatharg);
@@ -1970,6 +2038,7 @@ if (type == "www") {
 		}
 		start_moving(destret);
 	});//»
+
 }//»
 
 

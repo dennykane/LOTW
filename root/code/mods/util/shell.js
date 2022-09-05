@@ -3257,10 +3257,10 @@ const wout = (obj, arg, if_no_refresh) => {
 	else if (isstr(obj)){
 		if (col_obj) {
 			col_obj.unshift(obj.length);
-//FSPOEIREBG					vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv ?????
+//FSPOEIREBG					vvvvvvvvvvvvvvvvvvvvv ?????
 			useobj = {t:"lines",lines: fmt_lines(obj), colors:[{"0":col_obj}]}
 		}
-//													  vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv  !!!!!!!
+//													  vvvvvvvvvvvvvvvvvvvvv !!!!!
 		else if (obj.match(/\n/)) useobj = {t:"lines",lines: fmt_lines(obj)}
 	}
 	let ret = sys_write({
