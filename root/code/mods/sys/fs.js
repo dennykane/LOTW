@@ -1654,8 +1654,15 @@ this.com_mv = (shell_exports, args, if_cp, dom_objects, recur_opts) => {//«
 		is_root,
 		get_var_str,
 		termobj,
+		kill_register
 	} = shell_exports;
-
+	let killed = false;
+	if (kill_register){
+		kill_register(cb=>{
+			killed = true;
+			cb&&cb();
+		});
+	}
 	let use_dest_path="";
 	if (recur_opts){
 		cbok = recur_opts.cbok;
@@ -1718,7 +1725,8 @@ console.warn("NOT PASSING IN path_to_obj!!!");
 		iter = -1;
 		const domv = async () => {//«
 			iter++;
-			if (iter == mvarr.length) {
+			if (killed || iter == mvarr.length) {
+				if (killed) werr("Killed!");
 				if (Desk && !dom_objects) Desk.update_folder_statuses();
 				if (gotfail) return cberr();
 				cbok();
@@ -1808,7 +1816,9 @@ if (LINK_RE.test(gotto)){
 					} else {
 
 
-if (type!=="fs" && app === FOLDER_APP){
+if (type!=="fs" && app === FOLDER_APP){//«
+
+//"Manual recursion" needed in here...
 
 let nm = fent.NAME;
 if (savedir.KIDS[nm]){
@@ -1840,7 +1850,9 @@ for (let k in KIDS){
 }
 arr.push(newpath);
 let obj = {
-	cbok: domv,
+	cbok: ()=>{
+		domv();
+	},
 	cberr: () => {
 		gotfail = true;
 		domv();
@@ -1849,7 +1861,7 @@ let obj = {
 this.com_mv(shell_exports, arr, true, null, obj);
 return;
 
-}
+}//»
 
 if (type == "www") {//«
 	let rv = await fetch(frompath);

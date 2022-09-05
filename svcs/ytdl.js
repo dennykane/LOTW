@@ -67,8 +67,8 @@ const hostname = "localhost";
 let portnum = 20003;
 
 let COMMAND;
-const COMMANDS = ["yt-dlp", "youtube-dl"];
-//const COMMANDS = ["youtube-dl"];
+//const COMMANDS = ["yt-dlp", "youtube-dl"];
+const COMMANDS = ["youtube-dl"];
 
 let use_tmp = os.tmpdir();
 //let use_tmp="/dev/shm";

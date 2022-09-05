@@ -612,6 +612,11 @@ We can use
 //xTODOx Clean up everything in svcs/ytdl.js (remove the /tmp/yt-dl upon finishing the download...)
 
 
+const YTDL_DB_NAME="ytdl";
+const YTDL_DB_VERS=1;
+const YTDL_STORE_NAME="videos";
+let db;
+let vid;
 let chunks=[];
 let fname;
 let ws;
@@ -622,6 +627,8 @@ let fullpath, partpath;
 let tot_bytes_written=0;
 let writing=false;
 let got_error=false;
+let resume_from = null;
+let resume_name = null;
 await fs.mkDir(path);
 
 /*
@@ -632,6 +639,82 @@ const stat = (s)=>{//«
 	termobj.stat_render([s, INSTRUCTIONS_LINE]);
 };//»
 */
+
+const open_db=()=>{//«
+	return new Promise(async(y,n)=>{
+		let req = indexedDB.open(YTDL_DB_NAME, YTDL_DB_VERS);
+		req.onsuccess = function (evt) {
+			db = this.result;
+			y(true);
+		};
+		req.onerror = function (evt) {
+cerr("openDb:", evt.target.errorCode);
+			y();
+		};
+		req.onupgradeneeded = function (evt) {
+log("openDb.onupgradeneeded");
+			let store = evt.currentTarget.result.createObjectStore(YTDL_STORE_NAME,{keyPath: 'id'});
+//			store.createIndex('type', 'type', { unique: false });
+//			store.createIndex('by', 'by', { unique: false });
+//			store.createIndex('time', 'time', { unique: false });
+//			store.createIndex('score', 'score', { unique: false });
+		};
+	});
+}//»
+const get_object_store=(store_name, mode)=>{//«
+//   * @param {string} store_name
+//   * @param {string} mode either "readonly" or "readwrite"
+	let tx = db.transaction(store_name, mode);
+	return tx.objectStore(store_name);
+}//»
+const add_db_item=(obj)=>{//«
+	return new Promise(async(y,n)=>{
+		let store = get_object_store(YTDL_STORE_NAME, 'readwrite');
+		let req;
+		try {
+		  req = store.put(obj);
+		}
+		catch (e) {
+cerr(e);
+			y();
+			return;
+		}
+		req.onsuccess = function (evt) {
+			y(true);
+		};
+		req.onerror = function() {
+cerr("addPublication error", this.error);
+			y();
+		};
+	});
+}//»
+const get_db_item=id=>{//«
+	return new Promise(async(y,n)=>{
+		let store = get_object_store(YTDL_STORE_NAME, 'readonly');
+		if (!store) return y();
+		let req = store.get(id);
+		req.onsuccess=e=>{
+			y(e.target.result);
+		};
+		req.onerror=e=>{
+			cerr(e);
+			y();
+		};
+	});
+}//»
+const rm_db_item=id=>{//«
+	return new Promise(async(Y,N)=>{
+		let store = get_object_store(YTDL_STORE_NAME, 'readwrite');
+		if (!store) return Y();
+		let req = store.delete(id);
+		req.onsuccess = ()=> {Y(true);}
+		req.onerror = (err)=> {
+			Y();
+cerr(err);
+		}
+	});
+}//»
+
 const doend=()=>{//«
 	if (ws) ws.close();
 //	termobj.getch_loop(null);
@@ -682,6 +765,9 @@ const saveit=async()=>{//«
 		werr("Failed!");
 	}
 //	await fs.writeFile(fullpath, new Blob(chunks));
+if (!await(rm_db_item(vid))){
+cerr(`Could not delete: ${vid}`);
+}
 	cbok();
 	if (ws) {
 		ws.send("Cleanup");
@@ -697,7 +783,9 @@ ws = new WebSocket(`ws://${window.location.hostname}:${port}/`);
 
 ws.onopen=()=>{//«
 //log(`VID${get_name}:${vid}`);
-ws.send(`VID${get_name}:${vid}`);
+
+if (resume_name) ws.send(`VID${get_name}:${vid} ${resume_name} ${resume_from}`);
+else ws.send(`VID${get_name}:${vid}`);
 
 };//»
 ws.onclose = ()=>{//«
@@ -776,11 +864,17 @@ return;
 		doend();
 		return;
 	}
-	
+
 	if (await fs.pathToNode(fullpath)){
 		werr(`The file already exists: ${fullpath}`);
 		doend();
 		return;
+	}
+
+	if (!await add_db_item({id: vid, path: partpath})){
+werr("Could not add item  to the database");
+doend();
+return;
 	}
 
 	let rv = await fs.pathToNode(partpath);
@@ -842,6 +936,8 @@ stat();
 
 };//»
 
+if (!await open_db()) return cberr("No database!");
+
 //Startup«
 let port = 20003;
 
@@ -866,13 +962,31 @@ catch(e){
 }
 if (!url.hostname.match(/youtube.com$/)) return cberr("Does not appear to be a youtube.com link!");
 let params = url.searchParams;
-let vid = params.get("v");
+vid = params.get("v");
 //let list = params.get("list");
 //let ind = params.get("index");
 //if (!vid)
+
 if (vid && vid.match(/^[-_a-zA-Z0-9]{11}$/)){
+	let rv = await get_db_item(vid);
+	if (rv){
+		let node = await fs.pathToNode(rv.path);
+		if (!node){
+cwarn(`Could not find path ${rv.path}, deleting db item...`);
+			await rm_db_item(vid);
+		}
+		if (!Number.isFinite(node.SZ)){
+			cberr(`Invalid node.SZ (${node.SZ})!?`);
+			return;
+		}
+		partpath = rv.path;
+		fullpath = partpath.replace(/\.part$/,"");
+		resume_name = node.NAME.replace(/\.part$/,"");
+		resume_from = node.SZ;
+	}
 	initloop();
 	startws();
+
 }
 else cberr("BARFID");
 //»
