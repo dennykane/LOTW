@@ -4930,6 +4930,15 @@ log(fent);
 		SENDEOF: true
 	});
 },
+'time':()=>{
+wout(`${(new Date()+"").split(" ")[4]}`)
+cbok();
+},
+'date':()=>{
+let arr = (new Date()+"").split(" ");
+wout(`${arr[1]}-${arr[2]}-${arr[3]}`)
+cbok();
+},
 'log': async args => {
 /*
 	const dowait=()=>{

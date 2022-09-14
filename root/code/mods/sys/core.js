@@ -406,6 +406,145 @@ const copyarea=mk('textarea');
 
 const gbid=id=>{return document.getElementById(id);};
 const api = (()=>{
+
+
+const DB = function(DB_NAME, DB_VERS){//«
+
+const get_object_store=(mode)=>{let tx = db.transaction(STORE_NAME);return tx.objectStore(STORE_NAME);}
+const need_init=()=>{throw new Error("Did not init the db!");};
+
+let db;
+let did_init;
+let STORE_NAME;
+const thisdb = this;
+this.init=(store_name, keypath, indexes=[])=>{//«
+
+	if (!(api.isStr(DB_NAME)&&Number.isFinite((""+DB_VERS).ppi())&&api.isStr(store_name))) throw new Error("Usage: new DB(db_name(str), db_version(posint), store_name(str))");
+	STORE_NAME = store_name;
+	if (!keypath) keypath = "id";
+cwarn(`store: ${STORE_NAME}, keypath: ${keypath}`);
+for (let ind of indexes) log(ind);
+	return new Promise(async(y,n)=>{
+		let req = indexedDB.open(DB_NAME, DB_VERS);
+		req.onsuccess = function (evt) {
+			db = this.result;
+			did_init = true;
+			y(true);
+		};
+		req.onerror = function (evt) {
+cerr(evt.target.error);
+thisdb.error = evt;
+			y();
+		};
+		req.onblocked = (e) => {
+cerr("onblocked", e);
+			y();
+		};
+		req.onupgradeneeded = function (evt) {
+log("openDb.onupgradeneeded");
+			let store = evt.currentTarget.result.createObjectStore(STORE_NAME,{keyPath: keypath});
+			for (let ind of indexes) store.createIndex(ind.name, ind.name, {unique: !!ind.unique});
+		};
+	});
+}//»
+this.delete_db=()=>{//«
+	return new Promise((Y,N)=>{
+	const DBDeleteRequest = indexedDB.deleteDatabase(DB_NAME);
+		DBDeleteRequest.onerror = e => {
+cerr(e.target.error);
+thisdb.error = e;
+			Y();
+		};
+		DBDeleteRequest.onsuccess = e => {
+			Y(true);
+		};
+	});
+};//»
+this.delete_store=(store_name)=>{//«
+	let did_upgrade;
+	return new Promise(async(y,n)=>{
+		let req = indexedDB.open(DB_NAME, DB_VERS);
+		req.onsuccess = function (evt) {
+			y(did_upgrade);
+		};
+		req.onerror = function (evt) {
+thisdb.error = evt;
+cerr(evt.target.error);
+			y();
+		};
+		req.onblocked = (e) => {
+cerr("onblocked", e);
+thisdb.error = e||"Blocked";
+			y();
+		};
+		req.onupgradeneeded = function (evt) {
+//log("openDb.onupgradeneeded");
+			req.result.deleteObjectStore(store_name);
+			did_upgrade = true;
+		};
+	});
+};//»
+this.add=(obj)=>{//«
+	if (!did_init) return need_init();
+	return new Promise(async(y,n)=>{
+		let store = get_object_store('readwrite');
+		let req;
+		try {
+		  req = store.put(obj);
+		}
+		catch (e) {
+cerr(e);
+			y();
+			return;
+		}
+		req.onsuccess = function (evt) {
+			y(true);
+		};
+		req.onerror = function(e) {
+thisdb.error = e;
+cerr("addPublication error", this.error);
+			y();
+		};
+	});
+}//»
+this.get=id=>{//«
+	if (!did_init) return need_init();
+	return new Promise(async(y,n)=>{
+		let store = get_object_store('readonly');
+		if (!store) return y();
+		let req = store.get(id);
+		req.onsuccess=e=>{
+			y(e.target.result);
+		};
+		req.onerror=e=>{
+thisdb.error = e;
+			cerr(e);
+			y();
+		};
+	});
+}//»
+this.rm=id=>{//«
+	if (!did_init) return need_init();
+	return new Promise(async(Y,N)=>{
+		let store = get_object_store('readwrite');
+		if (!store) return Y();
+		let req = store.delete(id);
+		req.onsuccess = ()=> {Y(true);}
+		req.onerror = (err)=> {
+thisdb.error = err;
+			Y();
+cerr(err);
+		}
+	});
+}//»
+this.close=()=>{//«
+	if (!db) return;
+cwarn("Closing...");
+	db.close();
+	db = null;
+};//»
+
+}//»
 const decompress = (blob, opts = {}) => {//«
 	return new Promise(async (y, n) => {
 		if (!(blob instanceof Blob)) return n("decompress expected Blob");
@@ -530,6 +669,7 @@ const bytesToStr=bytearg=>{let bytes2str=(bytes)=>{let arr=[];for(let i=0;i<byte
 const toStr=dat=>{if(typeof dat==="string" || dat instanceof String)return dat;if(dat instanceof ArrayBuffer || dat.buffer instanceof ArrayBuffer)return bytesToStr(dat);if(dat instanceof Blob)return blobToStr(dat);try{return dat.toString();}catch(e){}console.error("Unknown object in to capi.toStr");};
 
 return {
+db: DB,
 extToApp:(arg)=>{
 	let ext = arg.split(".").pop();
 	let num = EXT_TO_APP_MAP[ext];
@@ -853,7 +993,6 @@ globals.util=util;
 //»
 
 //»
-
 //FS«
 
 const loadFs=(initstep)=>{//«

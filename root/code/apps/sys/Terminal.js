@@ -1,4 +1,6 @@
 /*
+*/
+/*
 
 @ODJTBQIKXH 
 XXX IS IT CORRECT TO DO: 'if (y>=h) {' XXX???
@@ -97,13 +99,14 @@ const DEL_LIBS=[
 //	"synth",
 //	"net",
 //	"fs",
-	"net.hn",
-	"dev.testing",
+//	"net.hn",
+//	"dev.testing",
 //	"js",
 //	"iface",
-	"av"
+//	"av"
 //	"crypto",
 //	"imap"
+"audio.webm"
 ];
 const DEL_MODS=[
 //	"math.trading",
@@ -131,6 +134,9 @@ string get in lines? Also, what puts a single space in?
 */
 ///XXX BADBUG123 (Found 1/23/20 @7:30am)
 //»
+
+//let GREEK_LANG_OK = false;
+let GREEK_LANG_OK = true;
 
 export const app = function (arg) {
 
@@ -164,6 +170,7 @@ termobj.num_prompts=0;
 //»
 //Var«
 
+let terminal_locked  = false;
 const ENV = {PATH:"/bin"}
 
 let is_scrolling = false;
@@ -489,7 +496,7 @@ else skip_factor = got;
 		if (dy < 0) dy = Math.ceil(4*dy);
 		else dy = Math.floor(4*dy);
 if (!dy) {
-cwarn("SKIP", dy);
+//cwarn("SKIP", dy);
 	return;
 }
 		scroll_num += dy;
@@ -559,7 +566,7 @@ const handle_insert=val=>{
 		let code = ch.charCodeAt();
 		if (!(code >= 32 && code <= 126)) {
 			if (code==10) continue;
-			code = 32;
+			if (!ok_alt_lang(ch)) code = 32;
 		}
 		if (code==32) {
 			if (gotspace) continue;
@@ -1011,6 +1018,7 @@ const getgrid=()=>{//«
 		return cerr("DIMS NOT SET");
 	}
 	let usech = "X";
+
 	let str = "";
 	let iter = 0;
 	wrapdiv.over="auto";
@@ -1055,6 +1063,20 @@ log(wrapdiv);
 };//»
 
 this.refresh = render;
+
+//»
+//Langs«
+
+const ok_alt_lang = ch => {//«
+//log(ch);
+	if (GREEK_LANG_OK && ch.match(/[α-ωΑ-Ω]/)) return true;
+//CJK
+//	if (ch.match(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]/)){
+//	}
+//else log("?", ch);
+	return false;
+
+};//»
 
 //»
 //Util«
@@ -1392,12 +1414,17 @@ const resize=()=>{//«
 	let oldh = h;
 	ncols=nrows=0;
 	getgrid();
-	if (!(ncols&&nrows)) return;
+	if (!(ncols&&nrows)) {
+		terminal_locked = true;
+		return;
+	}
+	terminal_locked = false;
 	w = ncols;
 	h = nrows;
 	if (!(oldw==w&&oldh==h)) do_fs_overlay();
 	termobj.w = w;
 	termobj.h = h;
+//log(h);
 	line_height = wrapdiv.clientHeight/h;
 	scroll_into_view();
 	scroll_middle();
@@ -3167,6 +3194,8 @@ const check_scrolling=()=>{
 
 const handle=(sym, e, ispress, code, mod)=>{//«
 	let marr;
+//log(terminal_locked);
+	if (terminal_locked) return;
 	if (is_scrolling){
 		if (!ispress) {
 			if (sym.match(/^[A-Z]+_$/)){

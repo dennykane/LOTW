@@ -48,6 +48,9 @@ $ fallocate -l <num> filename // extend file to num bytes (no truncation if file
 
 »*/
 
+const COMMANDS = ["yt-dlp", "youtube-dl"];
+//const COMMANDS = ["youtube-dl"];
+
 //Imports«
 
 const http = require('http');
@@ -67,8 +70,6 @@ const hostname = "localhost";
 let portnum = 20003;
 
 let COMMAND;
-//const COMMANDS = ["yt-dlp", "youtube-dl"];
-const COMMANDS = ["youtube-dl"];
 
 let use_tmp = os.tmpdir();
 //let use_tmp="/dev/shm";
@@ -133,13 +134,16 @@ let lowest_to_highest_WebM_first="249/139/250/140/251/141";
 //Order by container, then quality
 
 let MP4_then_WebM_highest_to_lowest="141/140/139/251/250/249";
-let WebM_then_MP4_highest_to_lowest="251/250/249/141/140/139";
 let MP4_then_WebM_lowest_to_highest="139/140/141/249/250/251";
 let WebM_then_MP4_lowest_to_highest="249/250/251/139/140/141";
+let WebM_then_MP4_highest_to_lowest="251/250/249/141/140/139";
+let WebM_highest_to_lowest="251/250/249";
+let WebM_lowest_to_highest="249/250/251";
 
 //»
 
-let FORMAT_LIST = highest_to_lowest_MP4_first;
+//let FORMAT_LIST = highest_to_lowest_MP4_first;
+let FORMAT_LIST = WebM_lowest_to_highest;
 
 //»
 //Args«
@@ -179,6 +183,19 @@ const nogo=(res, mess)=>{//«
 const okay=(res, usemime)=>{//«
     header(res, 200, usemime);
 }//»
+const exitHandler=(opts, exitCode)=>{//«
+//log("GOTEXIT");	
+//    if (exitCode || exitCode === 0) console.log(exitCode);
+//    if (options.exit) process.exit();
+	if (opts.cleanup) {
+log("Running 'rm -rf /tmp/ytdl-*'");
+		child_process.execSync("rm -rf /tmp/ytdl-*");
+	}
+	process.exit();
+}//»
+
+process.on('exit', exitHandler.bind(null,{cleanup:true}));
+process.on('SIGINT', exitHandler.bind(null, {exit:true}));
 
 //»
 const handle_request=(req,res)=>{//«
@@ -239,6 +256,12 @@ ws.on('message', data=>{//«
 let mess = data.toString();
 let marr;
 let if_name_only = false;
+if (marr=mess.match(/^FILEPATH:(.+)\n?$/)){
+	file_path = marr[1];
+	part_path = `${file_path}.part`;
+log("Got path",file_path);
+	return;
+}
 if (marr = mess.match(/^VID(_NAME)?:([-_a-zA-Z0-9]{11}) ?(.+)?$/)){
 
 did_abort = false;
@@ -281,13 +304,30 @@ let { signal } = ac;
 
 let cur_off = 0;
 if (resume_byte) cur_off = resume_byte;
-
-let com = spawn(COMMAND, ["-f", FORMAT_LIST, "--ffmpeg-location", "/blah/place/weird/hahahaha", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
+//XXXXXXXXXXXXXXXXXXXXX
+let com = spawn(COMMAND, 
+[
+//	"--get-duration",
+//	"--get-thumbnail",
+//	"--get-title",
+//	"--get-description",
+	"-j",
+	"--no-simulate",
+	"-f", FORMAT_LIST, 
+	"--ffmpeg-location", "/blah/place/weird/hahahaha",
+	"--restrict-filenames",
+	"--newline",
+	"-o", template,
+	vidid
+], {
+	signal
+});
 //let com = spawn(COMMAND, ["-f", FORMAT_LIST, "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
 //let com = spawn(COMMAND, ["-f", "141/251/140/250/139/249", "--restrict-filenames" , "--newline", "-o", template ,vidid], {signal});
-let path;
+//let path;
 let fd;
 const read=path=>{//«
+	if (!path) return;
 	let stats = fs.statSync(path);
 	if (!fd) fd = fs.openSync(path);
 	let sz = stats.size - cur_off;
@@ -304,10 +344,10 @@ let marr;
 if (str.match(/^\[download\]/)) {
 
 if (marr = str.match(/(Destination: (\/tmp\/.+))\n?$/)) {
-	path = marr[2];
-	file_path = path;
-	part_path = `${path}.part`;
-	let fname = path.split("/").pop();
+	file_path = marr[2];
+//	file_path = path;
+	part_path = `${file_path}.part`;
+	let fname = file_path.split("/").pop();
 	if (resume_fname && fname !== resume_fname){
 		ws.send(JSON.stringify({err: `Received filename (${fname}) !== resumename (${resume_fname})`}));
 		ac.abort();
@@ -332,7 +372,7 @@ else{
 //		log("Caught", e);
 	}
 	try{
-		read(path);
+		read(file_path);
 		return;
 	}
 	catch(e){
@@ -360,7 +400,7 @@ com.on('close',(code)=>{//«
 	if (did_abort) return;
 //log(`Closed with code: ${code}`);
 	try{
-		read(path);
+		read(file_path);
 	}
 	catch(e){
 //		log("Caught", e);
@@ -393,10 +433,13 @@ else{
 });//»
 });
 log(`${SERVICE_NAME} service listening at wss://${hostname}:${portnum}`);
+log(`Requesting formats: ${FORMAT_LIST}`);
 
 }//»
 
 //Startup«
+
+//child_process.execSync("rm -rf /tmp/ytdl-*");
 
 if (process.env.LOTW_TEST) {
 	COMMAND = COMMANDS[0];

@@ -42,6 +42,80 @@ const COMS = {
 
 'webmfile':async function(){//«
 
+/*«
+
+For the nth Cluster,
+Cues[n]->PointEntry->CueTime == Clusters[n]->ClusterTimeCode
+
+Given a slicing operation:
+
+
+
+
+
+When slicing, should SeekHead stay the same???
+What changes?
+Set Info->Duration to the new Float32
+
+
+const arr_to_num = (arr)=>{let n = 0;for (let i=0; i<arr.length;i++)n|=(arr[i]<<(i*8)); return n;}
+
+arr_to_num([64, 66, 15]); //1000000
+
+atn = arr_to_num
+
+
+NPS: Nanoseconds per second
+nps = 10**9 = 1_000_000_000
+
+SOSS = Size of Segment Size
+Number of bytes to encode the size of the segment in bytes (1-8 bytes)
+
+HOS = Header of Segment
+0x18 0x53 0x80 0x67 + SOSS (5-12 bytes)
+
+BOS = Beginning of Segment (byte offset into the file after the EBML/Header and HOS)
+
+
+DUR: Info->Duration
+
+					   DUR[0]  DUR[1]  DUR[2] DUR[3]
+arr = new Uint8Array([   70  ,  133  ,  234  , 0    ])
+
+(new DataView(arr.buffer)).getFloat32() -> Multiply by TCS
+
+
+
+TCS: Info->TimeCodeScale
+	  	    TCS[2]  TCS[1]  TCS[0] 
+tcs = atn([   64   ,  66   ,  15   ]) => 1000000
+
+TM: TimeMultiplier:
+	tcs/nps => 1000000/nps => 10**-3 => .001 
+
+
+CTC: Cluster->ClusterTimeCode
+
+CT: Cues->CueTime
+	  CT[1]  CT[0]
+atn([  17  , 39  ]) -> 10001
+
+CCP: Cues->CueTrackPosition->CueClusterPosition
+  (For Audio Track, Cues->CueTrackPosition->CueTrack == 1)
+	  CCP[2]   CCP[1]  CCP[0]
+atn([  167  ,   131  ,   2   ]) -> 164775 (byte offset from BOS)
+
+
+
+SB: SimpleBlock
+
+	  SB[2]  SB[1]	
+atn([  208  ,  27   ]) * TM 
+
+
+
+//»*/
+
 //General types anywhere:
 //ec void
 //bf crc32
@@ -54,22 +128,15 @@ let iter=0;
 let done = false;
 let all=[];
 const parse_section=(buf, par)=>{//«
-//log(1);
-//This has to return something!?!?!
 	if (done) return;
 	iter++;
 	if (iter>10000) {
 		cberr("Inifite loop?");
 		return;
 	}
-//log("parse", par);
-
 let c=0;
 let flen = buf.length;
 let rv;
-//let out = par.out;
-//let out = {};
-//par.out=out;
 let kids = [];
 while(1){
 	if (done) return kids;
@@ -105,10 +172,7 @@ while(1){
 	}
 	c+=n;
 	let id = rv;
-	if (!(rv = ebml_sz(buf,c))) {
-//cerr("RETURN!!!");
-		return;
-	}
+	if (!(rv = ebml_sz(buf,c))) return;
 	let bytes = buf.slice(rv[1],rv[0]+rv[1]);
 	if (kid) {//If not "Void" (0xec)
 		kids.push(`${kid.id}:${id}`);
@@ -122,23 +186,13 @@ while(1){
 	}
 	c=rv[0]+rv[1];
 	if (c==flen) break;
-
 }	
-
 return kids;
-//all.push(kids);
-//return out;
-
 };//»
-
-//let file={};
-//log(1);
 let got = parse_section(rv, WEBM);
 log(got);
 //log("DONE",WEBM.kids["18538067"].kids["1f43b675"].kids["a0"].out["a1"]);
 //log(WEBM.kids["18538067"].kids["1f43b675"]);
-//log(WEBM);
-//log(all);
 cbok();
 
 },//»
@@ -1961,7 +2015,7 @@ const read_8byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offs
 const WEBM = {//«
 "id":"WEBM",
 "kids": {
-	"1a45dfa3": {
+	"1a45dfa3": {//HEADER«
 		"id": "HEADER",
 		"kids": {
 			"4286": {"id": "EBMLVERSION"},
@@ -1972,11 +2026,27 @@ const WEBM = {//«
 			"4287": {"id": "DOCTYPEVERSION"},
 			"4285": {"id": "DOCTYPEREADVERSION"}
 		}
-	},
+	},//»
 	"18538067": {
 		"id": "SEGMENT",
 		"kids": {
-			"1549a966": {
+
+			"114d9b74": {//SEEKHEAD«
+				"id": "SEEKHEAD",
+				"kids": {
+					"4dbb": {
+						"id": "SEEKENTRY", 		//MULT
+						"out":[],
+						"mult":true,
+						"kids": {
+							"53ab": {"id": "SEEKID"},
+							"53ac": {"id": "SEEKPOSITION"}
+						}
+					}
+				}
+			},//»
+
+			"1549a966": {//INFO 21«
 				"id": "INFO",
 				"kids": {
 					"2ad7b1": {"id": "TIMECODESCALE"},
@@ -1987,8 +2057,8 @@ const WEBM = {//«
 					"4461": {"id": "DATEUTC"},
 					"73a4": {"id": "SEGMENTUID"}
 				}
-			},
-			"1654ae6b": {
+			},//»
+			"1654ae6b": {//TRACKS 22«
 				"id": "TRACKS",
 				"kids": {
 					"ae": {
@@ -2112,8 +2182,8 @@ const WEBM = {//«
 						}
 					}
 				}
-			},
-			"1c53bb6b": {
+			},//»
+			"1c53bb6b": {//CUES 28«
 				"id": "CUES",
 				"kids": {
 					"bb": {
@@ -2135,51 +2205,8 @@ const WEBM = {//«
 						}
 					}				
 				}
-			},
-			"1254c367": {
-				"id": "TAGS",
-				"kids": {
-					"7373": {"id": "TAG"},
-					"67c8": {"id": "SIMPLETAG"},
-					"45a3": {"id": "TAGNAME"},
-					"4487": {"id": "TAGSTRING"},
-					"447a": {"id": "TAGLANG"},
-					"4484": {"id": "TAGDEFAULT"},
-					"44b4": {"id": "BUG"},
-					"63c0": {"id": "TAGTARGETS"},
-					"63ca": {"id": "TYPE"},
-					"68ca": {"id": "TYPEVALUE"},
-					"63c5": {"id": "TRACKUID"},
-					"63c4": {"id": "CHAPTERUID"},
-					"63c6": {"id": "ATTACHUID"}
-				}
-			},
-			"114d9b74": {
-				"id": "SEEKHEAD",
-				"kids": {
-					"4dbb": {
-						"id": "SEEKENTRY", 		//MULT
-						"out":[],
-						"mult":true,
-						"kids": {
-							"53ab": {"id": "SEEKID"},
-							"53ac": {"id": "SEEKPOSITION"}
-						}
-					}
-				}
-			},
-			"1941a469": {
-				"id": "ATTACHMENTS",
-				"kids": {
-					"61a7": {"id": "ATTACHEDFILE"},
-					"467e": {"id": "FILEDESC"},
-					"466e": {"id": "FILENAME"},
-					"4660": {"id": "FILEMIMETYPE"},
-					"465c": {"id": "FILEDATA"},
-					"46ae": {"id": "FILEUID"}
-				}
-			},
-			"1f43b675": {
+			},//»
+			"1f43b675": {//CLUSTER 31«
 				"id": "CLUSTER",		// MULT
 				"out":[],
 				"mult":true,
@@ -2213,8 +2240,38 @@ const WEBM = {//«
 						}
 					}
 				}
-			},
-			"1043a770": {
+			},//»
+
+			"1254c367": {//TAGS«
+				"id": "TAGS",
+				"kids": {
+					"7373": {"id": "TAG"},
+					"67c8": {"id": "SIMPLETAG"},
+					"45a3": {"id": "TAGNAME"},
+					"4487": {"id": "TAGSTRING"},
+					"447a": {"id": "TAGLANG"},
+					"4484": {"id": "TAGDEFAULT"},
+					"44b4": {"id": "BUG"},
+					"63c0": {"id": "TAGTARGETS"},
+					"63ca": {"id": "TYPE"},
+					"68ca": {"id": "TYPEVALUE"},
+					"63c5": {"id": "TRACKUID"},
+					"63c4": {"id": "CHAPTERUID"},
+					"63c6": {"id": "ATTACHUID"}
+				}
+			},//»
+			"1941a469": {//ATTACHMENTS«
+				"id": "ATTACHMENTS",
+				"kids": {
+					"61a7": {"id": "ATTACHEDFILE"},
+					"467e": {"id": "FILEDESC"},
+					"466e": {"id": "FILENAME"},
+					"4660": {"id": "FILEMIMETYPE"},
+					"465c": {"id": "FILEDATA"},
+					"46ae": {"id": "FILEUID"}
+				}
+			},//»
+			"1043a770": {//CHAPTERS«
 				"id": "CHAPTERS",
 				"kids": {
 					"45b9": {"id": "EDITIONENTRY"},
@@ -2234,7 +2291,8 @@ const WEBM = {//«
 					"4598": {"id": "CHAPTERFLAGENABLED"},
 					"63c3": {"id": "CHAPTERPHYSEQUIV"}
 				}
-			}
+			}//»
+
 		}
 	}
 }
