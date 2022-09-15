@@ -100,7 +100,7 @@ const DEL_LIBS=[
 //	"net",
 //	"fs",
 //	"net.hn",
-//	"dev.testing",
+"dev.testing",
 //	"js",
 //	"iface",
 //	"av"
@@ -356,6 +356,7 @@ this.onkill = (if_dev_reload)=>{//«
 	execute_kill_funcs();
 
 if (if_dev_reload) {
+log(`Deleting ${DEL_MODS.length} mods, ${DEL_LIBS.length} libs, ${DEL_COMS.length} coms`);
 	delete_mods();
 	delete_libs();
 	delete_coms();
@@ -1092,18 +1093,21 @@ const focus_or_copy=()=>{
 };
 const delete_coms=()=>{
 	for (let l of DEL_COMS){
+//log("com", l);
 		delete NS.coms[l];
 		NS.coms[l]=undefined;
 	}
 };
 const delete_libs=()=>{
 	for (let l of DEL_LIBS){
+//log("lib", l);
 		delete NS.libs[l];
 		NS.libs[l]=undefined;
 	}
 };
 const delete_mods=()=>{
 	for (let m of DEL_MODS){
+//log("mod", m);
 		delete NS.mods[m];
 		NS.mods[m]=undefined;
 	}

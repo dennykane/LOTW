@@ -1,14 +1,22 @@
-/*
+/*«
 
-VERY STUPID HACK @WHTYUFNHD!!! This was (or looks like it was) the last thing I needed
-to figure out to get this to "just work".  I didn't know how to figure out the exact
-place for the new cluster_end (there were 1 off issues for some cases but not for 
-others.) I thought the answer might have had something to do with the issue @LNFHTYJHO ???
-Regardless, I just wanted to get something finally working after about 1 week of this stuff,
-and maybe this is it...
+XXX EDGE CASE ERROR XXX:
 
-*/
-//«
+ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.01 => 98067 bytes 14.68s == OK
+
+What is really going on here to screw up the algorithm?
+ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.001 => 161713 bytes 24.68 + time reported as much longer...
+ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.0001 => 161713 bytes 24.68 + time reported as much longer...
+ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.00001 => 161713 bytes 24.68 + time reported as much longer...
+
+ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.002 => 98067 bytes 14.68s == OK
+
+Solution: 
+//@QIURTMCSL Took out this weird/crazy idea
+//if (tm%2) tm-=1;
+
+
+»*/
 /*//«
 
 https://matroska-org.github.io/libebml/specs.html
@@ -20,7 +28,6 @@ streaming purposes. However, avoid using this reserved word unnecessarily,
 because it makes parsing slower and more difficult to implement.
 
 //»*/
-//»
 
 export const lib = (comarg, args, Core, Shell)=>{//«
 
@@ -31,7 +38,6 @@ const COMS = {
 ZBLERJ:async()=>{//«
 
 //Var«
-
 
 let rv;
 let MAX_ITERS=10000;
@@ -70,6 +76,8 @@ let end_time = opts.end||opts.e;
 if (!(start_time || end_time)) return cberr("Nothing to do!");
 if (start_time==="-") start_time=0;
 else{
+//SJUOPUEA
+//	start_time=parseFloat(Math.round(100*start_time)/100);
 	start_time=parseFloat(start_time);
 	if (!Number.isFinite(start_time) && start_time>=0) return cberr("Invalid start");
 }
@@ -200,15 +208,13 @@ timemult = timecodescale/10**9;
 }
 if (end_time==="-") end_time=duration;
 else{
+//QMNUYEKS
+//	end_time=parseFloat(Math.round(100*end_time)/100);
 	end_time=parseFloat(end_time);
 	if (!(Number.isFinite(end_time) && end_time>start_time && end_time <= duration)) return cberr("Invalid end_time");
 }
 if (start_time == 0 && end_time >= duration) return cbok("Nothing to do!");
 let end_timestamp = (end_time - start_time)/timemult;
-//log(end_timestamp);
-//let end_timestamp = duration*timemult;
-//log(duration);
-//log(end_timestamp);
 //»
 //Tracks«
 rv = await fs.readFile(fullpath, {binary: true, start:tracks_start, end:tracks_start+12});
@@ -236,9 +242,9 @@ for (let i=0; i < ents.length-1; i+=2){
 	if (ents[i]!=="POINTENTRY:bb") return exit(`E15-${i}`);
 	let ent = ents[i+1];
 	if (!(ent[0]==="CUETIME:b3"&&ent[2]==="CUETRACKPOSITION:b7")) return exit(`E16-${i}`);
-//	let tm = toint(ent[1])*timemult;
 	let tm = toint(ent[1]);
-	if (tm%2) tm-=1;
+//QIURTMCSL
+//	if (tm%2) tm-=1;
 	let tr = ent[3];
 
 	if (!(tr[0]==="CUETRACK:f7"&&tr[2]=="CUECLUSTERPOSITION:f1")) return exit("E20");
@@ -272,6 +278,8 @@ rv = ebml_sz(rv, 4);
 
 end_cluster_plus1 = from + rv[0] + rv[1];
 
+//log(start_cluster , end_cluster, end_cluster_plus1);
+
 }//»
 {//Update Cluster times/Zero out excess blocks and create cluster time/pos array for new Cues«
 
@@ -292,13 +300,10 @@ let did_slice_end;
 while(true){//«
 	if (iter > MAX_ITERS) return exit("E22");
 	if (!(a[cur_off]===0x1f && a[cur_off+1]===0x43 && a[cur_off+2]===0xb6 && a[cur_off+3]===0x75)) {
-//log("CUROFF", cur_off);
-//log(tohex(a.slice(cur_off, cur_off+20)));
 		return exit(`E23-${iter}`);
 	}
 	last_cluster_pos = cur_off;
 	rv = ebml_sz(a, cur_off+4);
-
 	let cluster_sz_len = rv[1]-4;
 	let cluster_sz_pos = cur_off+4;
 
@@ -307,25 +312,22 @@ while(true){//«
 	let cluster_begin = rv[1];
 	let cluster_end = cluster_sz+cluster_begin;
 	last_cluster_end = cluster_end;
-	if (a[rv[1]]===0xe7){
-
+	if (a[rv[1]]===0xe7){//«
 //Get the size of the CLUSTERTIMECODE element
 		let rv2 = ebml_sz(a, rv[1]+1);
-		let tmcodestart = rv[1]+2;
-//log(tmcodestart);
+		let tmcodestart = rv2[1];
 		let tmcodeend = tmcodestart+rv2[0];
 //Get the current time
 		let curtmarr = a.slice(tmcodestart, tmcodeend);
 		let usecurtmarrlen = curtmarr.length;
-//log(usecurtmarrlen);
 		let curtm = toint(curtmarr);
 		if (curtm*timemult >= end_time) break;
 //Create a zero'd out new time array with the length of the current one (so cluster array stays the same)
 		let newtmarr = new Uint8Array(curtmarr.length);
-//log(curtmarr.length);
+
 //If this is the first cluster, set it to first_time.
 //Also, if the start time is not aligned with the cluster timestamp,
-//zero out the excess beginning blocks and resequence the rest of them
+//remove the excess beginning blocks and resequence the rest of them
 
 		if (!Number.isFinite(first_time)) {//«
 
@@ -336,10 +338,10 @@ let excess_start_blocks = Math.floor(d4/MS_PER_WEBM_BLOCK);
 if (a[tmcodeend]!==0xa3){//Looking for clusters like: timecode + simpleblock1 + simpleblock2...
 	return exit("E26");
 }
-//cwarn(`Remove: ${excess_start_blocks} from beginning starting @${tmcodeend}`);
 {//Zero out excess_start_blocks from the beginning of the first cluster (and after end if needed)«
 	let coff = tmcodeend;
 	let itr = 0;
+//Scan forward to tne end of excess blocks
 	while(itr < excess_start_blocks){
 		if (!(a[coff]===0xa3)) {
 			return exit(`E27-${itr}`);
@@ -349,61 +351,31 @@ if (a[tmcodeend]!==0xa3){//Looking for clusters like: timecode + simpleblock1 + 
 		itr++;
 	}
 
-///*
+
+//Slice out the hole and create the smaller clusters array
 {
-
 let new_cluster_sz = cluster_sz-coff+tmcodestart;
-let cluster_sz_diff = cluster_sz - new_cluster_sz;
-
 let cluster_remainder = a.slice(coff);
 let new_clusters = new Uint8Array(cluster_remainder.length+tmcodeend);
-let diff = new_clusters.length - (cluster_remainder.length+tmcodeend);
-if(diff){
-	cberr(`ERGHGHGH: ${diff}`);
-	return;
-}
-
-
-let newszarr = num_to_ebml_arr(new_cluster_sz, cluster_sz_len);
-clusters.set(newszarr, 4);
+clusters.set(num_to_ebml_arr(new_cluster_sz, cluster_sz_len), 4);
 new_clusters.set(clusters.slice(0, tmcodeend));
 new_clusters.set(cluster_remainder, tmcodeend);
-
-//How do we get the correct end of the cluster?
-
 clusters = new_clusters;
 a = clusters;
-cluster_end = new_cluster_sz+cluster_begin+2;
-{
-	let i = cluster_end;
-//WHTYUFNHD
-	for (i=cluster_end; i<cluster_end+5; i++){
-		if ((a[i]===0x1f && a[i+1]===0x43 && a[i+2]===0xb6 && a[i+3]===0x75)) break;
-	}
-	cluster_end = i;
-}
+cluster_end-=coff-tmcodeend;
 coff = tmcodeend;
-
-
 }
-
-//*/
-
-/*Old "zero out" with Void (0xec) method«
-	a[tmcodeend] = 0xec;
-	a[tmcodeend+1]=0x8;
-	let zerolen = coff - tmcodeend - 5;
-	let dffarr = num_to_arr(zerolen - 1, 4);
-	let zeros = new Uint8Array(zerolen-1);
-	a.set(dffarr, tmcodeend+2);
-	a.set(zeros, tmcodeend+6);
-»*/
 
 	itr=0;
-	while(true){
+//This iterates through the rest of our first/current cluster to see of the end is contained within it
+//I suppose a more subtle method can be used via timestamps
+	while(true){//«
 		if (itr > 10000) return exit("!?!?!?!?");
 		if (!(a[coff]===0xa3)) {
-			if (a[coff]==0x1f&&a[coff+1]==0x43&&a[coff+2]==0xb6&&a[coff+3]==0x75) break;
+			if (a[coff]==0x1f&&a[coff+1]==0x43&&a[coff+2]==0xb6&&a[coff+3]==0x75) {
+
+				break;
+			}
 			if (a[coff]===0xa0){
 				let r3 = ebml_sz(a, coff+1);
 				let d3 = a.length - (coff+r3[0]);
@@ -418,31 +390,21 @@ cwarn("We have an ending BLOCKGROUP");
 		let newtm = itr*20;
 //If this block is past the end, truncate the cluster
 		if (newtm >= end_timestamp){//«
-//YTPOMDJHNF
-//cwarn("Got end in the first cluster!");
 			did_slice_end = true;
-
-
 let cluster_sz_pos = last_cluster_pos+4;
 let r = ebml_sz(a, cluster_sz_pos);
 let cluster_sz_len = r[1]-last_cluster_pos-4;
-//let cur_cluster_sz = r[0];
-
 let l = cluster_sz_len;
 let new_cluster_len = coff-cluster_sz_pos-4;
-
 {
 let ch = a[cluster_sz_pos+l+new_cluster_len+1];
-//cwarn(`Using new_cluster_len == ${new_cluster_len}....`);
 if (ch===0xa3||ch===0xa0){
-//log("Seems good!");
 }
 else{
 cerr("Something's wrong! What is the hex number below");
 log("0x"+((ch).toString(16)).padStart(2,"0"));
 }
 }
-
 let arr = num_to_arr(new_cluster_len, l);
 if (l==8) arr[0]|=0x1;
 else if (l==7) arr[0]|=0x2;
@@ -453,56 +415,31 @@ else if (l==3) arr[0]|=0x20;
 else if (l==2) arr[0]|=0x40;
 else if (l==1) arr[0]|=0x80;
 a.set(arr, cluster_sz_pos);
-
 clusters=a.slice(0, coff);
-
-
-
-
-//			clusters=a.slice(0, coff);
-			a = clusters;
-
-/*
-			a[coff] = 0xec;
-			a[coff+1]=0x8;
-			let zroln = cluster_end - coff - 5;
-			let dffarr = num_to_arr(zroln - 1, 4);
-			let zros = new Uint8Array(zroln-1);
-			a.set(dffarr, coff+2);
-			a.set(zros, coff+6);
-*/
-
-/*@GWPINMYDH
-*/
-
+a = clusters;
+//log(itr);
 			break;
 		}//»
-
 		a.set(num_to_arr(newtm, 2), r[1]+1);
 		coff=r[0]+r[1];
 		itr++;
-	}
-}//»
+	}//»
 
+}//»
 }
 
 			first_time = curtm;
 		}//»
 
 		let newtime = curtm-first_time;
-
 		if (newtime) newtime -= first_time_delta;
 		last_cluster_tm = newtime;
 		let numarr = num_to_arr(newtime);
-
 		newtmarr.set(numarr, usecurtmarrlen-numarr.length);
 		a.set(newtmarr, tmcodestart);
-//JUWPLJFSA
 		cluster_positions.push(newtime, cur_off);
-	}
+	}//»
 	else return exit("E23");
-//	cur_off=rv[0]+rv[1];
-//MQLKFURNCJ
 	cur_off = cluster_end;
 	let diff = a.length - cur_off;
 	if (!diff) break;
@@ -515,30 +452,16 @@ iter++;
 }//»
 
 if (!did_slice_end){//«
-
 //The final timestamp in the final cluster will have this time.
 //Slice everthing past it...
 let itr=0;
-//cwarn("!!!!!");
-
-
-//Depending on the size of the CLUSTERTIMECODE, we can have 1/2/3 off issues here...
-//Why is it hardcoded as 4?
-//4 is the length of a full CLUSTERTIMECODE field like this:
-// 0xe7 0x82 0x71 0x49
-//But 5 is the length of a CLUSTERTIMECODE field like this:
-//0xe7 0x83 0x00 0x98 0x59
 //LNFHTYJHO
 let usen = parseInt(tohex(a.slice(last_cluster_pos+8, last_cluster_pos+9))[1])+2;
-//log(usen);
 let cluster_sz_pos = last_cluster_pos+4;
 let r = ebml_sz(a, cluster_sz_pos);
-//log(r);
 let cluster_sz_len = r[1]-last_cluster_pos-4;
 let cur_cluster_sz = r[0];
-//log(r);
 let coff = r[1]+usen;
-//let cluster_data_pos = coff;
 
 while(true){
 	if (itr > 10000) return exit("#!#!#!#!#!");
@@ -553,22 +476,16 @@ cwarn("We have an ending BLOCKGROUP");
 				return exit("E30");
 			}
 		}
-//cwarn("Looking for 0xa3...  OR  0x1f 0x43 0xb6 0x75...");
-//log("COFF", coff);
-//log("Remainder:",a.length-coff);
 log(tohex(a.slice(coff, coff+20)));
 		return exit(`E31-${itr}`);
 	}
 	let r = ebml_sz(a, coff+1);
 	let newtm = last_cluster_tm+(itr*20);
-//Found the block to stop at, so break loop here.
-//GWPINMYDH
 if (newtm >= end_timestamp){//«
 let l = cluster_sz_len;
 let new_cluster_len = coff-cluster_sz_pos-4;
 {
 let ch = a[cluster_sz_pos+l+new_cluster_len+1];
-//cwarn(`Using new_cluster_len == ${new_cluster_len}....`);
 if (ch===0xa3||ch===0xa0){
 //log("Seems good!");
 }
@@ -589,17 +506,7 @@ else if (l==2) arr[0]|=0x40;
 else if (l==1) arr[0]|=0x80;
 a.set(arr, cluster_sz_pos);
 clusters=a.slice(0, coff);
-/*This is how to "zero out" the final cluster (instead of slicing)...«
-a[coff] = 0xec;
-a[coff+1]=0x8;
-let zroln = last_cluster_end - coff - 5;
-let dffarr = num_to_arr(zroln - 1, 4);
-let zros = new Uint8Array(zroln-1);
-a.set(dffarr, coff+2);
-a.set(zros, coff+6);
-»*/
 break;
-
 }//»
 	coff=r[0]+r[1];
 	itr++;
@@ -676,6 +583,8 @@ for (let cue of cues_arr){
 {//Set Segment size and new Info->Duration«
 let a = num_to_arr(info.length+tracks.length+clusters.length+cues.length);
 segment_head.set(a, 12-a.length);
+//log(end_timestamp);
+//log((end_time-start_time)/timemult);
 let tm = new Uint8Array((new Float32Array([(end_time-start_time)/timemult])).buffer);
 let gotdur;
 let dur_pos;

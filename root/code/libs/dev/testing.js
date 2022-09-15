@@ -10,13 +10,6 @@ To check for videos, we want to see if we have filenames that match /^title/ (wi
 bad characters removed).
 
 */
-/*
-
-
-Code	Country name (using title case)	Year	ccTLD	Notes
-
-
-*/
 /*Youtube API 'fields' parameter syntax«
 
 https://www.googleapis.com/youtube/v3/something?part=skrumpt,cheeg&fields=... 
@@ -39,471 +32,22 @@ export const lib = (comarg, args, Core, Shell)=>{
 
 const COMS={
 
-SETLANGS:()=>{//«
+/*Simple API to spin up indexedDB's.«
 
-const LANGUAGES = {//«
-'afrikaans':'af'	,
-'albanian':'sq',
-'amharic':'am',
-'arabic':'ar',
-'armenian':'hy',
-'azerbaijani':'az',
-'basque':'eu',
-'belarusian':'be',
-'bengali':'bn',
-'bosnian':'bs',
-'bulgarian':'bg',
-'catalan':'ca',
-'chichewa':'ny',
-'corsican':'co',
-'croatian':'hr',
-'czech':'cs',
-'danish':'da',
-'dutch':'nl',
-'english':'en',
-'esperanto':'eo',
-'estonian':'et',
-'filipino':'tl',
-'finnish':'fi',
-'french':'fr',
-'frisian':'fy',
-'galician':'gl',
-'georgian':'ka',
-'german':'de',
-'greek':'el',
-'gujarati':'gu',
-'haitian creole':'ht',
-'hausa':'ha',
-//'hebrew':'iw',
-'hebrew':'he',
-'hindi':'hi',
-'hungarian':'hu',
-'icelandic':'is',
-'igbo':'ig',
-'indonesian':'id',
-'irish':'ga',
-'italian':'it',
-'japanese':'ja',
-'javanese':'jw',
-'kannada':'kn',
-'kazakh':'kk',
-'khmer':'km',
-'korean':'ko',
-'kurdish':'ku',
-'kyrgyz':'ky',
-'lao':'lo',
-'latin':'la',
-'latvian':'lv',
-'lithuanian':'lt',
-'luxembourgish':'lb',
-'macedonian':'mk',
-'malagasy':'mg',
-'malay':'ms',
-'malayalam':'ml',
-'maltese':'mt',
-'maori':'mi',
-'marathi':'mr',
-'mongolian':'mn',
-'burmese':'my',
-'nepali':'ne',
-'norwegian':'no',
-'odia':'or',
-'pashto':'ps',
-'persian':'fa',
-'polish':'pl',
-'portuguese':'pt',
-'punjabi':'pa',
-'romanian':'ro',
-'russian':'ru',
-'samoan':'sm',
-'scots gaelic':'gd',
-'serbian':'sr',
-'sesotho':'st',
-'shona':'sn',
-'sindhi':'sd',
-'sinhala':'si',
-'slovak':'sk',
-'slovenian':'sl',
-'somali':'so',
-'spanish':'es',
-'sundanese':'su',
-'swahili':'sw',
-'swedish':'sv',
-'tajik':'tg',
-'tamil':'ta',
-'telugu':'te',
-'thai':'th',
-'turkish':'tr',
-'ukrainian':'uk',
-'urdu':'ur',
-'uyghur':'ug',
-'uzbek':'uz',
-'vietnamese':'vi',
-'welsh':'cy',
-'xhosa':'xh',
-'yiddish':'yi',
-'yoruba':'yo',
-'zulu':'zu',
-'cebuano':'ceb',
-'hawaiian':'haw',
-'hmong':'hmn',
-'chinese (simplified)':'zh-Hans',
-'chinese (traditional)': 'zh-Hant',
-//'chinese (simplified)':'zh-cn',
-//'chinese (traditional)': 'zh-tw',
-}
-//»
-
-localStorage["data-language_codes"] = JSON.stringify(LANGUAGES);
-
-cbok();
-
-},//»
-LANGS:()=>{//«
-
-let ALL = localStorage["data-language_codes"];
-if (!ALL) return cberr("localStorage['data-language_codes'] has not been set!");
-
-let langs;
-try {
-	langs = JSON.parse(ALL);
-}
-catch(e){
-	cberr("Invalid JSON in localStorage['data-language_codes']!");
+let db = await new capi.db("DBName", DBVersion);
+if (!await db.init("StoreName", "keyname",[{name: "field1"}, {name: "field2", unique: true}])){
+	cberr("Database Init Error");
 	return;
 }
+db.add(data);
+db.get(keyname);
+//Need another method to get by unique field names
+db.rm(keyname);
+db.close();
 
-let matches=[];
-for (let k in langs){
-	if ((new RegExp(args.join(" "),"i")).test(k)) matches.push(langs[k], k);
-}
-if (matches.length===2) {
-	wout(matches[0]);
-	werr(matches[1]);
-}
-else{
-	werr(`${matches.length/2} matches`);
-	for (let i=0; i < matches.length; i+=2) werr(`${matches[i]}: ${matches[i+1]}`);
-}
-
-cbok();
-
-},//»
-
-SETCCS:()=>{//«
-/*
-
-Used for regionCode in youtube search, which figures out availability/
-viewability in the given country. For relevanceLanguage, use the language code
-returned from the LANGS command.
-
-ISO 3166-1 alpha-2 codes are two-letter country codes defined in ISO 3166-1,
-part of the ISO 3166 standard[1] published by the International Organization
-for Standardization (ISO), to represent countries, dependent territories, and
-special areas of geographical interest.
-
-*/
-//«
-
-const COUNTRY_CODES=`AD	Andorra	1974	.ad	
-AE	United Arab Emirates	1974	.ae	
-AF	Afghanistan	1974	.af	
-AG	Antigua and Barbuda	1974	.ag	
-AI	Anguilla	1985	.ai	AI previously represented French Afars and Issas
-AL	Albania	1974	.al	
-AM	Armenia	1992	.am	
-AO	Angola	1974	.ao	
-AQ	Antarctica	1974	.aq	Covers the territories south of 60° south latitude	Code taken from name in French: Antarctique
-AR	Argentina	1974	.ar	
-AS	American Samoa	1974	.as	
-AT	Austria	1974	.at	
-AU	Australia	1974	.au	Includes the Ashmore and Cartier Islands and the Coral Sea Islands
-AW	Aruba	1986	.aw	
-AX	Aland Islands	2004	.ax	An autonomous county of Finland
-AZ	Azerbaijan	1992	.az	
-BA	Bosnia and Herzegovina	1992	.ba	
-BB	Barbados	1974	.bb	
-BD	Bangladesh	1974	.bd	
-BE	Belgium	1974	.be	
-BF	Burkina Faso	1984	.bf	Name changed from Upper Volta (HV)
-BG	Bulgaria	1974	.bg	
-BH	Bahrain	1974	.bh	
-BI	Burundi	1974	.bi	
-BJ	Benin	1977	.bj	Name changed from Dahomey (DY)
-BL	Saint Barthelemy	2007	.bl	
-BM	Bermuda	1974	.bm	
-BN	Brunei Darussalam	1974	.bn	Previous ISO country name: Brunei
-BO	Bolivia	1974	.bo	Previous ISO country name: Bolivia
-BQ	Bonaire, Sint Eustatius and Saba	2010	.bq	Consists of three Caribbean "special municipalities", which are part of the Netherlands proper: Bonaire, Sint Eustatius, and Saba (the BES Islands)	Previous ISO country name: Bonaire, Saint Eustatius and Saba	BQ previously represented British Antarctic Territory
-BR	Brazil	1974	.br	
-BS	Bahamas	1974	.bs	
-BT	Bhutan	1974	.bt	
-BV	Bouvet Island	1974	.bv	Belongs to Norway
-BW	Botswana	1974	.bw	
-BY	Belarus	1974	.by	Code taken from previous ISO country name: Byelorussian SSR (now assigned ISO 3166-3 code BYAA)	Code assigned as the country was already a UN member since 1945[14]
-BZ	Belize	1974	.bz	
-CA	Canada	1974	.ca	
-CC	Cocos (Keeling) Islands	1974	.cc	Belongs to Australia
-CD	Congo, Democratic Republic of the	1997	.cd	Name changed from Zaire (ZR)
-CF	Central African Republic	1974	.cf	
-CG	Congo	1974	.cg	
-CH	Switzerland	1974	.ch	Code taken from name in Latin: Confoederatio Helvetica
-CI	Cote d'Ivoire	1974	.ci	ISO country name follows UN designation (common name and previous ISO country name: Ivory Coast)
-CK	Cook Islands	1974	.ck	
-CL	Chile	1974	.cl	
-CM	Cameroon	1974	.cm	Previous ISO country name: Cameroon, United Republic of
-CN	China	1974	.cn	
-CO	Colombia	1974	.co	
-CR	Costa Rica	1974	.cr	
-CU	Cuba	1974	.cu	
-CV	Cabo Verde	1974	.cv	ISO country name follows UN designation (common name and previous ISO country name: Cape Verde, another previous ISO country name: Cape Verde Islands)
-CW	Curacao	2010	.cw	
-CX	Christmas Island	1974	.cx	Belongs to Australia
-CY	Cyprus	1974	.cy	
-CZ	Czechia	1993	.cz	Previous ISO country name: Czech Republic
-DE	Germany	1974	.de	Code taken from name in German: Deutschland	Code used for West Germany before 1990 (previous ISO country name: Germany, Federal Republic of)
-DJ	Djibouti	1977	.dj	Name changed from French Afars and Issas (AI)
-DK	Denmark	1974	.dk	
-DM	Dominica	1974	.dm	
-DO	Dominican Republic	1974	.do	
-DZ	Algeria	1974	.dz	Code taken from name in Arabic الجزائر al-Djazā'ir, Algerian Arabic الدزاير al-Dzāyīr, or Berber ⴷⵣⴰⵢⵔ Dzayer
-EC	Ecuador	1974	.ec	
-EE	Estonia	1992	.ee	Code taken from name in Estonian: Eesti
-EG	Egypt	1974	.eg	
-EH	Western Sahara	1974	.eh		Previous ISO country name: Spanish Sahara (code taken from name in Spanish: Sahara español)	.eh ccTLD has not been implemented.[15]
-ER	Eritrea	1993	.er	
-ES	Spain	1974	.es	Code taken from name in Spanish: España
-ET	Ethiopia	1974	.et	
-FI	Finland	1974	.fi	
-FJ	Fiji	1974	.fj	
-FK	Falkland Islands (Malvinas)	1974	.fk	ISO country name follows UN designation due to the Falkland Islands sovereignty dispute (local common name: Falkland Islands)[16]
-FM	Micronesia	1986	.fm	Previous ISO country name: Micronesia
-FO	Faroe Islands	1974	.fo	Code taken from name in Faroese: Føroyar
-FR	France	1974	.fr	Includes Clipperton Island
-GA	Gabon	1974	.ga	
-GB	United Kingdom of Great Britain and Northern Ireland	1974	.uk		(Also .gb)	Includes Akrotiri and Dhekelia (Sovereign Base Areas)	Code taken from Great Britain (from official name: United Kingdom of Great Britain and Northern Ireland)[17]	Previous ISO country name: United Kingdom	.uk is the primary ccTLD of the United Kingdom instead of .gb (see code UK, which is exceptionally reserved)
-GD	Grenada	1974	.gd	
-GE	Georgia	1992	.ge	GE previously represented Gilbert and Ellice Islands
-GF	French Guiana	1974	.gf	Code taken from name in French: Guyane française
-GG	Guernsey	2006	.gg	A British Crown Dependency
-GH	Ghana	1974	.gh	
-GI	Gibraltar	1974	.gi	
-GL	Greenland	1974	.gl	
-GM	Gambia	1974	.gm	
-GN	Guinea	1974	.gn	
-GP	Guadeloupe	1974	.gp	
-GQ	Equatorial Guinea	1974	.gq	Code taken from name in French: Guinée équatoriale
-GR	Greece	1974	.gr	
-GS	South Georgia and the South Sandwich Islands	1993	.gs	
-GT	Guatemala	1974	.gt	
-GU	Guam	1974	.gu	
-GW	Guinea-Bissau	1974	.gw	
-GY	Guyana	1974	.gy	
-HK	Hong Kong	1974	.hk	Hong Kong is officially a Special Administrative Region of the People's Republic of China since 01 July 1997
-HM	Heard Island and McDonald Islands	1974	.hm	Belongs to Australia
-HN	Honduras	1974	.hn	
-HR	Croatia	1992	.hr	Code taken from name in Croatian: Hrvatska
-HT	Haiti	1974	.ht	
-HU	Hungary	1974	.hu	
-ID	Indonesia	1974	.id	
-IE	Ireland	1974	.ie	
-IL	Israel	1974	.il	
-IM	Isle of Man	2006	.im	A British Crown Dependency
-IN	India	1974	.in	
-IO	British Indian Ocean Territory	1974	.io	
-IQ	Iraq	1974	.iq	
-IR	Iran (Islamic Republic of)	1974	.ir	Previous ISO country name: Iran
-IS	Iceland	1974	.is	Code taken from name in Icelandic: Ísland
-IT	Italy	1974	.it	
-JE	Jersey	2006	.je	A British Crown Dependency
-JM	Jamaica	1974	.jm	
-JO	Jordan	1974	.jo	
-JP	Japan	1974	.jp	
-KE	Kenya	1974	.ke	
-KG	Kyrgyzstan	1992	.kg	
-KH	Cambodia	1974	.kh	Code taken from former name: Khmer Republic	Previous ISO country name: Kampuchea, Democratic
-KI	Kiribati	1979	.ki	Name changed from Gilbert Islands (GE)
-KM	Comoros	1974	.km	Code taken from name in Comorian: Komori	Previous ISO country name: Comoro Islands
-KN	Saint Kitts and Nevis	1974	.kn	Previous ISO country name: Saint Kitts-Nevis-Anguilla
-KP	Korea (Democratic People's Republic of)	1974	.kp	ISO country name follows UN designation (common name: North Korea)
-KR	Korea, Republic of	1974	.kr	ISO country name follows UN designation (common name: South Korea)
-KW	Kuwait	1974	.kw	
-KY	Cayman Islands	1974	.ky	
-KZ	Kazakhstan	1992	.kz	Previous ISO country name: Kazakstan
-LA	Lao People's Democratic Republic	1974	.la	ISO country name follows UN designation (common name and previous ISO country name: Laos)
-LB	Lebanon	1974	.lb	
-LC	Saint Lucia	1974	.lc	
-LI	Liechtenstein	1974	.li	
-LK	Sri Lanka	1974	.lk	
-LR	Liberia	1974	.lr	
-LS	Lesotho	1974	.ls	
-LT	Lithuania	1992	.lt	
-LU	Luxembourg	1974	.lu	
-LV	Latvia	1992	.lv	
-LY	Libya	1974	.ly	Previous ISO country name: Libyan Arab Jamahiriya
-MA	Morocco	1974	.ma	Code taken from name in French: Maroc
-MC	Monaco	1974	.mc	
-MD	Moldova, Republic of	1992	.md	Previous ISO country name: Moldova (briefly from 2008 to 2009)
-ME	Montenegro	2006	.me	
-MF	Saint Martin (French part)	2007	.mf	The Dutch part of Saint Martin island is assigned code SX
-MG	Madagascar	1974	.mg	
-MH	Marshall Islands	1986	.mh	
-MK	North Macedonia	1993	.mk	Code taken from name in Macedonian: Severna Makedonija	Previous ISO country name: Macedonia, the former Yugoslav Republic of (designated as such due to Macedonia naming dispute)
-ML	Mali	1974	.ml	
-MM	Myanmar	1989	.mm	Name changed from Burma (BU)
-MN	Mongolia	1974	.mn	
-MO	Macao	1974	.mo	Previous ISO country name: Macau; Macao is officially a Special Administrative Region of the People's Republic of China since 20 December 1999
-MP	Northern Mariana Islands	1986	.mp	
-MQ	Martinique	1974	.mq	
-MR	Mauritania	1974	.mr	
-MS	Montserrat	1974	.ms	
-MT	Malta	1974	.mt	
-MU	Mauritius	1974	.mu	
-MV	Maldives	1974	.mv	
-MW	Malawi	1974	.mw	
-MX	Mexico	1974	.mx	
-MY	Malaysia	1974	.my	
-MZ	Mozambique	1974	.mz	
-NA	Namibia	1974	.na	
-NC	New Caledonia	1974	.nc	
-NE	Niger	1974	.ne	
-NF	Norfolk Island	1974	.nf	Belongs to Australia
-NG	Nigeria	1974	.ng	
-NI	Nicaragua	1974	.ni	
-NL	Netherlands	1974	.nl	Officially includes the islands Bonaire, Saint Eustatius and Saba, which also have code BQ in ISO 3166-1. Within ISO 3166-2, Aruba (AW), Curaçao (CW), and Sint Maarten (SX) are also coded as subdivisions of NL.[18]
-NO	Norway	1974	.no	
-NP	Nepal	1974	.np	
-NR	Nauru	1974	.nr	
-NU	Niue	1974	.nu	Previous ISO country name: Niue Island
-NZ	New Zealand	1974	.nz	
-OM	Oman	1974	.om	
-PA	Panama	1974	.pa	
-PE	Peru	1974	.pe	
-PF	French Polynesia	1974	.pf	Code taken from name in French: Polynésie française
-PG	Papua New Guinea	1974	.pg	
-PH	Philippines	1974	.ph	
-PK	Pakistan	1974	.pk	
-PL	Poland	1974	.pl	
-PM	Saint Pierre and Miquelon	1974	.pm	
-PN	Pitcairn	1974	.pn	Previous ISO country name: Pitcairn Islands
-PR	Puerto Rico	1974	.pr	
-PS	Palestine, State of	1999	.ps	Previous ISO country name: Palestinian Territory, Occupied	Consists of the West Bank and the Gaza Strip
-PT	Portugal	1974	.pt	
-PW	Palau	1986	.pw	
-PY	Paraguay	1974	.py	
-QA	Qatar	1974	.qa	
-RE	Reunion	1974	.re	
-RO	Romania	1974	.ro	
-RS	Serbia	2006	.rs	Republic of Serbia
-RU	Russian Federation	1992	.ru	ISO country name follows UN designation (common name: Russia)
-RW	Rwanda	1974	.rw	
-SA	Saudi Arabia	1974	.sa	
-SB	Solomon Islands	1974	.sb	Code taken from former name: British Solomon Islands
-SC	Seychelles	1974	.sc	
-SD	Sudan	1974	.sd	
-SE	Sweden	1974	.se	
-SG	Singapore	1974	.sg	
-SH	Saint Helena, Ascension and Tristan da Cunha	1974	.sh	Previous ISO country name: Saint Helena.
-SI	Slovenia	1992	.si	
-SJ	Svalbard and Jan Mayen	1974	.sj	Previous ISO name: Svalbard and Jan Mayen Islands	Consists of two Arctic territories of Norway: Svalbard and Jan Mayen
-SK	Slovakia	1993	.sk	SK previously represented the Kingdom of Sikkim
-SL	Sierra Leone	1974	.sl	
-SM	San Marino	1974	.sm	
-SN	Senegal	1974	.sn	
-SO	Somalia	1974	.so	
-SR	Suriname	1974	.sr	Previous ISO country name: Surinam
-SS	South Sudan	2011	.ss	
-ST	Sao Tome and Principe	1974	.st	
-SV	El Salvador	1974	.sv	
-SX	Sint Maarten (Dutch part)	2010	.sx	The French part of Saint Martin island is assigned code MF
-SY	Syrian Arab Republic	1974	.sy	ISO country name follows UN designation (common name and previous ISO country name: Syria)
-SZ	Eswatini	1974	.sz	Previous ISO country name: Swaziland
-TC	Turks and Caicos Islands	1974	.tc	
-TD	Chad	1974	.td	Code taken from name in French: Tchad
-TF	French Southern Territories	1979	.tf	Covers the French Southern and Antarctic Lands except Adélie Land	Code taken from name in French: Terres australes françaises
-TG	Togo	1974	.tg	
-TH	Thailand	1974	.th	
-TJ	Tajikistan	1992	.tj	
-TK	Tokelau	1974	.tk	Previous ISO country name: Tokelau Islands
-TL	Timor-Leste	2002	.tl	Name changed from East Timor (TP)
-TM	Turkmenistan	1992	.tm	
-TN	Tunisia	1974	.tn	
-TO	Tonga	1974	.to	
-TR	Turkey	1974	.tr	Actual name: Turkiye
-TT	Trinidad and Tobago	1974	.tt	
-TV	Tuvalu	1977	.tv	
-TW	Taiwan, Province of China	1974	.tw	Covers the current jurisdiction of the Republic of China	ISO country name follows UN designation (due to political status of Taiwan within the UN)[17] (common name: Taiwan)
-TZ	Tanzania	1974	.tz	
-UA	Ukraine	1974	.ua	Previous ISO country name: Ukrainian SSR	Code assigned as the country was already a UN member since 1945[14]
-UG	Uganda	1974	.ug	
-UM	United States Minor Outlying Islands	1986	.um	Consists of nine minor insular areas of the United States: Baker Island, Howland Island, Jarvis Island, Johnston Atoll, Kingman Reef, Midway Islands, Navassa Island, Palmyra Atoll, and Wake Island	.um ccTLD was revoked in 2007[19]	The United States Department of State uses the following user assigned alpha-2 codes for the nine territories, respectively, XB, XH, XQ, XU, XM, QM, XV, XL, and QW.[20]
-US	United States of America	1974	.us	Previous ISO country name: United States
-UY	Uruguay	1974	.uy	
-UZ	Uzbekistan	1992	.uz	
-VA	Vatican City	1974	.va	Actual name: Holy See	Covers Vatican City, territory of the Holy See	Previous ISO country names: Vatican City State (Holy See) and Holy See (Vatican City State)
-VC	Saint Vincent and the Grenadines	1974	.vc	
-VE	Venezuela (Bolivarian Republic of)	1974	.ve	Previous ISO country name: Venezuela
-VG	Virgin Islands (British)	1974	.vg	
-VI	Virgin Islands (US)	1974	.vi	
-VN	Vietnam	1974	.vn	ISO country name follows UN designation (common name: Vietnam)	Code used for Republic of Viet Nam (common name: South Vietnam) before 1977
-VU	Vanuatu	1980	.vu	Name changed from New Hebrides (NH)
-WF	Wallis and Futuna	1974	.wf	Previous ISO country name: Wallis and Futuna Islands
-WS	Samoa	1974	.ws	Code taken from former name: Western Samoa
-YE	Yemen	1974	.ye	Previous ISO country name: Yemen, Republic of (for three years after the unification)	Code used for North Yemen before 1990
-YT	Mayotte	1993	.yt	
-ZA	South Africa	1974	.za	Code taken from name in Dutch: Zuid-Afrika
-ZM	Zambia	1974	.zm	
-ZW	Zimbabwe	1980	.zw	Name changed from Southern Rhodesia (RH)`;
-//»
-
-localStorage["data-country_codes"] = COUNTRY_CODES;
-
-cbok();
-
-},//»
-CCS:async()=>{//«
-
-let ALL = localStorage["data-country_codes"];
-if (!ALL) return cberr("localStorage['data-country_codes'] has not been set!");
-
-if (!args.length) return cberr("Got nothing!");
-
-//log(ALL.length);
-let countries={};
-let all = ALL.split("\n");
-for (let ln of all){
-
-let arr = ln.split("\t");
-let code = arr.shift();
-let name = arr.shift();
-let yr = arr.shift();
-let tld = arr.shift();
-let notes = arr.join("\n");
-countries[name]={
-	code:code,
-	year: yr,
-	tld: tld,
-	notes: notes
-};
-
-}
-let matches=[];
-for (let k in countries){
-	if ((new RegExp(args.join(" "),"i")).test(k)) matches.push(countries[k].code, k);
-}
-if (matches.length===2) {
-	wout(matches[0]);
-	werr(matches[1]);
-}
-else{
-	werr(`${matches.length/2} matches`);
-	for (let i=0; i < matches.length; i+=2) werr(`${matches[i]}: ${matches[i+1]}`);
-}
-
-cbok();
-
-},//»
-
+db.delete_db();
+db.delete_store(store_name);
+»*/
 DODB:async()=>{//«
 
 /*
@@ -528,26 +72,7 @@ db.close();
 cbok();
 },//»
 
-URL:()=>{//«
-let arg = args.shift();
-if (!arg) return cberr("NAAH");
-let url;
-try{
-url = new URL(arg);
-}
-catch(e){
-return cberr(e.message);
-}
-if (!url.hostname.match(/youtube.com$/)) return cberr("Does not appear to be a youtube.com link!");
-let params = url.searchParams;
-let vid = params.get("v");
-let list = params.get("list");
-let ind = params.get("index");
-
-cbok();
-
-},//»
-
+//Extract tracks (array sequences of midi notes) from .midi file
 MIDITRACKS:async()=>{//«
 
 /*«
@@ -840,6 +365,9 @@ cbok();
 
 },//»
 
+//Play audio file, create start and end marks, then slice it to .wav by sending
+//through AudioWorkletNode and slice to .webm by sending to MediaRecorder. This
+//depends on sitting through the recording process.
 PLAYTEST:async()=>{//«
 /*
 
@@ -1082,6 +610,7 @@ cwarn(e.data.msg);
 	rafId=requestAnimationFrame(audioloop);
 },//»
 
+//A getch_loop that uses 1 or more status lines at the bottom of the screen.
 LOOPDOOP:async()=>{//«
 
 let minh = 3;
@@ -1125,6 +654,7 @@ wout("Zloyyyymoooooo!!!!!!!!!");
 
 },//»
 
+//Use Youtube API to search for videos, channels, playlists
 SEARCHYT:async()=>{//«
 
 /*
@@ -1744,6 +1274,7 @@ log(obj);
 cbok();
 
 },//»
+//Use Youtube API to get a youtube channel, playlist information or playlist videos
 THINGYT:async()=>{//«Playlist/PlaylistItems/Channel
 
 
@@ -2174,6 +1705,7 @@ cbok();
 
 
 },//»
+//Use Youtube API to get one or more video information objects
 VIDYT:async()=>{//«
 
 if (!args.length) return cberr("No args");
@@ -2581,6 +2113,11 @@ cbok();
 
 },//»
 
+//Use the backend ytdl service to get audio files. It uses indexedDB (not the
+//new api) to save the mapping from the 11 character base64 id to the name
+//of the video file's name. If this is found in ~/Downloads with a ".part" at
+//the end, we need to continue the download, and instruct the server to create
+//an arbitrary file of n bytes to get the remainding chunks.
 YTDL:async()=>{//«
 
 /*
@@ -3242,3 +2779,477 @@ const bufferToWave=(abuffer)=>{//«
 COMS[comarg](args);
 
 }
+
+
+
+/*
+
+
+//Stupid language to ISO language code mapping
+//e.g. english -> en
+SETLANGS:()=>{//«
+
+const LANGUAGES = {//«
+'afrikaans':'af'	,
+'albanian':'sq',
+'amharic':'am',
+'arabic':'ar',
+'armenian':'hy',
+'azerbaijani':'az',
+'basque':'eu',
+'belarusian':'be',
+'bengali':'bn',
+'bosnian':'bs',
+'bulgarian':'bg',
+'catalan':'ca',
+'chichewa':'ny',
+'corsican':'co',
+'croatian':'hr',
+'czech':'cs',
+'danish':'da',
+'dutch':'nl',
+'english':'en',
+'esperanto':'eo',
+'estonian':'et',
+'filipino':'tl',
+'finnish':'fi',
+'french':'fr',
+'frisian':'fy',
+'galician':'gl',
+'georgian':'ka',
+'german':'de',
+'greek':'el',
+'gujarati':'gu',
+'haitian creole':'ht',
+'hausa':'ha',
+//'hebrew':'iw',
+'hebrew':'he',
+'hindi':'hi',
+'hungarian':'hu',
+'icelandic':'is',
+'igbo':'ig',
+'indonesian':'id',
+'irish':'ga',
+'italian':'it',
+'japanese':'ja',
+'javanese':'jw',
+'kannada':'kn',
+'kazakh':'kk',
+'khmer':'km',
+'korean':'ko',
+'kurdish':'ku',
+'kyrgyz':'ky',
+'lao':'lo',
+'latin':'la',
+'latvian':'lv',
+'lithuanian':'lt',
+'luxembourgish':'lb',
+'macedonian':'mk',
+'malagasy':'mg',
+'malay':'ms',
+'malayalam':'ml',
+'maltese':'mt',
+'maori':'mi',
+'marathi':'mr',
+'mongolian':'mn',
+'burmese':'my',
+'nepali':'ne',
+'norwegian':'no',
+'odia':'or',
+'pashto':'ps',
+'persian':'fa',
+'polish':'pl',
+'portuguese':'pt',
+'punjabi':'pa',
+'romanian':'ro',
+'russian':'ru',
+'samoan':'sm',
+'scots gaelic':'gd',
+'serbian':'sr',
+'sesotho':'st',
+'shona':'sn',
+'sindhi':'sd',
+'sinhala':'si',
+'slovak':'sk',
+'slovenian':'sl',
+'somali':'so',
+'spanish':'es',
+'sundanese':'su',
+'swahili':'sw',
+'swedish':'sv',
+'tajik':'tg',
+'tamil':'ta',
+'telugu':'te',
+'thai':'th',
+'turkish':'tr',
+'ukrainian':'uk',
+'urdu':'ur',
+'uyghur':'ug',
+'uzbek':'uz',
+'vietnamese':'vi',
+'welsh':'cy',
+'xhosa':'xh',
+'yiddish':'yi',
+'yoruba':'yo',
+'zulu':'zu',
+'cebuano':'ceb',
+'hawaiian':'haw',
+'hmong':'hmn',
+'chinese (simplified)':'zh-Hans',
+'chinese (traditional)': 'zh-Hant',
+//'chinese (simplified)':'zh-cn',
+//'chinese (traditional)': 'zh-tw',
+}
+//»
+
+localStorage["data-language_codes"] = JSON.stringify(LANGUAGES);
+
+cbok();
+
+},//»
+LANGS:()=>{//«
+
+let ALL = localStorage["data-language_codes"];
+if (!ALL) return cberr("localStorage['data-language_codes'] has not been set!");
+
+let langs;
+try {
+	langs = JSON.parse(ALL);
+}
+catch(e){
+	cberr("Invalid JSON in localStorage['data-language_codes']!");
+	return;
+}
+
+let matches=[];
+for (let k in langs){
+	if ((new RegExp(args.join(" "),"i")).test(k)) matches.push(langs[k], k);
+}
+if (matches.length===2) {
+	wout(matches[0]);
+	werr(matches[1]);
+}
+else{
+	werr(`${matches.length/2} matches`);
+	for (let i=0; i < matches.length; i+=2) werr(`${matches[i]}: ${matches[i+1]}`);
+}
+
+cbok();
+
+},//»
+
+//Stupid country to ISO country code mapping
+//e.g. United States -> US
+SETCCS:()=>{//«
+
+//Used for regionCode in youtube search, which figures out availability/
+//viewability in the given country. For relevanceLanguage, use the language code
+//returned from the LANGS command.
+//
+//ISO 3166-1 alpha-2 codes are two-letter country codes defined in ISO 3166-1,
+//part of the ISO 3166 standard[1] published by the International Organization
+//for Standardization (ISO), to represent countries, dependent territories, and
+//special areas of geographical interest.
+
+//«
+
+const COUNTRY_CODES=`AD	Andorra	1974	.ad	
+AE	United Arab Emirates	1974	.ae	
+AF	Afghanistan	1974	.af	
+AG	Antigua and Barbuda	1974	.ag	
+AI	Anguilla	1985	.ai	AI previously represented French Afars and Issas
+AL	Albania	1974	.al	
+AM	Armenia	1992	.am	
+AO	Angola	1974	.ao	
+AQ	Antarctica	1974	.aq	Covers the territories south of 60° south latitude	Code taken from name in French: Antarctique
+AR	Argentina	1974	.ar	
+AS	American Samoa	1974	.as	
+AT	Austria	1974	.at	
+AU	Australia	1974	.au	Includes the Ashmore and Cartier Islands and the Coral Sea Islands
+AW	Aruba	1986	.aw	
+AX	Aland Islands	2004	.ax	An autonomous county of Finland
+AZ	Azerbaijan	1992	.az	
+BA	Bosnia and Herzegovina	1992	.ba	
+BB	Barbados	1974	.bb	
+BD	Bangladesh	1974	.bd	
+BE	Belgium	1974	.be	
+BF	Burkina Faso	1984	.bf	Name changed from Upper Volta (HV)
+BG	Bulgaria	1974	.bg	
+BH	Bahrain	1974	.bh	
+BI	Burundi	1974	.bi	
+BJ	Benin	1977	.bj	Name changed from Dahomey (DY)
+BL	Saint Barthelemy	2007	.bl	
+BM	Bermuda	1974	.bm	
+BN	Brunei Darussalam	1974	.bn	Previous ISO country name: Brunei
+BO	Bolivia	1974	.bo	Previous ISO country name: Bolivia
+BQ	Bonaire, Sint Eustatius and Saba	2010	.bq	Consists of three Caribbean "special municipalities", which are part of the Netherlands proper: Bonaire, Sint Eustatius, and Saba (the BES Islands)	Previous ISO country name: Bonaire, Saint Eustatius and Saba	BQ previously represented British Antarctic Territory
+BR	Brazil	1974	.br	
+BS	Bahamas	1974	.bs	
+BT	Bhutan	1974	.bt	
+BV	Bouvet Island	1974	.bv	Belongs to Norway
+BW	Botswana	1974	.bw	
+BY	Belarus	1974	.by	Code taken from previous ISO country name: Byelorussian SSR (now assigned ISO 3166-3 code BYAA)	Code assigned as the country was already a UN member since 1945[14]
+BZ	Belize	1974	.bz	
+CA	Canada	1974	.ca	
+CC	Cocos (Keeling) Islands	1974	.cc	Belongs to Australia
+CD	Congo, Democratic Republic of the	1997	.cd	Name changed from Zaire (ZR)
+CF	Central African Republic	1974	.cf	
+CG	Congo	1974	.cg	
+CH	Switzerland	1974	.ch	Code taken from name in Latin: Confoederatio Helvetica
+CI	Cote d'Ivoire	1974	.ci	ISO country name follows UN designation (common name and previous ISO country name: Ivory Coast)
+CK	Cook Islands	1974	.ck	
+CL	Chile	1974	.cl	
+CM	Cameroon	1974	.cm	Previous ISO country name: Cameroon, United Republic of
+CN	China	1974	.cn	
+CO	Colombia	1974	.co	
+CR	Costa Rica	1974	.cr	
+CU	Cuba	1974	.cu	
+CV	Cabo Verde	1974	.cv	ISO country name follows UN designation (common name and previous ISO country name: Cape Verde, another previous ISO country name: Cape Verde Islands)
+CW	Curacao	2010	.cw	
+CX	Christmas Island	1974	.cx	Belongs to Australia
+CY	Cyprus	1974	.cy	
+CZ	Czechia	1993	.cz	Previous ISO country name: Czech Republic
+DE	Germany	1974	.de	Code taken from name in German: Deutschland	Code used for West Germany before 1990 (previous ISO country name: Germany, Federal Republic of)
+DJ	Djibouti	1977	.dj	Name changed from French Afars and Issas (AI)
+DK	Denmark	1974	.dk	
+DM	Dominica	1974	.dm	
+DO	Dominican Republic	1974	.do	
+DZ	Algeria	1974	.dz	Code taken from name in Arabic الجزائر al-Djazā'ir, Algerian Arabic الدزاير al-Dzāyīr, or Berber ⴷⵣⴰⵢⵔ Dzayer
+EC	Ecuador	1974	.ec	
+EE	Estonia	1992	.ee	Code taken from name in Estonian: Eesti
+EG	Egypt	1974	.eg	
+EH	Western Sahara	1974	.eh		Previous ISO country name: Spanish Sahara (code taken from name in Spanish: Sahara español)	.eh ccTLD has not been implemented.[15]
+ER	Eritrea	1993	.er	
+ES	Spain	1974	.es	Code taken from name in Spanish: España
+ET	Ethiopia	1974	.et	
+FI	Finland	1974	.fi	
+FJ	Fiji	1974	.fj	
+FK	Falkland Islands (Malvinas)	1974	.fk	ISO country name follows UN designation due to the Falkland Islands sovereignty dispute (local common name: Falkland Islands)[16]
+FM	Micronesia	1986	.fm	Previous ISO country name: Micronesia
+FO	Faroe Islands	1974	.fo	Code taken from name in Faroese: Føroyar
+FR	France	1974	.fr	Includes Clipperton Island
+GA	Gabon	1974	.ga	
+GB	United Kingdom of Great Britain and Northern Ireland	1974	.uk		(Also .gb)	Includes Akrotiri and Dhekelia (Sovereign Base Areas)	Code taken from Great Britain (from official name: United Kingdom of Great Britain and Northern Ireland)[17]	Previous ISO country name: United Kingdom	.uk is the primary ccTLD of the United Kingdom instead of .gb (see code UK, which is exceptionally reserved)
+GD	Grenada	1974	.gd	
+GE	Georgia	1992	.ge	GE previously represented Gilbert and Ellice Islands
+GF	French Guiana	1974	.gf	Code taken from name in French: Guyane française
+GG	Guernsey	2006	.gg	A British Crown Dependency
+GH	Ghana	1974	.gh	
+GI	Gibraltar	1974	.gi	
+GL	Greenland	1974	.gl	
+GM	Gambia	1974	.gm	
+GN	Guinea	1974	.gn	
+GP	Guadeloupe	1974	.gp	
+GQ	Equatorial Guinea	1974	.gq	Code taken from name in French: Guinée équatoriale
+GR	Greece	1974	.gr	
+GS	South Georgia and the South Sandwich Islands	1993	.gs	
+GT	Guatemala	1974	.gt	
+GU	Guam	1974	.gu	
+GW	Guinea-Bissau	1974	.gw	
+GY	Guyana	1974	.gy	
+HK	Hong Kong	1974	.hk	Hong Kong is officially a Special Administrative Region of the People's Republic of China since 01 July 1997
+HM	Heard Island and McDonald Islands	1974	.hm	Belongs to Australia
+HN	Honduras	1974	.hn	
+HR	Croatia	1992	.hr	Code taken from name in Croatian: Hrvatska
+HT	Haiti	1974	.ht	
+HU	Hungary	1974	.hu	
+ID	Indonesia	1974	.id	
+IE	Ireland	1974	.ie	
+IL	Israel	1974	.il	
+IM	Isle of Man	2006	.im	A British Crown Dependency
+IN	India	1974	.in	
+IO	British Indian Ocean Territory	1974	.io	
+IQ	Iraq	1974	.iq	
+IR	Iran (Islamic Republic of)	1974	.ir	Previous ISO country name: Iran
+IS	Iceland	1974	.is	Code taken from name in Icelandic: Ísland
+IT	Italy	1974	.it	
+JE	Jersey	2006	.je	A British Crown Dependency
+JM	Jamaica	1974	.jm	
+JO	Jordan	1974	.jo	
+JP	Japan	1974	.jp	
+KE	Kenya	1974	.ke	
+KG	Kyrgyzstan	1992	.kg	
+KH	Cambodia	1974	.kh	Code taken from former name: Khmer Republic	Previous ISO country name: Kampuchea, Democratic
+KI	Kiribati	1979	.ki	Name changed from Gilbert Islands (GE)
+KM	Comoros	1974	.km	Code taken from name in Comorian: Komori	Previous ISO country name: Comoro Islands
+KN	Saint Kitts and Nevis	1974	.kn	Previous ISO country name: Saint Kitts-Nevis-Anguilla
+KP	Korea (Democratic People's Republic of)	1974	.kp	ISO country name follows UN designation (common name: North Korea)
+KR	Korea, Republic of	1974	.kr	ISO country name follows UN designation (common name: South Korea)
+KW	Kuwait	1974	.kw	
+KY	Cayman Islands	1974	.ky	
+KZ	Kazakhstan	1992	.kz	Previous ISO country name: Kazakstan
+LA	Lao People's Democratic Republic	1974	.la	ISO country name follows UN designation (common name and previous ISO country name: Laos)
+LB	Lebanon	1974	.lb	
+LC	Saint Lucia	1974	.lc	
+LI	Liechtenstein	1974	.li	
+LK	Sri Lanka	1974	.lk	
+LR	Liberia	1974	.lr	
+LS	Lesotho	1974	.ls	
+LT	Lithuania	1992	.lt	
+LU	Luxembourg	1974	.lu	
+LV	Latvia	1992	.lv	
+LY	Libya	1974	.ly	Previous ISO country name: Libyan Arab Jamahiriya
+MA	Morocco	1974	.ma	Code taken from name in French: Maroc
+MC	Monaco	1974	.mc	
+MD	Moldova, Republic of	1992	.md	Previous ISO country name: Moldova (briefly from 2008 to 2009)
+ME	Montenegro	2006	.me	
+MF	Saint Martin (French part)	2007	.mf	The Dutch part of Saint Martin island is assigned code SX
+MG	Madagascar	1974	.mg	
+MH	Marshall Islands	1986	.mh	
+MK	North Macedonia	1993	.mk	Code taken from name in Macedonian: Severna Makedonija	Previous ISO country name: Macedonia, the former Yugoslav Republic of (designated as such due to Macedonia naming dispute)
+ML	Mali	1974	.ml	
+MM	Myanmar	1989	.mm	Name changed from Burma (BU)
+MN	Mongolia	1974	.mn	
+MO	Macao	1974	.mo	Previous ISO country name: Macau; Macao is officially a Special Administrative Region of the People's Republic of China since 20 December 1999
+MP	Northern Mariana Islands	1986	.mp	
+MQ	Martinique	1974	.mq	
+MR	Mauritania	1974	.mr	
+MS	Montserrat	1974	.ms	
+MT	Malta	1974	.mt	
+MU	Mauritius	1974	.mu	
+MV	Maldives	1974	.mv	
+MW	Malawi	1974	.mw	
+MX	Mexico	1974	.mx	
+MY	Malaysia	1974	.my	
+MZ	Mozambique	1974	.mz	
+NA	Namibia	1974	.na	
+NC	New Caledonia	1974	.nc	
+NE	Niger	1974	.ne	
+NF	Norfolk Island	1974	.nf	Belongs to Australia
+NG	Nigeria	1974	.ng	
+NI	Nicaragua	1974	.ni	
+NL	Netherlands	1974	.nl	Officially includes the islands Bonaire, Saint Eustatius and Saba, which also have code BQ in ISO 3166-1. Within ISO 3166-2, Aruba (AW), Curaçao (CW), and Sint Maarten (SX) are also coded as subdivisions of NL.[18]
+NO	Norway	1974	.no	
+NP	Nepal	1974	.np	
+NR	Nauru	1974	.nr	
+NU	Niue	1974	.nu	Previous ISO country name: Niue Island
+NZ	New Zealand	1974	.nz	
+OM	Oman	1974	.om	
+PA	Panama	1974	.pa	
+PE	Peru	1974	.pe	
+PF	French Polynesia	1974	.pf	Code taken from name in French: Polynésie française
+PG	Papua New Guinea	1974	.pg	
+PH	Philippines	1974	.ph	
+PK	Pakistan	1974	.pk	
+PL	Poland	1974	.pl	
+PM	Saint Pierre and Miquelon	1974	.pm	
+PN	Pitcairn	1974	.pn	Previous ISO country name: Pitcairn Islands
+PR	Puerto Rico	1974	.pr	
+PS	Palestine, State of	1999	.ps	Previous ISO country name: Palestinian Territory, Occupied	Consists of the West Bank and the Gaza Strip
+PT	Portugal	1974	.pt	
+PW	Palau	1986	.pw	
+PY	Paraguay	1974	.py	
+QA	Qatar	1974	.qa	
+RE	Reunion	1974	.re	
+RO	Romania	1974	.ro	
+RS	Serbia	2006	.rs	Republic of Serbia
+RU	Russian Federation	1992	.ru	ISO country name follows UN designation (common name: Russia)
+RW	Rwanda	1974	.rw	
+SA	Saudi Arabia	1974	.sa	
+SB	Solomon Islands	1974	.sb	Code taken from former name: British Solomon Islands
+SC	Seychelles	1974	.sc	
+SD	Sudan	1974	.sd	
+SE	Sweden	1974	.se	
+SG	Singapore	1974	.sg	
+SH	Saint Helena, Ascension and Tristan da Cunha	1974	.sh	Previous ISO country name: Saint Helena.
+SI	Slovenia	1992	.si	
+SJ	Svalbard and Jan Mayen	1974	.sj	Previous ISO name: Svalbard and Jan Mayen Islands	Consists of two Arctic territories of Norway: Svalbard and Jan Mayen
+SK	Slovakia	1993	.sk	SK previously represented the Kingdom of Sikkim
+SL	Sierra Leone	1974	.sl	
+SM	San Marino	1974	.sm	
+SN	Senegal	1974	.sn	
+SO	Somalia	1974	.so	
+SR	Suriname	1974	.sr	Previous ISO country name: Surinam
+SS	South Sudan	2011	.ss	
+ST	Sao Tome and Principe	1974	.st	
+SV	El Salvador	1974	.sv	
+SX	Sint Maarten (Dutch part)	2010	.sx	The French part of Saint Martin island is assigned code MF
+SY	Syrian Arab Republic	1974	.sy	ISO country name follows UN designation (common name and previous ISO country name: Syria)
+SZ	Eswatini	1974	.sz	Previous ISO country name: Swaziland
+TC	Turks and Caicos Islands	1974	.tc	
+TD	Chad	1974	.td	Code taken from name in French: Tchad
+TF	French Southern Territories	1979	.tf	Covers the French Southern and Antarctic Lands except Adélie Land	Code taken from name in French: Terres australes françaises
+TG	Togo	1974	.tg	
+TH	Thailand	1974	.th	
+TJ	Tajikistan	1992	.tj	
+TK	Tokelau	1974	.tk	Previous ISO country name: Tokelau Islands
+TL	Timor-Leste	2002	.tl	Name changed from East Timor (TP)
+TM	Turkmenistan	1992	.tm	
+TN	Tunisia	1974	.tn	
+TO	Tonga	1974	.to	
+TR	Turkey	1974	.tr	Actual name: Turkiye
+TT	Trinidad and Tobago	1974	.tt	
+TV	Tuvalu	1977	.tv	
+TW	Taiwan, Province of China	1974	.tw	Covers the current jurisdiction of the Republic of China	ISO country name follows UN designation (due to political status of Taiwan within the UN)[17] (common name: Taiwan)
+TZ	Tanzania	1974	.tz	
+UA	Ukraine	1974	.ua	Previous ISO country name: Ukrainian SSR	Code assigned as the country was already a UN member since 1945[14]
+UG	Uganda	1974	.ug	
+UM	United States Minor Outlying Islands	1986	.um	Consists of nine minor insular areas of the United States: Baker Island, Howland Island, Jarvis Island, Johnston Atoll, Kingman Reef, Midway Islands, Navassa Island, Palmyra Atoll, and Wake Island	.um ccTLD was revoked in 2007[19]	The United States Department of State uses the following user assigned alpha-2 codes for the nine territories, respectively, XB, XH, XQ, XU, XM, QM, XV, XL, and QW.[20]
+US	United States of America	1974	.us	Previous ISO country name: United States
+UY	Uruguay	1974	.uy	
+UZ	Uzbekistan	1992	.uz	
+VA	Vatican City	1974	.va	Actual name: Holy See	Covers Vatican City, territory of the Holy See	Previous ISO country names: Vatican City State (Holy See) and Holy See (Vatican City State)
+VC	Saint Vincent and the Grenadines	1974	.vc	
+VE	Venezuela (Bolivarian Republic of)	1974	.ve	Previous ISO country name: Venezuela
+VG	Virgin Islands (British)	1974	.vg	
+VI	Virgin Islands (US)	1974	.vi	
+VN	Vietnam	1974	.vn	ISO country name follows UN designation (common name: Vietnam)	Code used for Republic of Viet Nam (common name: South Vietnam) before 1977
+VU	Vanuatu	1980	.vu	Name changed from New Hebrides (NH)
+WF	Wallis and Futuna	1974	.wf	Previous ISO country name: Wallis and Futuna Islands
+WS	Samoa	1974	.ws	Code taken from former name: Western Samoa
+YE	Yemen	1974	.ye	Previous ISO country name: Yemen, Republic of (for three years after the unification)	Code used for North Yemen before 1990
+YT	Mayotte	1993	.yt	
+ZA	South Africa	1974	.za	Code taken from name in Dutch: Zuid-Afrika
+ZM	Zambia	1974	.zm	
+ZW	Zimbabwe	1980	.zw	Name changed from Southern Rhodesia (RH)`;
+//»
+
+localStorage["data-country_codes"] = COUNTRY_CODES;
+
+cbok();
+
+},//»
+CCS:async()=>{//«
+
+let ALL = localStorage["data-country_codes"];
+if (!ALL) return cberr("localStorage['data-country_codes'] has not been set!");
+
+if (!args.length) return cberr("Got nothing!");
+
+//log(ALL.length);
+let countries={};
+let all = ALL.split("\n");
+for (let ln of all){
+
+let arr = ln.split("\t");
+let code = arr.shift();
+let name = arr.shift();
+let yr = arr.shift();
+let tld = arr.shift();
+let notes = arr.join("\n");
+countries[name]={
+	code:code,
+	year: yr,
+	tld: tld,
+	notes: notes
+};
+
+}
+let matches=[];
+for (let k in countries){
+	if ((new RegExp(args.join(" "),"i")).test(k)) matches.push(countries[k].code, k);
+}
+if (matches.length===2) {
+	wout(matches[0]);
+	werr(matches[1]);
+}
+else{
+	werr(`${matches.length/2} matches`);
+	for (let i=0; i < matches.length; i+=2) werr(`${matches[i]}: ${matches[i+1]}`);
+}
+
+cbok();
+
+},//»
+
+*/
