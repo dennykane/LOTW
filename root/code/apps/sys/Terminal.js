@@ -90,7 +90,7 @@ Step 4) Implement simple interfaces to vim, less, man, help, etc.
 //Development COM/LIB/MOD deleting«
 
 const DEL_COMS=[
-"bin.dummy"
+//"bin.dummy"
 ]
 const DEL_LIBS=[
 //	"math.trading",
@@ -100,23 +100,23 @@ const DEL_LIBS=[
 //	"net",
 //	"fs",
 //	"net.hn",
-"dev.testing",
+//"dev.testing",
 //	"js",
 //	"iface",
 //	"av"
 //	"crypto",
 //	"imap"
-"audio.webm"
+//"audio.webm"
 ];
 const DEL_MODS=[
 //	"math.trading",
 //	"sys.idb",
 //	"iface.net",
-	"sys.fs",
-	"util.shell",
+//	"sys.fs",
+//	"util.shell",
 //	"util.esmangle",
 //	"av.tone",
-//	"util.vim",
+	"util.vim",
 //	"util.pager"
 ];
 //»
@@ -356,7 +356,13 @@ this.onkill = (if_dev_reload)=>{//«
 	execute_kill_funcs();
 
 if (if_dev_reload) {
-log(`Deleting ${DEL_MODS.length} mods, ${DEL_LIBS.length} libs, ${DEL_COMS.length} coms`);
+let s="Deleting";
+
+if (DEL_MODS.length) s+=` mods: ${DEL_MODS.join(",")}`;
+if (DEL_LIBS.length) s+=` libs: ${DEL_LIBS.join(",")}`;
+if (DEL_COMS.length) s+=` coms: ${DEL_COMS.join(",")}`;
+log(s);
+//log(`Deleting mods: ${DEL_MODS.join(", ")}, libs: ${DEL_LIBS.join(", ")}, coms: ${DEL_COMS.join(", ")}`);
 	delete_mods();
 	delete_libs();
 	delete_coms();

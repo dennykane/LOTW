@@ -1,3 +1,39 @@
+/*
+@YEOPIUYHG Just added in some logic to fix the issue of justifying text at the
+bottom of the screen. There had been two issues:
+
+1) The delete operation would remove the line just above the top line of
+the justified paragraph (seltop). So there is a test:
+	if (seltop !== cy()) doaddline=true;
+...which leads to:
+	if (doaddline) lines.splice(cy(), 0, [""]);
+...after the insert_lines operation is done.
+
+2) Also, we need to know if there is an empty last line like this: 
+	let last_line_null = !lines[lines.length-1][0];
+
+... then after all the delete and insert logic is done, we do this:
+
+	if (!last_line_null && !lines[lines.length-1].length) lines.pop();
+
+... which just says "If the last line was inititially not null (had content in
+it) and now it is, then get rid of it."
+
+
+
+@WIUPTNGFH (2x), there was a bug when there was no "ch" variable. Now, we are 
+returning from that case.
+
+
+
+Infinite loop during arbitrary editing with heavy usage of Ctrl-j paragraph justifying!
+
+Look into every while/for loop.
+
+Solution!? @QOPIUTHGS, took out the "true" as the second argument to delete_lines, and now
+everything seems perfect.
+
+*/
 export const mod = function(Core, arg) {
 
 //Render with no cursor: render({nocursor:true});
@@ -1316,7 +1352,7 @@ const insert_word_color=(pos, s)=>{//«
 };//»
 
 const update_syntax_printch=()=>{//«
-
+if (SYNTAX !== JS_SYNTAX) return;
 /*Note«
 This does not check for syntax destroyers like quotes in quotes (" " ") or comment enders
 The idea is that at the level of printing single characters: when it comes to real time
@@ -1337,6 +1373,8 @@ const expanders=[
 ];
 let ln = curln(true);
 let lnlen = ln.length;
+
+//WIUPTNGFH (also see the one below where there is ch.match)
 let prv="", nxt=ln[x+1], ch = ln[x];
 if (x>0) prv=ln[x-1];
 
@@ -1473,6 +1511,8 @@ for (let col of colarr){//«Find everything to move ahead to put into movecols a
 for (let col of movecols) colarr[col[4]] = col;//Activate the new colors
 if (!incol){//«If not interior to something...
 let have_comment = false;
+//WIUPTNGFH
+if (!ch) return;
 if (ch.match(/^[a-z]$/)){//«Might have a new keyword if lower case
 	let s = ch;
 	let start_i=x;
@@ -2568,9 +2608,9 @@ const fmt=(str,opts={})=>{//«
 	return ret.join("\n");
 };//»
 const do_justify=()=>{//«
-
+	let holdx = x;
+	let holdy = y;
 	if (is_normal_mode(true)){
-
 		let thisln = lines[cy()];
 		if (!thisln.length) return;
 		if (/^[\t ]+$/.test(thisln.join(""))) return;
@@ -2580,12 +2620,10 @@ const do_justify=()=>{//«
 		for (;;){
 			let ln = lines[i];
 			if (!ln.length) {
-
 				i++;
 				break;
 			}
 			if (/^[\t ]+$/.test(ln.join(""))) {
-
 				i++;
 				break;
 			}
@@ -2618,16 +2656,23 @@ const do_justify=()=>{//«
 	}
 
 	if (visual_line_mode) {
-		delete_lines(false, true);
+//YEOPIUYHG
+		let last_line_null = !lines[lines.length-1][0];
+		let doaddline;
+		delete_lines();
+		if (seltop !== cy()) doaddline=true;
 		let arr = yank_buffer.data;
 		let s='';
-		for (let ln of arr){
-			s+=ln.join("")+" ";
-		}
+		for (let ln of arr) s+=ln.join("")+" ";
 		let arr2 = fmt(s,{maxlen:WRAP_LENGTH,nopad:true}).split("\n");
 		insert_lines(arr2);
+		if (x>=w) x=w-1;
+		if (doaddline) lines.splice(cy(), 0, [""]);
+		if (!last_line_null && !lines[lines.length-1].length) lines.pop();
+		y = holdy;
 		render();
 	}
+//*/
 
 }//»
 const insert_comment=()=>{//«
@@ -2815,7 +2860,6 @@ const insert_lines = (linesarg, if_from_pretty)=>{//«
 //XXX DOWUTHERE???
 //		if (!lines[cy()].length) n=1;
 		let donum = newlines.length-n;
-
 		if (donum && foldmode) adjust_row_folds(realy(), donum);
 		lines.splice(cy(),n,...newlines);
 		if (donum && foldmode) {
@@ -4627,7 +4671,6 @@ When you are coming out of normal mode and doing a paste, x++ is like hitting th
 					visual_mode = false;
 					render();
 				});
-
 			}//»
 			else if (ch=="V"){//«
 				visual_line_mode = true;
