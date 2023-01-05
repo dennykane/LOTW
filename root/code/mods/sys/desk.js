@@ -6203,7 +6203,7 @@ else {
 return;
 }
 //			if (CUR.ison()) {
-			if (kstr=="m_C"){//«/*Move icons*/
+			if (kstr=="m_CA"){//«/*Move icons*/
 const move_icon_array = ()=>{//«
 	let r;
 	const move_to_win_or_desk=()=>{//«

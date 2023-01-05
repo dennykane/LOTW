@@ -1,4 +1,42 @@
 /*
+
+WTF IS SAVE_STATE SUPPOSED TO BE REALLY NOW??? TRY AGAIN WITH THAT LOGIC!!!!
+
+*/
+/*
+
+
+Do a "macro mode" that disables repeat and allows holding down several keys in order
+to, ie, automagically print out a certain word.
+
+
+*/
+/*
+const MACROS={
+	pr:"oposition",
+	ph:'ilosophy',
+	exp:'ression',
+	exi:'stence',
+	el:'ementary',
+	rep:'resentation',
+	des:'cription',
+	pos:'sibilities',
+	sit:'uation',
+	tau:'tology',
+	con:'tradiction'
+	
+};
+*/
+const MACROS={
+par:"ticipate",
+con:"sequences",
+Ce:"rtainly"
+}
+
+/*«
+
+STILL NOT PERFECT!!!!!!!!
+
 @YEOPIUYHG Just added in some logic to fix the issue of justifying text at the
 bottom of the screen. There had been two issues:
 
@@ -33,7 +71,7 @@ Look into every while/for loop.
 Solution!? @QOPIUTHGS, took out the "true" as the second argument to delete_lines, and now
 everything seems perfect.
 
-*/
+»*/
 export const mod = function(Core, arg) {
 
 //Render with no cursor: render({nocursor:true});
@@ -219,6 +257,15 @@ let jlog=obj=>{log(JSON.stringify(obj, null, "  "));};
 const fsapi = NS.api.fs;
 //»
 //Var«
+
+let do_saveloop = true;
+let editsave_interval;
+let EDITSAVE_LOOP_MS = 60 * 1000;
+
+let MACROMODE = false;//"New" macro mode
+let KEYDOWNS = {};
+let KEYTIMES = {};
+
 let SAVE_STATE_TO_DB_TIMEOUT_SECS=5;
 let SAVE_STATE_INTERVAL_MS=70;
 let MIN_COMPLETE_LETTERS=6;
@@ -795,6 +842,15 @@ this.resize=(warg,harg)=>{
 //»
 //Util«
 
+const set_completer_words=(linesarg)=>{
+	if (!linesarg) {
+linesarg = get_edit_save_arr()[0].split("\n");
+	}
+//log(linesarg);
+	ALL_WORDS = linesarg.join(" ").split(/\W+/).sort().uniq().filter( w =>
+		w.length >= MIN_COMPLETE_LETTERS && !w.match(/^\d/)
+	);
+};
 let MEM_WARN_THRESHHOLD_PERCENT = 50;
 const MB = 1024*1024;
 const stat_memory=()=>{
@@ -844,6 +900,7 @@ const cancel=()=>{
 	stat_render("Cancelled!");
 };
 const quit=()=>{
+	if (editsave_interval) clearInterval(editsave_interval);
 	termobj.is_dirty = false;
 	termobj.onescape = onescape;
 	termobj.overrides = hold_overrides;
@@ -1070,7 +1127,7 @@ const prepend_visual_line_space=(ch)=>{//«
 	termobj.is_dirty = true;
 };//»
 const maybequit=()=>{//«
-return quit();
+//return quit();
 	if (!dirty_flag) return quit();
 	stat_message = "Really quit? [y/N]";
 	render();
@@ -3811,6 +3868,7 @@ const do_save_state=(if_init)=>{//«
 	if (save_state_to_db_timeout) clearTimeout(save_state_to_db_timeout);
 	if (!if_init) save_state_to_db();
 };//»
+/*
 const save_state=()=>{//«
 	did_save_state=1;
 	if (save_state_interval) return;
@@ -3825,6 +3883,8 @@ const save_state=()=>{//«
 		save_state_interval=null;
 	}, SAVE_STATE_INTERVAL_MS);
 };//»
+*/
+const save_state = noop;
 
 const do_history_arrow=sym=>{//«
 let hist;
@@ -4033,7 +4093,6 @@ const search_and_replace = async(arr, if_entire_file) =>{//«
 
 };//»
 
-
 const do_scroll_search=(if_start)=>{//«
 	line_colors.splice(0, line_colors.length);
 	if (if_start && foldmode){
@@ -4178,7 +4237,15 @@ console.error("Fold error detected, line: ", i);
 	}
 	return false;
 };//»
-const editsave=async(if_version)=>{//«
+const do_edit_saveloop=()=>{
+
+editsave_interval = setInterval(()=>{
+	if (dirty_flag) editsave(true);
+}, EDITSAVE_LOOP_MS);
+
+};
+const editsave=async(if_nostat)=>{//«
+//const editsave=async(if_version)=>{
 	let func;
 
 	let arr = get_edit_save_arr();
@@ -4200,6 +4267,7 @@ const editsave=async(if_version)=>{//«
 		return;
 	}
 	let usepath = edit_fullpath;
+/*
 	if (if_version){
 		usepath = await get_version_path();
 		let bytes = await Core.api.gzip(val);
@@ -4207,19 +4275,21 @@ const editsave=async(if_version)=>{//«
 		val = bytes;
 		if (!usepath) return;
 	}
+*/
 	clear_save_state_to_db_timeout();
 	func(usepath, val, (ret,err_or_pos)=>{
 		if (ret) {
 			if (_Desk && _Desk.make_icon_if_new(ret)) _Desk.update_folder_statuses();
 			let numstr="";
-			if (if_version) {
+//			if (if_version) {
 //				numstr = ;
-				let num = (usepath.split("/")).pop();
-				stat_message = `${edit_fname} v${parseInt(num)} ${err_or_pos} gzipped bytes written`;
-			}
-			else {
-				stat_message = `${edit_fname} ${numlines}L, ${err_or_pos}C written`;
-			}
+//				let num = (usepath.split("/")).pop();
+//				stat_message = `${edit_fname} v${parseInt(num)} ${err_or_pos} gzipped bytes written`;
+//			}
+//			else {
+			if (!if_nostat) stat_message = `${edit_fname} ${numlines}L, ${err_or_pos}C written`;
+//else log("SAVED...");
+//			}
 			dirty_flag = false;
 			termobj.is_dirty = false;
 			delete_state_from_db();
@@ -4229,6 +4299,7 @@ const editsave=async(if_version)=>{//«
 	}, opts);
 }
 //»
+
 const handle_edit_input_tab = (if_ctrl)=>{//«
 	if (if_ctrl) num_completion_tabs = 0;
 	let gotpath = stat_com_arr.join("").trim();
@@ -4321,6 +4392,7 @@ fs.path_to_obj(pardir,parobj=>{
 		edit_fname = fname;
 		edit_ftype = rtype;
 		editsave();
+		if (do_saveloop && edit_fullpath && edit_ftype=="fs") do_edit_saveloop();
 	};
 	rootobj = parobj.root;
 	let rv = checkok();
@@ -4467,7 +4539,23 @@ const save_temp_file = () => {//«
 
 this.key_up_handler = (arg1,e)=>{//«
 	let code = e.keyCode;
-	if (code >=16 && code <=18){
+if (code >=32 && code <= 126) {
+//log();
+	if (MACROMODE) {
+		let k = e.key;
+		let tm = KEYDOWNS[k];
+if (tm){
+delete KEYTIMES[tm];
+delete KEYDOWNS[k];
+}
+if (!Object.keys(KEYDOWNS).length){
+KEYDOWNS={};
+KEYTIMES={};
+}
+	}
+
+}
+	else if (code >=16 && code <=18){
 		let meta = (code==18?"A":(code==17?"C":"S"))+e.location;
 		let dval = meta_downs[meta];
 		if (dval==1) meta_ups[meta]=1;
@@ -4514,9 +4602,34 @@ this.key_handler=async(sym, e, ispress, code, meta)=>{//«
 			let ch = String.fromCharCode(code);
 			if (stat_cb) return stat_cb(ch);
 			if (edit_insert) {
+				let macro_key;
+				if (MACROMODE){
+					macro_key = '';
+					let k = e.key;
+					if (k.match(/[a-z]/)) {
+						if (KEYDOWNS[k]) return;
+						let tm = new Date().getTime();
+						KEYDOWNS[k]=new Date().getTime();
+						KEYTIMES[tm]=k;
+let arr=[];
+for (let k in KEYDOWNS){
+arr.push(KEYDOWNS[k]);
+}
+arr = arr.sort();
+for (let n of arr){
+	macro_key+=KEYTIMES[n];
+}
+//log(macro_key);
+					}
+				}
 				printch(ch, e);
+if (macro_key){
+let str = MACROS[macro_key];
+
+if (str) printchars(str);
+}
+
 				save_state();
-//DELAY_REPEAT_TEST_HERE
 				do_syntax_timer();
 				return 
 			}
@@ -4886,8 +4999,20 @@ termobj.clipboard_copy(yank_buffer.data.reduce((prev,arr)=>prev+arr.join("")+"\n
 	const updown_funcs={
 		UP_:up,
 		DOWN_:down,
-		PGDOWN_S:()=>{if(lines[cy()+h-1]){scroll_num++;render();}},
-		PGUP_S:()=>{if(scroll_num){scroll_num--;render();}},
+		PGDOWN_S: () => {
+			if (lines[cy() + h - 1]) {
+				scroll_num++;
+if (y>0) y--;
+				render();
+			}
+		},
+		PGUP_S: () => {
+			if (scroll_num) {
+				scroll_num--;
+if (y < h-2) y++;
+				render();
+			}
+		},
 		PGUP_: pgup,
 		PGDOWN_:pgdn,
 		HOME_:home,
@@ -4907,18 +5032,18 @@ termobj.clipboard_copy(yank_buffer.data.reduce((prev,arr)=>prev+arr.join("")+"\n
 		printch("\t",e);
 		save_state();
 	}//»
-	else if(sym=="n_C"){
+	else if(sym=="n_C"){//«
 		if (NO_CTRL_N){
 			e.preventDefault();
 		}
 		else{
 stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 		}
-	}
-	else if (sym=="p_C"){
+	}//»
+	else if (sym=="p_C"){//«
 		e.preventDefault();
 		do_complete();
-	}
+	}//»
 	else if (sym=="p_A"){//«
 		if (!pretty) {
 			if (!is_normal_mode(true)) {
@@ -4934,12 +5059,12 @@ stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 		}
 		else dopretty();
 	}//»
-	else if (sym=="l_C"){
+	else if (sym=="l_C"){//«
 		e.preventDefault();
 		dolinewrap();
 		save_state();
 		do_syntax_timer();
-	}
+	}//»
 	else if (sym=="n_A") {//«
 		edit_show_col = !edit_show_col;
 		render();
@@ -4958,18 +5083,18 @@ stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 		if (edit_stdin_func) edit_stdin_func(get_edit_save_arr()[0], new_stdin_func_cb);
 	}//»
 	else if (sym=="e_C") seek_line_end();
-	else if (sym=="ENTER_") {
+	else if (sym=="ENTER_") {//«
 		enter();
 		save_state();
-	}
-	else if (sym=="ENTER_C") {
+	}//»
+	else if (sym=="ENTER_C") {//«
 		let hold = edit_insert;
 		edit_insert=true;
 		enter(true);
 		edit_insert=hold;
 		save_state();
 		render();
-	}
+	}//»
 	else if (sym=="LEFT_") left();
 	else if (sym=="LEFT_C") left(true);
 	else if (sym=="RIGHT_") right();
@@ -4980,11 +5105,11 @@ stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 		save_state();
 		do_syntax_timer();
 	}//»
-	else if (sym=="DEL_") {
+	else if (sym=="DEL_") {//«
 		del();
 		save_state();
 		do_syntax_timer();
-	}
+	}//»
 	else if (sym=="u_C") {//«
 		e.preventDefault();
 		insert_cut_buffer();
@@ -5015,12 +5140,10 @@ stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 		stat_render("Showing marks: " + show_marks);
 	}//»
 	else if (sym=="s_C") trysave();
-	else if (sym=="s_CS") {
+	else if (sym=="s_CS") {//«
 		if (!edit_fullpath) return trysave();
 		trysave(true);	
-//log("SAVEAS");
-//		trysave();
-	}
+	}//»
 	else if (sym=="v_A") {//«
 		if (!edit_fullpath) return stat_render("Must save before versioning!");
 		if (edit_ftype!="fs") return stat_render("Only supporting local versioning!");
@@ -5033,35 +5156,33 @@ stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 	}//»
 	else if (sym=="SPACE_CAS") {log(real_lines);}
 	else if (sym=="j_C") do_justify();
-	else if (sym=="/_A") {
+	else if (sym=="/_A") {//«
 		if (SYNTAX==JS_SYNTAX) {
 			printchars("/**/");
 			save_state();
 		}
-	}
-	else if (sym=="o_CAS"){
+	}//»
+	else if (sym=="o_CAS"){//«
 		x=0;y=0;scroll_num=0;
 		render();
-	}
-	else if (sym=="d_A"){
+	}//»
+	else if (sym=="d_A"){//«
 		y++;
 		if (y==h-1){
 			y--;
 			scroll_num++;
 		}
 		render();
-	}
-	else if (sym=="n_CA"){
+	}//»
+	else if (sym=="n_CA"){//«
 		clear_nulls_from_cur_ln();
 		save_state();
-	}
-	else if (sym=="m_CAS"){
-		stat_memory();
-	}
-	else if (sym=="n_CAS"){
+	}//»
+	else if (sym=="m_CAS") stat_memory();
+	else if (sym=="n_CAS"){//«
 		clear_nulls_from_file();
 		save_state();
-	}
+	}//»
 	else if (sym=="l_CS") {//«
 //		save_state_to_db(states[states.length-1]);
 	}//»
@@ -5076,14 +5197,14 @@ stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 			save_state();
 		}
 	}//»
-	else if (sym=="0_A"){
+	else if (sym=="0_A"){//«
 		if (is_normal_mode()&&dev_mode) {
 			printch("");
 			save_state();
 			stat_warn('Now inserting a null byte in dev mode');
 		}
-	}
-	else if (sym.match(/^[-0-9]_CA$/)){
+	}//»
+	else if (sym.match(/^[-0-9]_CA$/)){//«
 		if (sym=="0_CA"){
 			state_iter=0;
 			load_state();
@@ -5104,7 +5225,33 @@ state_iter = Math.floor(which*states.length/10);
 load_state();
 stat_which_state(true);
 		}
+	}//»
+else if (sym=="-_CAS"){
+printch("—");
+}
+else if (sym=="c_CAS"){
+set_completer_words();
+stat(`Reset completers (${ALL_WORDS.length} words)`);
+}
+else if (sym=="q_A"){
+	MACROMODE = !MACROMODE;
+	if (MACROMODE) {
+		KEYDOWNS={};
+		KEYTIMES={};
+//		for (let k in KEYDOWNS) delete KEYDOWNS[k];
+//		for (let k in KEYTIMES) delete KEYTIMES[k];
+		stat("Macro mode is on");
 	}
+	else stat("Macro mode is off");
+//KEYDOWNS={};
+}
+else if (sym=="d_CA"){
+
+let arr = get_edit_save_arr();
+Core.api.download(arr[0],edit_fname||"VIMDL.txt")
+
+}
+
 }//»
 
 this.init = async(arg, patharg, cb, opts)=>{//«
@@ -5181,9 +5328,7 @@ cb(`linesarg.length (${linesarg.length}) >= REAL_LINES_SZ (${REAL_LINES_SZ})`);
 //cwarn("Don't have ALL_WORDS!!!");
 	}
 	else{
-		ALL_WORDS = linesarg.join(" ").split(/\W+/).sort().uniq().filter( w =>
-			w.length >= MIN_COMPLETE_LETTERS && !w.match(/^\d/)
-		);
+		set_completer_words(linesarg);
 		lines=[];
 		line_colors = [];
 		zlncols=[];
@@ -5202,6 +5347,7 @@ cb(`linesarg.length (${linesarg.length}) >= REAL_LINES_SZ (${REAL_LINES_SZ})`);
 	vim.fname = edit_fname;
 	termobj.init_edit_mode(vim, num_stat_lines);
 	render();
+	if (do_saveloop && edit_fullpath && edit_ftype=="fs") do_edit_saveloop();
 }//»
 
 }
