@@ -1,3 +1,6 @@
+/*@SHUPWMJD Moving window edges with hotkeys: Chromebooks have no PGUP, PGDOWN, HOME, or END keys and
+ChromeOS likes to eat up a lot of hotkey combinations that use arrow keys!!!
+*/
 /*Idea for repositioning windows after the console window is reclosed«
 
 Currently, windows are repositioned by check_all_wins() to fit in the available
@@ -46,7 +49,7 @@ left: 50%;
 transform: translate(-50%, -50%);
 
 »*/
-/*!!! Errpr !!!//«
+/*!!! Error !!!//«
 
 I had a deeply embedded folder icon that I moved onto the desktop, which had a window connected to it.
 Window minimization status did not affect it.
@@ -135,7 +138,7 @@ Also: ENTER_ and ENTER_A are treated like ENTER_, when just 1 icon is highlighte
 
 const NS = window[__OS_NS__];
 
-export const mod = function(Core, arg) {
+export const mod = function(Core, arg) {//«
 
 //Imports/Decs«
 
@@ -261,6 +264,7 @@ let minimized_windows=[];
 //String/Regex constants/vars«
 
 const MEDIAPLAYER_EXTENSIONS=["webm","mp4","m4a","ogg","mp3"];
+let TEXT_EDITOR_APP = "util.TextEdit";
 const DEF_BIN_OPENER = "util.BinView";
 const UNZIP_APP = "util.Unzip";
 const DEF_FORUM = "general";
@@ -1890,10 +1894,10 @@ const reload_icons = (cb, is_refresh) => {//«
 		else doload();
 	});
 };//»
-const open_folder_win = (name, path, iconarg, winargs) => {//«
+const open_folder_win = (name, path, iconarg, winargs, cbarg, folder_cbarg) => {//«
 	let icon = iconarg ||{app: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
 	icon.winargs = winargs;
-	let win = open_new_window(icon);
+	let win = open_new_window(icon, null, {SAVECB: cbarg, SAVEFOLDERCB: folder_cbarg});
 	winon(win);
 }//»
 
@@ -2190,10 +2194,16 @@ const make_window = (arg) => {//«
 	let is_hidden = arg.HIDDEN;
 	let app = arg.APP;
 
-	let appobj = arg.APPOBJ;
+//	let appobj = arg.APPOBJ;
 	let winid;
-	if (!appobj) appobj = {};
+//	if (!appobj) appobj = {};
 	let win = make("div");
+//	if (arg.SAVEFOLDERCB) arg.SAVEFOLDERCB(win);
+	if (arg.SAVECB) {
+		win._savecb = arg.SAVECB;
+		win._savefoldercb = arg.SAVEFOLDERCB;
+		arg.SAVEFOLDERCB(win);
+	}
 	win.toggle_chrome=()=>{
 		do_toggle_win_chrome(win);
 	};
@@ -2257,11 +2267,23 @@ cwarn("No drop on main window");
 	}
 	if (is_chrome || arg.NOCHROME) win.nowindecs = true;
 	no_select(win);
+
+/*
 	if (appobj.path) {
 		if (app.match(/^\./)) win.app = app;
 		else win.app = appobj.path.replace(/\x2f/g,".") + "."+app
 	}
 	else win.app = app;
+*/
+
+//Test for app.match(/filesystem:.+.js$/, and "slice out" the "app" name)
+	let marr;
+	let fs_url;
+	if (marr = app.match(/^filesystem:.+\/([a-z][a-z0-9]*)\.js$/i)){
+		fs_url = app;
+		app = `local.${marr[1]}`;
+	}
+	win.app = app;
 	win.dataset.app = win.app;
 	win.type = "window";
 //	if (!is_embedded) win.pos = "absolute";
@@ -2536,9 +2558,11 @@ win._mintitle.innerText = s
 	};
 	close.onclick=()=>{
 //		butdiv.reset();
+		if (win._savecb) win._savecb();
 		win.force_kill();
 	}
 	win.key_kill = () => {
+		if (win._savecb) win._savecb();
 		if (win.obj && win.obj.is_editing) {
 			if (win.obj.try_kill) win.obj.try_kill();
 			else cwarn("Dropping close signal");
@@ -2709,6 +2733,7 @@ win._mintitle.innerText = s
 	arg.Core = Core;
 	arg.Desk = Desk;
 	arg.NS = NS;
+	arg.FS_URL = fs_url;
 	if (win.nosave) arg.APPMODE = true;
 	if (!arg.ISBLANK) make_app_window(arg);
 	return win;
@@ -2723,23 +2748,22 @@ const make_app_window = (arg) => {//«
 	let hold_current = Desk.CWIN;
 	let win = arg.TOPWIN;
 	let mainwin = arg.MAIN;
-	let appobj = arg.APPOBJ || {};
-	appobj.Core = Core;
-	appobj.Main = mainwin;
-	appobj.Top = win;
-	appobj.NS = NS;
-	appobj.Desk = Desk;
-	let url;
+//	let appobj = arg.APPOBJ || {};
+	let appobj = {
+		Core: Core,
+		Main: mainwin,
+		Top: win,
+		NS: NS,
+		Desk: Desk
+	};
+	let fs_url = arg.FS_URL;
 	let cb = arg.CB||(()=>{});
 	let scrpath;
 	let winapp = win.app;
-	let is_local = winapp.match(/^local\./);
 	let str, marr;
 	let icon = arg.ICON || {};
 	if (!icon.ready) icon.ready={};
-//	const script_path = `/root/code/apps/${winapp.replace(/\./g, "/")}.js`;
-	const script_path = `/root/code/apps/${winapp.replace(/\./g, "/")}.js?v=${VERNUM++}`;
-
+	let script_path;
 //»
 
 	win.barferror = e => {//«
@@ -2766,9 +2790,15 @@ win.title = winapp;
 		icon.ready.state = "Running application";
 		try {
 			if (!arg.MAIN) console.log(" ");
+if (fs_url){
+	win.obj = new NS.apps[winapp](appobj);
+	win._fs_url = fs_url
+}
+else {
 			const { app } = await import(script_path);
 			NS.apps[winapp] = app;
 			win.obj = new app(appobj);
+}
 			win.obj.arg = arg;
 			loadit();
 		} catch (e) {
@@ -2789,14 +2819,22 @@ win.title = winapp;
 		}, "error");
 	}//»
 	const make_it = async () => {//«
+
 		let scr = make('script');
-		scr.type = "module";
 		scr.onload = load_cb;
 		scr.onerror = e => {
 			icon.ready.error = "Application script load error:\x20"+winapp;
 			win.barferror(e);
 		};
+
+		if (fs_url) script_path = fs_url;
+		else {
+			scr.type = "module";
+			script_path = `/root/code/apps/${winapp.replace(/\./g, "/")}.js`;
+		}
+		script_path += `?v=${VERNUM++}`;
 		scr.src = script_path;
+//		scr.src = `${script_path}?v=${VERNUM++}`;
 		win._script = scr;
 		document.head.add(scr);
 	};//»
@@ -2860,19 +2898,19 @@ win.title = winapp;
 	};//»
 	const doload = async () => {//«
 		icon.ready.state = "Seeking application file";
-//log(NS.apps[win.app]);
 		if (NS.apps[win.app]) {
 			win.obj = new NS.apps[winapp](appobj,NS,globals,Core,Desk,mainwin);
 			win.obj._hashsum = NS.apps[winapp]._hashsum;
 			loadit();
 			return;
 		} 
-		else if (appobj.path) return load_cache();
+//		else if (appobj.path) return load_cache();
+
 		make_it();
 	};//»
 
 	if(winapp=="Script" || winapp=="None"){set_win_defs(win);icon.ready.state=true;cb(win);return;}
-	win.main.onmouseup=e=>{
+	win.main.onmouseup=e=>{//«
 		CRW=null;
 		CDW=null;
 		if (!arg.ISCHROME && win.obj.onicondrop) {
@@ -2888,11 +2926,16 @@ win.title = winapp;
 			icon_array_off(4);
 			cldragimg();
 		}
-	};
+	};//»
+
 	doload();
 
 }//»
 
+const open_text_editor = ()=>{
+	open_app(TEXT_EDITOR_APP, null, true);
+	return true;
+};
 const open_terminal = () => {//«
 	open_app("sys.Terminal", null, true);
 	return true;
@@ -2915,12 +2958,20 @@ const set_win_defs = (w,arg={}) => {//«
 //const make_folder_icon_cb = (winarg, winpath, namearg, if_autopos, roottype) => {
 	if (w.app==FOLDER_APP){
 		obj.get_context=()=>{
+let choices = [
+	"Folder",
+	()=>{make_folder_icon_cb(w)},
+	"Text File"
+];
+if (w._savecb) choices.push(null);
+
+else choices.push(()=>{Desk.make_icon_cb(w.fullpath(), "Text", w)});
 			return [
 				"\u{1f381}\xa0New",
-				[
-					"Folder",()=>{make_folder_icon_cb(w)},
-					"Text File",()=>{Desk.make_icon_cb(w.fullpath(), "Text", w)}
-				]
+				choices
+//				[
+//					"Text File",()=>{Desk.make_icon_cb(w.fullpath(), "Text", w)}
+//				]
 			];
 		}
 	}
@@ -4220,7 +4271,13 @@ const icon_dblclick = (icon, e, win_cb) => {//«
 	let app=icon.app;
 	if (!icon.win || try_force_open) {
 		if (app == "Folder"|| app==FOLDER_APP) {
-			win = open_new_window(icon);
+			let w = icon.parwin;
+			if (w._savecb){
+				icon.winargs={X: w.x, Y:w.y, WID: w.main.w, HGT: w.main.h};
+				icon.parwin.force_kill();
+				win = open_new_window(icon, null, {SAVECB: w._savecb, SAVEFOLDERCB: w._savefoldercb});
+			}
+			else win = open_new_window(icon);
 			winon(win);
 			if(win_cb) win_cb(win);
 		}
@@ -4524,11 +4581,16 @@ const delete_icons = async which => {//«
 const no_move_all_icons=()=>{for(let icn of IA)icon_off(icn);IA=[];CDICN=null;}
 
 const save_icon_editing = async() => {//«
-	const abort=mess=>{
+	const abort=async mess=>{
 		if (!mess) mess="There was an error";
 		CEDICN.del();
+		if (CEDICN._editcb) {
+			await WDGAPI.poperr(mess);
+			CEDICN._editcb();
+			CEDICN._editcb = null;;
+		}
+		else poperr(mess);
 		CEDICN = null;
-		poperr(mess);
 		CG.off();
 	};
 	const doend = async (oldnamearg, newvalarg) => {
@@ -4550,15 +4612,18 @@ const save_icon_editing = async() => {//«
 		CEDICN.dblclick = null;
 		icon_off(CEDICN);
 		CEDICN.name = newval;
-		if (CEDICN._savetext) {
-			let rv = await fsapi.writeFile(CEDICN.fullpath(), CEDICN._savetext, {NOMAKEICON: true});
+		if (CEDICN._savetext||CEDICN._savetext==="") {
+//			let rv = await fsapi.writeFile(CEDICN.fullpath(), CEDICN._savetext, {NOMAKEICON: true});
+			let rv = await fsapi.writeFile(CEDICN.fullpath(), CEDICN._savetext);
 			if (!rv) return abort("The file could not be created");
+//log(rv);
+			CEDICN._entry = rv.entry;
 			delete CEDICN._savetext;
 		}
 
 		if (CEDICN._editcb) {
 			CEDICN._editcb(CEDICN);
-			CEDICN._editcb = null;;
+			CEDICN._editcb = null;
 		}
 		CEDICN.save();
 		if (CEDICN.parentNode===desk && !windows_showing) toggle_show_windows();
@@ -4588,7 +4653,7 @@ const save_icon_editing = async() => {//«
 						}
 						let rtype = parobj.root.TYPE;
 						if (rtype == "fs") {
-							if (CEDICN._savetext) doend(holdname, checkit);
+							if (CEDICN._savetext||CEDICN._savetext==="") doend(holdname, checkit);
 							else {
 								fs.get_or_make_dir(CEDICN.path, checkit, mkret => {
 									if (mkret) doend(holdname, checkit);
@@ -4751,9 +4816,13 @@ const make_new_file=(val, ext, path, winarg)=>{//«
 			let icon = make_icon({NAME: `${name}.${ext}`});
 			icon._savetext = val;
 			icon._editcb = Y;
-	//				if (usewin===desk) place_in_icon_slot(icon, null, true);
-			if (path===globals.desk_path) place_in_icon_slot(icon, null, true);
-			else add_icon_to_folder_win(icon, winarg);
+if (winarg) add_icon_to_folder_win(icon, winarg);
+else if (path===globals.desk_path) place_in_icon_slot(icon, null, true);
+else{
+console.error("No winarg AND path!==desk_path!!!");
+return;
+}
+
 			setTimeout(() => {
 				init_icon_editing(icon);
 			}, 0);
@@ -5221,7 +5290,6 @@ const open_app = (appname, cb, force_open, winargs, appargs, if_reload, icon) =>
 		usew = winw() - (20 + 134);
 		useh = winh() - (35 + 79);
 	} 
-//	if (appname == FOLDER_APP) wintitle = "File Explorer".tonbsp();
 	let useicon = winargs.ICON || icon || {ready:{}};
 	win = make_window({
 		CENTER: winargs.CENTER||defwinargs.CENTER,
@@ -5326,7 +5394,7 @@ const open_file_by_path = (patharg, cb, opt={}) => {//«
 		let fullpath = objpath(ret);
 		if (ret.APP == FOLDER_APP) {
 			ok();
-			return open_folder_win(ret.NAME, objpath(ret.par),null,opt.WINARGS);
+			return open_folder_win(ret.NAME, objpath(ret.par),null,opt.WINARGS, opt.SAVE_CB, opt.SAVE_FOLDER_CB);
 //			return open_folder_win(ret.NAME, objpath(ret.par),{winargs:opt.WINARGS,fullpath:()=>{return fullpath;}});
 		}
 		let patharr = fullpath.split("/");
@@ -5443,9 +5511,12 @@ const open_new_window = (icon, cb, opts={}) => {//«
 //		APPOBJ: appobj,
 		ICONPATH: icon.path,
 		CB: cb,
+		SAVECB: opts.SAVECB,
+		SAVEFOLDERCB: opts.SAVEFOLDERCB,
 		TYPE: "window"
 	});
 	if (!win) return;
+//	win._savecb = opts.SAVECB;
 	win.name = usename;
 	win.path = usepath;
 	win.ext = useext;
@@ -5512,7 +5583,7 @@ usewin._script = null;
 		let winicon = w.icon;
 		let winname = w.name;
 		let winext = w.ext;
-		let winapp = w.app;
+		let winapp = w._fs_url || w.app;
 		let winnosave = w.nosave;
 		let appobj = w.appobj;
 		if (!appobj) appobj = {};
@@ -6203,7 +6274,7 @@ else {
 return;
 }
 //			if (CUR.ison()) {
-			if (kstr=="m_CA"){//«/*Move icons*/
+			if (kstr=="m_"){//«/*Move icons*/
 const move_icon_array = ()=>{//«
 	let r;
 	const move_to_win_or_desk=()=>{//«
@@ -6312,13 +6383,13 @@ maxed/fullscreened wins).
 					if (is_max) return;
 					return move_window(kstr[0]);
 				}
-				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_CS$/)) {
-//					if (is_max) delete cwin.is_maxed;
-					let ch0=chr[0];
-					if (ch0=="R"||ch0=="D") return resize_window(ch0);
-					else if(ch0=="L") return resize_window("R",true);
-					else return resize_window("D",true);
-				}
+//log
+//SHUPWMJD
+if (kstr=="RIGHT_CA") resize_window("R");
+else if (kstr=="LEFT_CA") resize_window("R", true);
+else if (kstr=="END_S") resize_window("D");
+else if (kstr=="HOME_S") resize_window("D", true);
+
 			}
 		}
 		if (cwin.movediv || cwin.is_minimized) return;
@@ -6328,6 +6399,7 @@ maxed/fullscreened wins).
 	}
 /*A lonely escape has escaped to the desktop!*/
 	if (kstr == "ESC_") return handle_ESC();
+	else if (kstr=="1_CA") return open_text_editor();
 }
 this.keydown=dokeydown;
 //»
@@ -7025,7 +7097,7 @@ this.init = async (init_str, cb) => {
 }
 //»
 
-}
+}//»
 
 
 

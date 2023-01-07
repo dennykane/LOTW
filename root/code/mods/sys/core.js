@@ -17,7 +17,8 @@ let DEF_APP = "util.BinView";
 const APP_ARR=[//«
 	"Link",
 	"Application",
-    "util.TextView",
+//    "util.TextView",
+    "util.TextEdit",
     "util.Unzip",
     "games.Arcade",
     "audio.Synth",
@@ -58,6 +59,7 @@ const APPICONS={//«
 	Folder:"1f4c1",
 	Hello:"1f64b",
 	TextView:"1f4dd",
+	TextEdit:"1f4dd",
 	BinView:"1f51f",
 	Terminal:"1f5b3",
 	Synth:"1f39b",

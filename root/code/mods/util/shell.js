@@ -4735,6 +4735,30 @@ log(fent);
 	if (!Desk) return cberr(ENODESK);
 	let which = args.shift();
 	if (!which) return cberr("No app given!");
+
+if (which.match(/\.js$/)){
+if (!window.webkitResolveLocalFileSystemURL) return cberr("Not running Chromium-based browser!");
+
+let path = normpath(which);
+let url = Core.fs_url(path);
+webkitResolveLocalFileSystemURL(url, fent=>{
+if (!fent.isFile) return cberr(`${path}: not a file`);
+/*
+
+*/
+//log(fent);
+//cbok(url);
+which = url;
+openit();
+
+}, (err)=>{
+
+cberr(`${path}: not found in local fs!`);
+});
+
+return;
+}
+
 	if (opts.source || opts.s){
 		let path = which.replace(/\./g, "/");
 		let rv = await fetch(`/root/code/apps/${path}.js`);

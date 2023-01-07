@@ -1,6 +1,4 @@
 /*
-*/
-/*
 
 @ODJTBQIKXH 
 XXX IS IT CORRECT TO DO: 'if (y>=h) {' XXX???
@@ -113,10 +111,10 @@ const DEL_MODS=[
 //	"sys.idb",
 //	"iface.net",
 //	"sys.fs",
-//	"util.shell",
+	"util.shell",
 //	"util.esmangle",
 //	"av.tone",
-	"util.vim",
+//	"util.vim",
 //	"util.pager"
 ];
 //»
@@ -3136,7 +3134,7 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 		if (sym == "d_C") return do_ctrl_D();
 		num_ctrl_d = 0;
 //SDJK
-		if (sym=="PGUP_S"||sym=="PGDOWN_S") return handle_buffer_scroll(sym==="PGUP_S");
+//		if (sym=="PGUP_S"||sym=="PGDOWN_S") return handle_buffer_scroll(sym==="PGUP_S");
 		if (buffer_scroll_num!==null){
 			buffer_scroll_num = null;
 			x = hold_x;

@@ -1,3 +1,9 @@
+/*!!! @TEWOPJTYS: Just commented out set_completer_words() in init !!!
+This can take >1 second for larger files that normally open almost instantly
+
+The hotkey to do this manually is c_CAS
+
+*/
 /*
 
 WTF IS SAVE_STATE SUPPOSED TO BE REALLY NOW??? TRY AGAIN WITH THAT LOGIC!!!!
@@ -26,12 +32,14 @@ const MACROS={
 	con:'tradiction'
 	
 };
-*/
 const MACROS={
 par:"ticipate",
 con:"sequences",
 Ce:"rtainly"
 }
+*/
+
+const MACROS = {};
 
 /*«
 
@@ -5328,7 +5336,9 @@ cb(`linesarg.length (${linesarg.length}) >= REAL_LINES_SZ (${REAL_LINES_SZ})`);
 //cwarn("Don't have ALL_WORDS!!!");
 	}
 	else{
-		set_completer_words(linesarg);
+//TEWOPJTYS
+//		set_completer_words(linesarg);
+
 		lines=[];
 		line_colors = [];
 		zlncols=[];

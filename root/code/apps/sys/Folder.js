@@ -1,14 +1,11 @@
-/*TODO: NEED A FOLDER PICKER FOR IMPLEMENTING "SAVE AS" FUNCTIONALITY TODO
-
-- Basically just open this app by passing a "folders only" option. 
-- When navigating, need to keep the same window (don't open a new one).
-- Need to be able to navigate "up" to the parent folder.
-
-*/
 export const app = function(arg) {
 
-//let folders_only = true;
-let folders_only = false;
+ 
+
+//Just pass the window geometry
+//log(topwin.x, topwin.y, Main.w, Main.h);
+
+//let picker_mode = false;
 
 //Imports«
 
@@ -28,6 +25,10 @@ let statbar = topwin.status_bar;
 let num_entries = 0;
 
 const{poperr} = globals.widgets;
+
+let picker_mode;
+// = false;
+
 
 //»
 
@@ -102,7 +103,7 @@ kids = dir.KIDS;
 let keys = kids._keys;
 keys.splice(keys.indexOf("."),1);
 keys.splice(keys.indexOf(".."),1);
-if (folders_only){
+if (picker_mode){
 	let arr = [];
 	for (let k of keys){
 //log(kids[k].APP, FOLDER_APP);
@@ -161,6 +162,13 @@ const stat_num=()=>{//«
 	else stat(`${num_entries} entries`);
 };//»
 const init=async()=>{//«
+
+	if (topwin._savecb) {
+		picker_mode = true;
+		topwin.title = `Save\xa0Location\xa0:\xa0'${topwin.title}'`;
+	}
+//log(topwin._savecb);
+
 	dir = await fs.pathToNode(path);
 	if (!dir) {
 if (path) poperr(`Directory not found: ${path}`);
@@ -193,6 +201,7 @@ else cwarn("Opening in 'app mode'");
 this.reload=reload;
 
 this.onkeydown = function(e,s) {//«
+
 if (s=="r_")reload(path);
 else if (s=="0_"){
 	if (topwin.CURSOR) {
@@ -200,8 +209,27 @@ else if (s=="0_"){
 	}
 //topwin.CURSOR.set();
 }
+else if (s=="b_"){
 
+if (path=="//"||path==="/") return;
+let arr = path.split("/");
+arr.pop();
+let opts = {WINARGS: {X: topwin.x, Y:topwin.y, WID: Main.w, HGT: Main.h}};
+if (topwin._savecb) {
+	opts.SAVE_CB = topwin._savecb;
+opts.SAVE_FOLDER_CB = topwin._savefoldercb;
+}
+Desk.open_file_by_path(arr.join("/"), null, opts);
+topwin.force_kill();
 
+}
+else if (s=="s_"||s=="s_C"){
+
+if (topwin._savecb) {
+	topwin._savecb(topwin);
+	topwin._savecb = null;
+}
+}
 }//»
 this.onkill = function() {//«
 	icondv.del();

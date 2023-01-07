@@ -73,7 +73,8 @@ Main.dis="flex";
 Main.style.alignItems="center";
 Main.style.justifyContent="center";
 Main.style.flexDirection="column";
-
+Main.tcol="#fff";
+Main.innerHTML="<h2>Loading emulator...</h2>";
 
 let bUP,bDOWN,bLEFT,bRIGHT;
 let bB, bA, bY, bX;
