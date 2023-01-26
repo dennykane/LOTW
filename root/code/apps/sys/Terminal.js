@@ -1,7 +1,5 @@
-/*
-
-@ODJTBQIKXH 
-XXX IS IT CORRECT TO DO: 'if (y>=h) {' XXX???
+//Issues«
+/*@ODJTBQIKXH XXX IS IT CORRECT TO DO: 'if (y>=h) {' XXX??? «
 
 Just added the math to include num_stat_lines inside of scroll_into_view().
 Whenever we've had stat_lines before, we've never needed to call scroll_into_view(), because
@@ -23,7 +21,7 @@ it is not a span tag (slosing or opening). So, all non-span-tag <'s get replaced
 
 Also, all &'s are being turned into &amp;'s.
 
-*/
+»*/
 //METACHAR_ESCAPE: This escapes the shell's metacharacters when autocompleting
 /*
 
@@ -84,6 +82,21 @@ Step 4) Implement simple interfaces to vim, less, man, help, etc.
 
 
 »*/
+//Issues«
+
+/*
+
+Example of using 'wout' to print an error message with darkish red background
+wout("Unknown size",{color:["","#a00"],error:1});
+
+Doing encrypt, which might call read_stdin, thisline looks like [""]. How does this null
+string get in lines? Also, what puts a single space in? 
+//GHTYEKS
+		else if (!if_force_nl && thisline.length == 1 && thisline[0]==" ") lines[lines.length-1] = outi.split("");
+*/
+///XXX BADBUG123 (Found 1/23/20 @7:30am)
+//»
+//»
 
 //Development COM/LIB/MOD deleting«
 
@@ -107,30 +120,17 @@ const DEL_LIBS=[
 //"audio.webm"
 ];
 const DEL_MODS=[
+	"util.shell",
+//	"util.vim",
 //	"math.trading",
 //	"sys.idb",
 //	"iface.net",
 //	"sys.fs",
-	"util.shell",
 //	"util.esmangle",
 //	"av.tone",
-//	"util.vim",
+//	"local.vim"
 //	"util.pager"
 ];
-//»
-//Issues«
-
-/*
-
-Example of using 'wout' to print an error message with darkish red background
-wout("Unknown size",{color:["","#a00"],error:1});
-
-Doing encrypt, which might call read_stdin, thisline looks like [""]. How does this null
-string get in lines? Also, what puts a single space in? 
-//GHTYEKS
-		else if (!if_force_nl && thisline.length == 1 && thisline[0]==" ") lines[lines.length-1] = outi.split("");
-*/
-///XXX BADBUG123 (Found 1/23/20 @7:30am)
 //»
 
 //let GREEK_LANG_OK = false;
@@ -653,10 +653,11 @@ log(real_lines);
 	let real_lines;
 	let real_line_mode=false;
 	let show_marks;
+	let splice_mode;
 	let opts = {};
 	if (actor) ({stat_input_mode,stat_com_arr,stat_message,stat_message_type,real_line_mode}=actor);
 	if (!stat_input_mode) stat_input_mode="";
-	if (editor) ({macro_mode,visual_block_mode,visual_line_mode,visual_mode,show_marks,seltop,selbot,selleft,selright,selmark,error_cursor,real_lines, opts}=editor);
+	if (editor) ({splice_mode, macro_mode,visual_block_mode,visual_line_mode,visual_mode,show_marks,seltop,selbot,selleft,selright,selmark,error_cursor,real_lines, opts}=editor);
 	if (!(ncols&&nrows)) return;
 
 	let docursor = false;
@@ -902,6 +903,8 @@ if (num2 > w) {
 			else if (visual_line_mode) recmess = mess = "-- VISUAL LINE --";
 			else if (visual_mode) recmess = mess = "-- VISUAL --";
 			else if (visual_block_mode) recmess = mess = "-- VISUAL BLOCK --";
+			else if (splice_mode) mess="splice mode";
+
 			if (mess && !messln) messln = mess.length-7;
 			
 			let per;
@@ -2521,7 +2524,9 @@ log("YARR WHAT MAN OPTIONS????");
 		}
 		else {
 			if (tok0==="app"||tok0=="lib"||tok0=="import"){
+//log(tok);
 				if (tok0=="import") tok0="lib";
+				else if (tok0==="app" && tok.match(/\x2f/)) return do_gdc();
 				let path="";
 				if (tok) path=`?path=${tok}`;
 				let rv = await fetch(`/_get${tok0}${path}`);

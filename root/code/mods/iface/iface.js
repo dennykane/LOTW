@@ -58,12 +58,14 @@ this.ref = dbref;
 let messages = [];
 let waiters={};
 let connections = {};
+
 const send=(to,msg,type)=>{//«
 	let m = dbref.push({from:username, msg: msg, to: to, type:type});
 	m.remove();
 };
 this.send=send;
 //»
+
 const Peer=function(to,is_conn,cb){//«
 const port_arr=[//«
 "cam",
@@ -84,7 +86,7 @@ const port_arr=[//«
 	let closed = false;
 	const ports={};
 	let pc = new RTCPeerConnection({'iceServers':[{'urls':'stun:stun.l.google.com:19302'},{'urls':'stun:stun.services.mozilla.com'}]});
-	const handle_message=e=>{
+	const handle_message=e=>{//«
 cwarn("Peer event received",to);
 		let arr=new Uint8Array(e.data);
 		let port=port_arr[arr[0]];
@@ -109,9 +111,9 @@ cerr("Dropping message to port",port);
 				return;
 			}
 		}
-	};
+	};//»
 
-	const pc_send=async(port,data)=>{
+	const pc_send=async(port,data)=>{//«
 		if (closed) return;
 		let num = port_arr.indexOf(port);
 		if (num<0) return cerr("NOPORT",port);
@@ -119,7 +121,7 @@ cerr("Dropping message to port",port);
 		let ret=await Core.api.toBuf(blob);
 		if (!(ret instanceof ArrayBuffer)) return cerr("Not ArrayBuffer",data);
 		channel.send(ret);
-	};
+	};//»
 	const init_channel = chan => {//«
 		channel=chan;
 		this.channel = channel;
@@ -144,9 +146,6 @@ cwarn("Channel OPEN", to);
 			closed = true;
 cwarn("Channel CLOSED",to);
 			delete connections[to];
-let dirobj = await fsapi.pathToNode('/iface/'+channame);
-if (!(dirobj&&dirobj.KIDS)) return cerr("No dirobj for /iface/"+channame);
-delete dirobj.KIDS[to];
 		};
 	};//»
 	pc.onicecandidate=e=>{if(!e.candidate)return;send(to,JSON.stringify(e.candidate),"ice");};
@@ -242,6 +241,7 @@ cwarn("Unknown message type", typ);
 }
 
 });//»
+
 this.getConnections=()=>{return Object.keys(connections);};
 this.getConnection=name=>{return connections[name];};
 this.getMessage=()=>{return messages.shift();};
@@ -334,9 +334,9 @@ const api={//«
 	}
 };
 
-NS.api.iface=api;
-
 //»
+
+NS.api.iface=api;
 
 }
 

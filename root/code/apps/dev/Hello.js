@@ -1181,7 +1181,6 @@ const load_iface=()=>{//«
 		let rv = await fsapi.loadMod("iface.iface",{STATIC:true});
 		if (!rv) return Y();
         Y(true);
-		if (typeof rv === "string") Core.do_update(`mods.iface.iface`, rv);
     });
 }; //»
 const init_video=()=>{//«

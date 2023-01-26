@@ -1,5 +1,17 @@
+/*Major system "house cleaning" on Jan. 9, 2023://«
 
+Removed: SNESEmulator.js (4MB!) and SNESEmulator.mem from mods/games/ and put into SNES.zip
+Removed: snes-wasm.js and walt.js from mods/util/wasm/ and put into WASM_UTIL.zip
+Removed: esprima.js and escodegen.js from mods/util/es and put into ESPRIMA_UTIL.zip
+Removed: mods/av/webm/ and put into WEBM_WASM.zip
+Removed: mods/math/* (stats.js and trading.js)
+Removed: mods/synth/ (Tone.js and dx7/)
+Removed: 2 games from www/examples
+Removed: many apps from apps/* and put into OLDAPPS.zip
 
+Want to think about an "LOTW-ext" repo in order to keep the core project to a decent size...
+
+»*/
 window.__OS_NS__="LOTW";
 window[__OS_NS__]={error:{message:""},libs:{}, test:{}, coms:{}, devapps:{}, apps:{}, mods:{}, sys:{}, api:{}, init:{}};
 const NS = window[__OS_NS__];
@@ -49,7 +61,7 @@ const EXT_TO_APP_MAP={//«
 	webm:7,
 	mp4:7,
 	m4a:7,
-	smc: 8
+//	smc: 8
 //	ncft: 8
 };//»
 for (let k in EXT_TO_APP_MAP) ALL_EXTENSIONS.push(k);
@@ -397,7 +409,13 @@ globals.name = {
 //const copydiv=mk('div');
 const getAppIcon=(arg,opts={})=>{
 //	if (!arg) return APPICONS.BinView;
-	let app = arg.split(".").pop();
+//	let app = arg.split(".").pop();
+	let arr = arg.split(".");
+	let app = arr.pop();
+	if (app=="js" && arr.length) {
+		app = arr.pop();
+		if (app.match(/\x2f/)) app = app.split("/").pop();
+	}
 	let ch = APPICONS[app];
 	if (!ch) return app[0];
 	if (opts.html) return `&#x${ch};`;
@@ -1180,19 +1198,30 @@ const load_mod = async(modname, cb, opts = {})=>{//«
 //	let str;
 	let have_cache = false;
 //	let hash_ret = true;
+
+	let marr;
+	let fs_url;
+	if (marr = modname.match(/^filesystem:.+\/([a-z][a-z0-9]*)\.js$/i)){
+		fs_url = modname;
+		modname = `local.${marr[1]}`;
+	} 
+
 	if (use_type) which = use_type;
 	if (!force && NS[which][modname]) return cb(true);
 	let path = modname.replace(/\./g, "/");
 	let modpath;
-	if (which=="coms") modpath = `/root/${path}.js`;
+	if (fs_url) modpath = fs_url;
+	else if (which=="coms") modpath = `/root/${path}.js`;
 	else modpath = `/root/code/${which}/${path}.js`;
 	if (!modpath.match(/\/root\/code\/mods\/sys/))modpath+=`?v=${VERNUM++}`;
 	let scr = make('script');
-	scr.type = "module";
+	if (!fs_url) scr.type = "module";
 	scr.onload = async() => {
 		if (which=="mods") {
-			const { mod } = await import(modpath);
-			NS[which][modname] = mod;
+			if (!fs_url) {
+				const { mod } = await import(modpath);
+				NS[which][modname] = mod;
+			}
 		}
 		else if (which=="libs") {
 			const { lib } = await import(modpath);
@@ -1623,7 +1652,13 @@ const xget = (url, cb, if_text, blob_to_post, prog_cb, upload_prog_cb) => {//«
 this.xget = xget;
 api.xget=(url,opts={})=>{return new Promise((Y,N)=>{xget(url,Y,opts.text,opts.blob,opts.onProgress);});}
 //»
+
+api.initIO=()=>{
+	return api.makeScript("/socket.io/socket.io.min.js");
+};
+
 //»
+
 //Util«
 /*
 api.initSW = if_unreg => {//«

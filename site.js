@@ -1,9 +1,14 @@
+/*Jan. 10, 2023: Just created users/ directory to store files that are named by the username
+and have the password as the contents.
+
+*/
 //If starting with pm2 on a public server (to listen on port 80), do something like this:
 // $ sudo LOTW_LIVE=1 pm2 site.js
 
 //Use an LOTW_PORT env var to use a different address scheme than localhost:8080 
 //or publicsite.com:80;
 
+const REMOTE_COMS_OK = false;
 
 //Imports«
 
@@ -13,6 +18,9 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const zlib = require('zlib');
+const IOServer = require("socket.io").Server;
+let io;
+let http_server;
 
 //»
 
@@ -237,7 +245,8 @@ if (process.env.LOTW_LIVE){
 	port = 443;
 }
 else{
-	hostname="localhost";
+//	hostname="localhost";
+	hostname="0.0.0.0";
 	port = use_port||8080;
 }
 
@@ -354,7 +363,22 @@ else regexp = new RegExp("^" + pattern.replace(/\./g,"\\."));
 
 //»
 
+const handle_io_conn=socket=>{
+
+//io.on();
+//log("!!!!!!!!!!!     SOCKET IN     !!!!!!!!!!!!!!");
+//log(socket);
+//socket.emit("msg", "hello from the server.");
+
+
+};
+
 const handle_request=async(req, res, url, args)=>{//«
+	const err = (arg)=>{
+let s = "Error";
+if (arg) s+=`: ${arg}`;
+		nogo(res, s);
+	};
 	"use strict";
 	let meth = req.method;
 	let body, path, enc, pos;
@@ -430,6 +454,26 @@ log(e);
 				if (!(rv && rv.ok)) return nogo(res, "Could not get ip address");
 				res.end(await rv.text());
 			}
+			else if (REMOTE_COMS_OK && url == "/_aru"){//Command: addremuser
+				try{
+					let arr = atob(args.q).split(" ");
+					let name = arr[0];
+					let pass = arr[1];
+					if (!(name && pass)) return err(1);
+					if (!name.match(/^[a-zA-Z][a-zA-Z0-9]+$/)) return err(4);
+					if (name.length > 16) return err(5);
+					if (pass.length < 4) return err(6);
+					let fname = `../users/${name}`;
+					if (fs.existsSync(fname)) return err(2);
+					fs.writeFileSync(fname, pass);
+					fs.mkdirSync(`../uploads/${name}`);
+				}
+				catch(e){
+					return err(3);
+				}
+				res.end(`OK`);
+			}
+
 			else nogo(res, "Bad command");
 			return;
 		}
@@ -505,7 +549,56 @@ log(e);
 		okay(res, usemime, useenc);
 		res.end(str);
 	}//»
-	else if (meth == "POST") nogo(res);
+	else if (meth == "POST") {
+		if (REMOTE_COMS_OK && url == "/_sra"){//Command: setremapp«
+
+let name;
+let fname;
+try{
+	let arr = atob(args.q).split(" ");
+	name = arr[0];
+	let pass = arr[1];
+	fname = arr[2];
+	if (!(name && pass && fname)) return err(1);
+	if (!fname.match(/^[a-zA-Z][a-zA-Z0-9]*\.js$/)) return err(6);
+	if (fname.length > 16) return err(7);
+
+	let rv = fs.readFileSync(`../users/${name}`, 'utf8');
+	if (rv !== pass) return err(2);
+}
+catch(e){
+	return err(3);
+}
+
+let body = [];
+let bytes = 0;
+let MAX_BYTES = 100000;
+let did_abort = false;
+const getdat = function(chunk){
+	if (did_abort) return;
+	bytes += chunk.length;
+	if (bytes > MAX_BYTES) {
+		did_abort = true;
+		req.off('data', getdat);
+		return err(5);
+	}
+	body.push(chunk);
+};
+req.on('data', getdat);
+req.on('end', () => {
+	if (did_abort) return;
+	try{
+		fs.writeFileSync(`../uploads/${name}/${fname}`, Buffer.concat(body));
+		res.end('OK');
+	}
+	catch(e){
+		err(4);
+	}
+});
+
+		}//»
+		else nogo(res);
+	}
 	else nogo(res);
 }//»
 
@@ -535,7 +628,7 @@ const app =(req,res)=>{//«
 
 if (process.env.LOTW_LIVE) {//«
 
-	https.createServer({
+	http_server = https.createServer({
 		key: fs.readFileSync(KEY_PATH),
 		cert: fs.readFileSync(CERT_PATH)
 	}, app).listen(443, hostname)
@@ -547,13 +640,16 @@ if (process.env.LOTW_LIVE) {//«
 }
 else {
 
-	http.createServer(app).listen(port, hostname);
+	http_server = http.createServer(app).listen(port, hostname);
 	log(`Site server listening at http://${hostname}:${port}`);
 
 }//»
 
+io = new IOServer(http_server);
+io.on('connection', handle_io_conn);
+//init_io();
 
-
+//log(io_server);
 
 /*
 	if (url=="/") {//«

@@ -536,13 +536,20 @@ return new Promise(async(Y,N)=>{
 
 //HTML5 FS«
 //WRITE_FS_FILE
-const write_fs_file = (fent, blob, cb, if_append, if_trunc) => {//«
+const write_fs_file = async(fent, blob, cb, if_append, if_trunc, opts={}) => {//«
 	const err = (e) => {
 		cb();
 	};
+	let realsize;
+	if (Number.isFinite(opts.SPLICESTART) && opts.SPLICEEND){
+		let startblob = await getFsFileFromFent(fent, true, null, 0, opts.SPLICESTART);
+		let endblob = await getFsFileFromFent(fent, true, null, opts.SPLICEEND-1);
+		realsize = blob.size;
+		blob = new Blob([startblob, blob, endblob]);
+	}
 	fent.createWriter(function(writer) {
 		if (if_append) writer.seek(writer.length);
-		var truncated = false;
+		let truncated = false;
 		writer.onwriteend = async function(e) {//«
 			if (!truncated) {
 				truncated = true;
@@ -575,7 +582,7 @@ const write_fs_file = (fent, blob, cb, if_append, if_trunc) => {//«
 				fent._fileObj = obj;
 				let bytes = this.position;
 				fent._currentSize = bytes;
-				cb(obj, this);
+				cb(obj, this, realsize);
 			}
 		};//»
 		writer.onerror = function(e) {
@@ -1117,6 +1124,11 @@ const get_fs_ent_by_path = (patharg, cb, if_dir, if_make, if_root) => {//«
 }
 this.get_fs_ent_by_path = get_fs_ent_by_path;
 //»
+const getFsFileFromFent = (fent, if_blob, mimearg, start, end) =>{
+	return new Promise((Y,N)=>{
+		get_fs_file_from_fent(fent, Y, if_blob, mimearg, start, end)
+	});
+};
 const get_fs_file_from_fent = (fent, cb, if_blob, mimearg, start, end) => {//«
 	fent.file(file => {
 
@@ -1283,9 +1295,8 @@ const get_fs_by_path = (patharg, cb, opts = {}) => {//«
 this.get_fs_by_path = get_fs_by_path;
 this.getfile = get_fs_by_path;
 //»
-const save_fs_by_path = (patharg, val, cb, opts) => {//«
+const save_fs_by_path = (patharg, val, cb, opts={}) => {//«
 	patharg = patharg.replace(/\/+/g, "/");
-	if (!opts) opts = {};
 	let apparg = opts.APPARG;
 	let if_append = opts.APPEND||opts.append;
 	let mimearg = opts.MIMEARG;
@@ -1318,6 +1329,8 @@ const save_fs_by_path = (patharg, val, cb, opts) => {//«
 	else path = "/";
 	let dosave = (dir, obj) => {
 		save_fs_file(dir, obj, fname, val, cb, {
+			SPLICESTART: opts.spliceStart,
+			SPLICEEND: opts.spliceEnd,
 			MIMEARG: mimearg,
 			APPARG: apparg,
 			APPEND: if_append,
@@ -1352,7 +1365,6 @@ console.error("dir.getFile",e);
 		cb();
 		return;
 	}
-	if (!opts) opts = {};
 	let mimearg = opts.MIMEARG;
 	let apparg = opts.APPARG;
 	let if_append = opts.APPEND||opts.append;
@@ -1377,7 +1389,7 @@ console.error("dir.getFile",e);
 	dir.getFile(fname, {
 		create: true
 	}, fent => {
-		write_fs_file(fent, blob, (ret, thisobj) => {
+		write_fs_file(fent, blob, (ret, thisobj, reallenret) => {
 			if (ret) {
 				let arr = fent.fullPath.split("/");
 				arr.shift();
@@ -1392,10 +1404,10 @@ console.error("dir.getFile",e);
 							Core.Desk.check_open_files(fullpath, winid, lenret, sha1, byteret);
 						}
 					}
-					cb(ret, lenret);
+					cb(ret, lenret, reallenret);
 				}, if_root, LINK_RE.test(fname));
 			} else cb();
-		}, if_append, (val && val.length == 1 && val.charCodeAt() == 0));
+		}, if_append, (val && val.length == 1 && val.charCodeAt() == 0), opts);
 	}, err);
 }
 this.save_fs_file = save_fs_file;

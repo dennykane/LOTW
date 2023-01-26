@@ -600,6 +600,7 @@ let sws = failopts(args,//«
 			b:1//Read the given file to suck it into the buffer and save it as something else
 		},
 		LONG: {
+			'use-dev-module': 3,
 			create:1,
 			servhook:3,
 			foldmethod:3,
@@ -616,10 +617,26 @@ let fileobj;
 let use_state;
 let vimstore = await capi.getStore("vim");
 if (!vimstore) console.warn("Could not get vimstore!");
-let start=str=>{
-	Core.load_mod("util.vim",async rv=>{
+let gotdev;
+let usemod;
+let start=async str=>{
+	gotdev = sws['use-dev-module'];
+	if (gotdev){
+	//	if (which.match(/\.js$/)){
+		let path = normpath(gotdev);
+		let node = await pathToNode(path);
+		if (!node) return cberr(`${path}: File not found`);
+		if (!node.root.TYPE=="fs") return cberr(`${path}: Not in the local file system`);
+		usemod = Core.fs_url(node.fullpath);
+//cbok(usemod);
+//return;
+	//	}
+	}
+	else usemod = "util.vim";
+	Core.load_mod(usemod,async rv=>{
 		if (!rv) return cberr("No util.vim module!");
-		let vim = new NS.mods["util.vim"](Core, Shell);
+		if (gotdev) usemod = "local.vim";
+		let vim = new NS.mods[usemod](Core, Shell);
 		let useext;
 		if (sws.b) {
 			if (fullpath) useext = fullpath.split(".").pop();

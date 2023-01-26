@@ -327,7 +327,7 @@ Main.top.title="Unicoder";
 const main = mkdv();
 Main.tabIndex="-1";
 main.dis="flex";
-
+main.bgcol="#999";
 const side_div=mkdv();
 side_div.overy="scroll";
 
@@ -339,6 +339,8 @@ main.add(side_tab);
 side_div.add(side_tab);
 
 const main_div=mkdv();
+//log(main_div);
+main_div.style.userSelect="text";
 main_div.pos="relative";
 main_div.fs=24;
 main_div.overy="scroll";

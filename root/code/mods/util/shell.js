@@ -4055,12 +4055,67 @@ const do_ls = (args)=>{
 
 builtins = {//«
 
-blah:(args)=>{
-wout(`BLAH: ${args.length}`);
-//log(args);
+socket:()=>{
+
+if (!window.io) return cberr("Call 'ioup' first!");
+let sock = globals.socket;
+if (sock) return cbok("Socket exists");
+
+sock = new window.io();
+//sock.on('msg',msg=>{
+//log("Socket in> ", msg);
+//});
+sock.on('connect',()=>{
+log("CONNECTED");
+});
+globals.socket = sock;
+//log(sock);
 cbok();
+
 },
 
+ioup:async()=>{
+
+if (window.io) return cbok("Already loaded");
+if (!await capi.initIO()) return cberr("Blah");
+if (!window.io) return cberr("Loaded script but no window.io!?!?!?");
+
+cbok();
+
+},
+
+'addremuser':async(args)=>{
+
+//Set file
+//let rv = await fetch(`/_1001?q=${btoa("username p@$$w0rd Filename.js")}`,{method: "POST", body:bytes.buffer});
+
+	let user = args.shift();
+	let pass = args.shift();
+	if (!(user&&pass)) return cberr("Need username and password!");
+	let q = btoa(`${user} ${pass}`);
+	let rv = await fetch(`/_aru?q=${q}`);
+	if (!rv.ok) return cberr("Error");
+	cbok("OK");
+
+},
+
+///*
+'setremapp':async(args)=>{
+
+	let user = args.shift();
+	let pass = args.shift();
+	let fname = args.shift();
+	if (!fname) return cberr("No arg!");
+	let bytes = await readFile(fname, {binary: true});
+	if (!bytes) return cberr(`${fname}: not found`);
+	let usename = fname.split("/").pop();
+	log(usename);
+	let q = btoa(`${user} ${pass} ${usename}`);
+	let rv = await fetch(`/_sra?q=${q}`,{method: "POST", body:bytes.buffer});
+	if (!rv.ok) return cberr("Error");
+	cbok();
+},
+//*/
 //Synth stuff«
 
 //Midi file«
@@ -4487,7 +4542,28 @@ cerr("Dropping", ret);
 		doit();
 	});
 },
-'setdeskpath':async args=>{let opts=failopts(args,{SHORT:{d:1},LONG:{default:1}});if(!opts)return;let def=opts.default || opts.d;let path=args.shift();if(path && def)return cberr("path given,but 'default' arg specified");if(def)path='/home/'+Core.get_username()+"/Desktop";if(!path)return cberr("No path given(use '--default' to set it to ~/Desktop)");let obj=await pathToNode(path);if(!obj)return cberr(path+":\x20not found");if(obj.APP !==FOLDER_APP)return cberr(path+":\x20not a directory");path=objpath(obj);if(!await Desk.set_desk_path(path))return cberr("Could not set desktop path");cbok("OK");},
+'setdeskpath': async args => {
+	let opts = failopts(args, {
+		SHORT: {
+			d: 1
+		},
+		LONG: {
+			default: 1
+		}
+	});
+	if (!opts) return;
+	let def = opts.default || opts.d;
+	let path = args.shift();
+	if (path && def) return cberr("path given,but 'default' arg specified");
+	if (def) path = '/home/' + Core.get_username() + "/Desktop";
+	if (!path) return cberr("No path given\x20(use '--default' to set it to ~/Desktop)");
+	let obj = await pathToNode(path);
+	if (!obj) return cberr(path + ":\x20not found");
+	if (obj.APP !== FOLDER_APP) return cberr(path + ":\x20not a directory");
+	path = objpath(obj);
+	if (!await Desk.set_desk_path(path)) return cberr("Could not set desktop path");
+	cbok("OK");
+},
 'mkdir': args => {
 	let opts = failopts(args, {
 		LONG: {
@@ -4661,6 +4737,7 @@ cerr("Dropping", ret);
 		termobj.set_root_state(false);
 		Core.set_username(who);
 		let homedir = `/home/${who}`;
+		let deskdir = `${homedir}/Desktop`;
 		cur_dir = homedir;
 		await fsapi.popHtml5Dir(homedir);
 		ENV.USER = who;
@@ -4670,7 +4747,10 @@ cerr("Dropping", ret);
 			NOEND: true
 		});
 		cbok();
-		if (Desk) Desk.set_desktop_stats();
+		if (Desk) Desk.set_desk_path(deskdir);
+//	if (!await Desk.set_desk_path(path)) return cberr("Could not set desktop path");
+//		if (Desk) Desk.set_desktop_stats();
+
 	} else {
 		if (is_root) return cbok("Already root");
 		rv = await getLineInput("Password:\x20", true);
@@ -4711,6 +4791,13 @@ log(fent);
 	cbok();
 },
 'app': async args => {
+
+/*
+Autocompletion behavior:
+- If there is a '/' in the argument, the default behavior of looking for file entries will be used
+- Otherwise, the server will be queried for the "official" applications
+
+*/
 	let usearg;
 	const openit=async()=>{
 		if (!await Desk.openApp(which, (opts.force||opts.f), null, usearg)) return cberr();
@@ -5253,8 +5340,11 @@ sys_builtins = {//«
 	rv2 = await getLineInput("Retype password:\x20", true);
 	if (rv1!==rv2) return cberr("Password mismatch!");
 	users[name]=await Core.api.sha1(rv1);
-	await fsapi.touchHtml5Dir(`/home/${name}`);
-	await fsapi.popHtml5Dir(`/home/${name}`);
+	let homedir = `/home/${name}`;
+	let deskdir = `${homedir}/Desktop`;
+	await fsapi.touchHtml5Dir(homedir);
+//	await fsapi.popHtml5Dir(homedir);
+	await fsapi.touchHtml5Dir(deskdir);
 	Core.set_users(users);
 	cbok();
 }

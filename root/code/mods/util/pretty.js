@@ -4,7 +4,7 @@
 }(
 "undefined" != typeof self ? self : "undefined" != typeof windows ? window : "undefined" != typeof global ? global : this,
 */
-
+export const mod = function(){
 let pretty = function() {
 	return function(t) {
 		var e = {};
@@ -1204,4 +1204,5 @@ this.getmod = _=>{
 	return pretty();
 }
 
+}
 

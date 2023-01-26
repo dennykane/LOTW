@@ -516,7 +516,8 @@ const make_desktop = () => {//«
 	desk.tcol = "#000";
 	desk.pos = "relative";
 //	desk.over = "hidden";
-	desk.over = "scroll";
+//	desk.over = "scroll";
+	desk.over = "auto";
 	desk.w = winw();
 	desk.h = winh();
 	desk.z = min_win_z;
@@ -1669,14 +1670,17 @@ const set_desk_path = (path) => {//«
 		if (! await pathToNode(path)) return Y();
 		desk_path = path
 		globals.desk_path = desk_path;
+/*
 		let arr = desk.icons;
 		for (let icn of arr) {
 			if (icn && icn.del) icn.del();
 		}
-		await reloadIcons();
+*/
+//		await reloadIcons();
+
+		reload_desk_icons_cb();
 		Y(true);
 		Core.set_local_storage("desk_path", desk_path);
-		Desk.set_desktop_stats();
 	});
 };
 this.set_desk_path=set_desk_path;
@@ -2546,7 +2550,8 @@ win._mintitle.innerText = s
 	};
 	let close = mkbut("14px");
 	close.id="closebut_"+winid;
-	close.innerText="\u{1f5d9}";
+//	close.innerText="\u{1f5d9}";
+	close.innerHTML="<b>X</b>";
 	close.title="Close";
 	close.style.lineHeight = "15px";
 	butdiv.close = close;
@@ -2635,7 +2640,9 @@ win._mintitle.innerText = s
 
 	let min = mkbut("16px");
 	min.id="minbut_"+winid;
-	min.innerText="\u{1f5d5}"; 
+//	min.innerText="\u{1f5d5}"; 
+	min.innerText="\u{2b07}"; //Solid down arrow
+	min.lh="135%";
 	min.title="Minimize";
 	min.onclick=()=>{
 		if (win.is_minimized) return;
@@ -2791,8 +2798,8 @@ win.title = winapp;
 		try {
 			if (!arg.MAIN) console.log(" ");
 if (fs_url){
-	win.obj = new NS.apps[winapp](appobj);
 	win._fs_url = fs_url
+	win.obj = new NS.apps[winapp](appobj);
 }
 else {
 			const { app } = await import(script_path);
@@ -4597,7 +4604,6 @@ const save_icon_editing = async() => {//«
 		let oldname = getNameExt(oldnamearg)[0];
 		let newval;
 		if (newvalarg) {
-//			if (CEDICN.app == FOLDER_APP) newval = newvalarg;
 			if (!CEDICN.link && CEDICN.app == FOLDER_APP) newval = newvalarg;
 			else newval = getNameExt(newvalarg)[0];
 		}
@@ -4613,10 +4619,8 @@ const save_icon_editing = async() => {//«
 		icon_off(CEDICN);
 		CEDICN.name = newval;
 		if (CEDICN._savetext||CEDICN._savetext==="") {
-//			let rv = await fsapi.writeFile(CEDICN.fullpath(), CEDICN._savetext, {NOMAKEICON: true});
 			let rv = await fsapi.writeFile(CEDICN.fullpath(), CEDICN._savetext);
 			if (!rv) return abort("The file could not be created");
-//log(rv);
 			CEDICN._entry = rv.entry;
 			delete CEDICN._savetext;
 		}
@@ -4632,7 +4636,11 @@ const save_icon_editing = async() => {//«
 	};
 	let ifnew;
 	if (CEDICN) {
-		if (CEDICN.isnew) ifnew = true;
+		if (CEDICN.isnew) {
+			ifnew = true;
+			delete CEDICN.isnew;
+			CEDICN.isnew = undefined;
+		}
 		let val = CEDICN.name;
 		let holdname = val;
 		let checkit = CEDICN.area.value.trim().replace(RE_SP_PL, " ").replace(RE_SP_G, "\u00A0");
@@ -4648,7 +4656,7 @@ const save_icon_editing = async() => {//«
 					path_to_obj(CEDICN.path, async parobj => {
 						if (!parobj) {
 							doend(holdname);
-							console.error("path_to_obj(): parpath not found:" + CEDICN.path);
+cerr("path_to_obj(): parpath not found:" + CEDICN.path);
 							return;
 						}
 						let rtype = parobj.root.TYPE;
@@ -4663,39 +4671,18 @@ const save_icon_editing = async() => {//«
 						}
 						else {
 							doend(holdname);
-							console.error("Unknown root type:" + rtype);
+cerr("Unknown root type:" + rtype);
 						}
 					});
-				} else {
-//log(CEDICN.link);
+				} 
+				else {
 					let app = (CEDICN.link&&"Link")||CEDICN.app;
-
-
-/*
-					if (app == "Link") {
-						fs.move_kids(srcpath, destpath, ret => {
-							if (!ret) {
-								poperr("The icon could not be renamed.");
-								doend(holdname);
-								return;
-							}
-							doend(checkit);
-						}, false);
-					} else {
-*/
 					fs.get_fs_ent_by_path(srcpath, ret1 => {
-/*
-log(ret1);
-log(srcpath, destpath, app);
-doend(holdname);
-return;
-
-*/
 						if (ret1) {
 							fs.mv_by_path(srcpath, destpath, app, ret2 => {
 								if (ret2) doend(holdname, checkit);
 								else {
-									cerr("fs.mv_by_path returned nothing");
+cerr("fs.mv_by_path returned nothing");
 									doend(holdname);
 								}
 							});
@@ -4703,14 +4690,12 @@ return;
 							fs.get_fs_ent_by_path(destpath, ret3 => {
 								if (ret3) doend(checkit);
 								else {
-									cerr("fs.get_fs_ent_by_path returned nothing");
+cerr("fs.get_fs_ent_by_path returned nothing");
 									doend(holdname);
 								}
 							}, app, true);
 						}
 					}, app);
-
-//					}
 				}
 			} 
 			else {
@@ -5368,6 +5353,15 @@ const open_icon_app = async(icon, bytes, ext, useapp, force_open) => {//«
 			icon.ready.error = "App icon JSON format error";
 			return poperr("No '" + ext + "' field in the JSON object!");
 		}
+
+		if (which.match(/\.js$/)){
+			let path = globals.fs.normalize_path(which, icon.path);
+			let node = await pathToNode(path);
+			if (!node) return poperr(`${path}: File not found`);
+			if (!node.root.TYPE=="fs") return poperr(`${path}: Not in the local file system`);
+			which = Core.fs_url(node.fullpath);
+		}
+
 		open_app(which, null, true, icon.winargs, obj.args, null, icon);
 //		open_app(which, null, force_open, icon.winargs, obj.args, null, icon);
 	}
@@ -6352,8 +6346,8 @@ else move_icon_array();
 	if (kstr=="t_CAS") return keysym_funcs.open_app("util.Titles");
 	if (kstr=="r_CAS") return reload_desk_icons_cb();
 	if (kstr=="k_CAS") {
-		return (debug_keydown = !debug_keydown);
-//		toggle_key_viewer();
+//		return (debug_keydown = !debug_keydown);
+		toggle_key_viewer();
 		return;
 	}
 	if (kstr == "d_CAS") {
@@ -6385,10 +6379,10 @@ maxed/fullscreened wins).
 				}
 //log
 //SHUPWMJD
-if (kstr=="RIGHT_CA") resize_window("R");
-else if (kstr=="LEFT_CA") resize_window("R", true);
-else if (kstr=="END_S") resize_window("D");
-else if (kstr=="HOME_S") resize_window("D", true);
+if (kstr=="RIGHT_CS") resize_window("R");
+else if (kstr=="LEFT_CS") resize_window("R", true);
+else if (kstr=="DOWN_CS") resize_window("D");
+else if (kstr=="UP_CS") resize_window("D", true);
 
 			}
 		}
@@ -6620,9 +6614,11 @@ const job_killer=async()=>{
 	if (!(isint(num) && num > 0)) return poperr("Need a positive integer!");
 	if (!Core.kill_job(num)) poperr("No such job!");
 };
+/*
 const try_clock_update=()=>{//«
 	if (Date.now() - last_clock_time > MIN_MS_DIFF_TO_UPDATE_CLOCK) system_clock.update();
 };//»
+*/
 const clearpop=()=>{let pop=Desk.CPR;if(pop&&pop.ok)pop.ok();};
 const z_compare = (a, b) => {
 	if (pi(a.style.zIndex) < pi(b.style.zIndex)) return 1;
@@ -7043,7 +7039,7 @@ this.init = async (init_str, cb) => {
 	window.onresize = doresize;
 
 	window.onfocus=(e)=>{
-		try_clock_update();
+//		try_clock_update();
 	};
 
 	step = await NS.initstep("Generating the desktop DOM element");
