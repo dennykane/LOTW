@@ -434,7 +434,7 @@ const parseCookies = cookieHeader=>{
 
     cookieHeader.split(`;`).forEach(function(cookie) {
         let [ name, ...rest] = cookie.split(`=`);
-        name = name?.trim();
+        name = name.trim();
         if (!name) return;
         const value = rest.join(`=`).trim();
         if (!value) return;
