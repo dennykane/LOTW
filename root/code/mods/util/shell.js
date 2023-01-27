@@ -4054,7 +4054,49 @@ const do_ls = (args)=>{
 //XXXXXXXXXXXX
 
 builtins = {//«
+logout:async()=>{
+//let rv = await fetch('/_logout');
+//if (!rv.ok) return cberr("Fail");
+//log(await rv.text());
+document.cookie="id=0;max-age=0";
+cbok();
+},
+login:async()=>{
 
+let rv = await fetch('/_login');
+if (!rv.ok) return cberr("Fail");
+let url = await rv.text();
+//log(url);
+let w = window.open(url, "Login", "height=400,width=500");
+let iter=0;
+let interval = setInterval(()=>{
+	if (w && w.close) {
+		let txt;
+		try{txt = w.document.body.innerText;}catch(e){return;}
+		if (!txt) return;
+		if (txt.match(/^You/)) {
+			w.close();
+			cbok();
+			clearInterval(interval);
+		}
+	}
+	iter++;
+	if (iter > 1000){
+		clearInterval(interval);
+	}
+},100);
+
+/*
+sock.on('profile',msg=>{
+//	log("Socket in> ", msg);
+//	if (msg==="GOTCB") {
+log(JSON.parse(msg));
+	if (w && w.close) w.close();
+	cbok();
+//	}
+});
+*/
+},
 socket:()=>{
 
 if (!window.io) return cberr("Call 'ioup' first!");
@@ -4062,15 +4104,18 @@ let sock = globals.socket;
 if (sock) return cbok("Socket exists");
 
 sock = new window.io();
-//sock.on('msg',msg=>{
-//log("Socket in> ", msg);
-//});
-sock.on('connect',()=>{
-log("CONNECTED");
+sock.on('error',msg=>{
+	console.error("Socket error> ", msg);
 });
-globals.socket = sock;
-//log(sock);
-cbok();
+sock.on('connect',()=>{
+	log("CONNECTED");
+	globals.socket = sock;
+	cbok();
+});
+sock.on('disconnect',()=>{
+	log("DISCONNECTED");
+	globals.socket = null;
+});
 
 },
 

@@ -1,3 +1,15 @@
+/*
+
+!!! TODO !!!
+
+Need to get the full hostname in order to dynamically create the redirect_uri for OAuth2Client
+req.socket.encrypted; //protocol http or  https
+req.headers.host; //localhost:8080 or lotw.site
+
+//log(req.hostname);
+
+
+*/
 /*Jan. 10, 2023: Just created users/ directory to store files that are named by the username
 and have the password as the contents.
 
@@ -13,18 +25,35 @@ const REMOTE_COMS_OK = false;
 //Imports«
 
 const { execSync } = require("child_process");
+const {OAuth2Client} = require('google-auth-library');
+
 const spawn = require('child_process').spawn;
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const zlib = require('zlib');
+const cookie = require('cookie');
+//const crypto = require('crypto');
+const cryptojs = require('crypto-js');
+
 const IOServer = require("socket.io").Server;
+
+const oauth_keys = require('../.secrets/oauth2.keys.json');
+const crypto_password = require('../.secrets/encrypt_password.json').value;
+
+
+
+const sockets = {};
+//const auth_clients = {};
+
 let io;
 let http_server;
 
 //»
 
 //Var«
+
+let redirect_uri;
 
 const FS_CACHE = {};
 const GZIP_CACHE = {};
@@ -363,16 +392,58 @@ else regexp = new RegExp("^" + pattern.replace(/\./g,"\\."));
 
 //»
 
-const handle_io_conn=socket=>{
+//log(crypto_password);
+//return;
 
-//io.on();
-//log("!!!!!!!!!!!     SOCKET IN     !!!!!!!!!!!!!!");
-//log(socket);
-//socket.emit("msg", "hello from the server.");
+const encrypt=text=>{
+  const result = cryptojs.AES.encrypt(text, crypto_password);
+  return result.toString();
+}
+ 
+const decrypt=text=>{
+  const result = cryptojs.AES.decrypt(text, crypto_password);
+  return result.toString(cryptojs.enc.Utf8);
+}
 
+const handle_io_conn=sock=>{
+
+const cookie_error=str=>{
+	sock.emit("error", str);
+	setTimeout(()=>{sock.disconnect();},1000);
+};
+
+let cookies = sock.handshake.headers.cookie;
+if (!cookies) return cookie_error("NO COOKIES");
+cookies = parseCookies(cookies);
+let id = cookies.id;
+if (!id) return cookie_error("NO 'ID' IN COOKIES!");
+try{
+	id = decrypt(id);
+}catch(e){
+	return cookie_error("COULD NOT DECODE THE ID");
+}
+
+sockets[id] = sock;
 
 };
 
+///*Cookie Parser«
+const parseCookies = cookieHeader=>{
+    const list = {};
+    if (!cookieHeader) return list;
+
+    cookieHeader.split(`;`).forEach(function(cookie) {
+        let [ name, ...rest] = cookie.split(`=`);
+        name = name?.trim();
+        if (!name) return;
+        const value = rest.join(`=`).trim();
+        if (!value) return;
+        list[name] = decodeURIComponent(value);
+    });
+
+    return list;
+};
+//»*/
 const handle_request=async(req, res, url, args)=>{//«
 	const err = (arg)=>{
 let s = "Error";
@@ -386,6 +457,7 @@ if (arg) s+=`: ${arg}`;
 	let isblog = false;
 //log(req);
 	if (meth == "GET") {//«
+
 		if (url=="/") {
 			if (args.path){//«
 				let decpath = decodeURIComponent(args.path);
@@ -419,9 +491,14 @@ log(e);
 				}
 				return;
 			}//»
-			okay(res, "text/html");return res.end(BASE_PAGE);
+			okay(res, "text/html");
+			return res.end(BASE_PAGE);
 		}
-		if (url.match(/^\/(desk|shell|.+\.app)$/)) return res.end(OS_HTML);
+		if (url.match(/^\/(desk|shell|.+\.app)$/)) {
+
+			okay(res, "text/html");
+			return res.end(OS_HTML);
+		}
 		if (url.match(/^\/_/)){
 			if (url == "/_getbin") {
 				okay(res);
@@ -449,6 +526,74 @@ log(e);
 				}   
 				else nogo(res);
 			}//»
+
+else if (url == "/_oauthcallback"){//«
+
+
+const oAuth2Client = new OAuth2Client(oauth_keys.web.client_id,oauth_keys.web.client_secret,redirect_uri);
+
+let r = await oAuth2Client.getToken(decodeURIComponent(args.code));
+oAuth2Client.setCredentials(r.tokens);
+let url = 'https://people.googleapis.com/v1/people/me?personFields=emailAddresses,names,photos';
+let gmail, encrypted_gmail;
+let name, photo_url;
+try{
+	let rv = await oAuth2Client.request({url});
+	let dat = rv.data;
+	if (dat.names && dat.names[0]) name = dat.names[0].displayName;
+	if (dat.photos && dat.photos[0]) photo_url = dat.photos[0].url;
+	let emails = dat.emailAddresses;
+	for (let addr of emails){
+		let marr;
+		if (marr = addr.value.match(/^(.+)@gmail.com$/)){
+			gmail = marr[1];
+			break;
+		}
+	}
+	if (!gmail) return nogo(res,"Gmail address not returned");
+	encrypted_gmail = encrypt(gmail);
+}
+catch(e){
+	return nogo(res, "oauth error");
+}
+
+let head = {'Content-Type':"text/html"};
+let expires = (new Date(new Date().setFullYear(new Date().getFullYear() + 2))+"").split("-")[0];
+head['Set-Cookie'] = `id=${encrypted_gmail}; Expires=${expires}`;
+res.writeHead(200,head);
+let res_str = 
+`
+<html>
+<head>
+<title>Logged in</title>
+<script>
+localStorage.setItem("gmail_id","${gmail}");
+localStorage.setItem("gmail_name","${name}");
+localStorage.setItem("gmail_photo_url","${photo_url}");
+</script>
+</head>
+<body>
+You can now close the window!
+</body>
+</html>
+`;
+
+res.end(res_str);
+
+}//»
+else if (url=="/_login"){//«
+
+const oAuth2Client = new OAuth2Client(oauth_keys.web.client_id,oauth_keys.web.client_secret,redirect_uri);
+const authorizeUrl = oAuth2Client.generateAuthUrl({
+	access_type: 'offline',
+	scope:'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+	redirect_uri: redirect_uri
+});
+
+okay(res);
+res.end(authorizeUrl);
+
+}//»
 			else if (url == "/_ip") {
 				let rv = await fetch("https://ifconfig.me/ip");
 				if (!(rv && rv.ok)) return nogo(res, "Could not get ip address");
@@ -637,11 +782,14 @@ if (process.env.LOTW_LIVE) {//«
 	log(`Site server listening at https://${hostname}:443`);
 	log(`Site server listening at http://${hostname}:80`);
 
+	redirect_uri = `https://lotw.site/_oauthcallback`;
 }
 else {
 
 	http_server = http.createServer(app).listen(port, hostname);
 	log(`Site server listening at http://${hostname}:${port}`);
+
+	redirect_uri = `http://localhost:${port}/_oauthcallback`;
 
 }//»
 
