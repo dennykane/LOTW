@@ -4116,9 +4116,27 @@ sock.on('disconnect',()=>{
 	log("DISCONNECTED");
 	globals.socket = null;
 });
+sock.on("ping_ask",from=>{
+//	cwarn("PING ASK", from);
+	sock.emit("ping_rep", from);
+});
+sock.on("ping_rep",to=>{
+//	cwarn("PING ASK", from);
+//	sock.emit("ping_rep", from);
+cwarn("ping in", to);
+});
 
 },
+ping:(args)=>{
 
+let to = args.shift();
+if (!to) return cberr("No 'to' arg!");
+let sock = globals.socket;
+if (!sock) return cbok("No socket!");
+sock.emit("ping", to);
+cbok();
+
+},
 ioup:async()=>{
 
 if (window.io) return cbok("Already loaded");

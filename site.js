@@ -283,6 +283,31 @@ else{
 
 //Util«
 
+const parseCookies = cookieHeader=>{//«
+    const list = {};
+    if (!cookieHeader) return list;
+
+    cookieHeader.split(`;`).forEach(function(cookie) {
+        let [ name, ...rest] = cookie.split(`=`);
+        name = name.trim();
+        if (!name) return;
+        const value = rest.join(`=`).trim();
+        if (!value) return;
+        list[name] = decodeURIComponent(value);
+    });
+
+    return list;
+};//»
+
+const encrypt=text=>{//«
+  const result = cryptojs.AES.encrypt(text, crypto_password);
+  return result.toString();
+}//»
+ 
+const decrypt=text=>{//«
+  const result = cryptojs.AES.decrypt(text, crypto_password);
+  return result.toString(cryptojs.enc.Utf8);
+}//»
 
 const hard_spawn=(name, args, cb, send_json)=>{//«
 
@@ -392,20 +417,7 @@ else regexp = new RegExp("^" + pattern.replace(/\./g,"\\."));
 
 //»
 
-//log(crypto_password);
-//return;
-
-const encrypt=text=>{
-  const result = cryptojs.AES.encrypt(text, crypto_password);
-  return result.toString();
-}
- 
-const decrypt=text=>{
-  const result = cryptojs.AES.decrypt(text, crypto_password);
-  return result.toString(cryptojs.enc.Utf8);
-}
-
-const handle_io_conn=sock=>{
+const handle_io_conn=sock=>{//«
 
 const cookie_error=str=>{
 	sock.emit("error", str);
@@ -423,27 +435,34 @@ try{
 	return cookie_error("COULD NOT DECODE THE ID");
 }
 
+sock._user_id = id;
 sockets[id] = sock;
 
-};
+sock.on("disconnect", async () => {
+	sockets[id]=undefined;
+	delete sockets[id];
+});
 
-///*Cookie Parser«
-const parseCookies = cookieHeader=>{
-    const list = {};
-    if (!cookieHeader) return list;
+sock.on("ping", to=>{
+	let tosock = sockets[to];
+	if (!tosock) {
+		sock.emit("error", `${to}: not a user`);
+		return;
+	}
+	tosock.emit("ping_ask", id);
+});
+sock.on("ping_rep", from=>{
+	let fromsock = sockets[from];
+	if (!fromsock) {
+		sock.emit("error", `${from}: not a user`);
+		return;
+	}
+	fromsock.emit("ping_rep", id);
+});
 
-    cookieHeader.split(`;`).forEach(function(cookie) {
-        let [ name, ...rest] = cookie.split(`=`);
-        name = name.trim();
-        if (!name) return;
-        const value = rest.join(`=`).trim();
-        if (!value) return;
-        list[name] = decodeURIComponent(value);
-    });
 
-    return list;
-};
-//»*/
+};//»
+
 const handle_request=async(req, res, url, args)=>{//«
 	const err = (arg)=>{
 let s = "Error";
@@ -795,9 +814,7 @@ else {
 
 io = new IOServer(http_server);
 io.on('connection', handle_io_conn);
-//init_io();
 
-//log(io_server);
 
 /*
 	if (url=="/") {//«
