@@ -44,15 +44,19 @@ const crypto_password = require('../.secrets/encrypt_password.json').value;
 
 
 const sockets = {};
+const NAME_TO_ID = {};
+const ID_TO_NAME = {};
 //const auth_clients = {};
 
-let io;
-let http_server;
 
 //»
 
 //Var«
 
+let io;
+let http_server;
+
+const users_file = `../.secrets/users.txt`;
 let redirect_uri;
 
 const FS_CACHE = {};
@@ -443,31 +447,55 @@ sock.on("disconnect", async () => {
 	delete sockets[id];
 });
 
-sock.on("ping", to=>{
-	let tosock = sockets[to];
+sock.on("ping", arg=>{
+	let fromsock = sockets[id];
+	if (fromsock!==sock) {
+		sock.emit("ping_error", {msg:`The socket is not active!`, id: arg.id});
+		return;
+	}
+	let tosock = sockets[NAME_TO_ID[arg.to]];
 	if (!tosock) {
-		sock.emit("error", `${to}: not a user`);
+		sock.emit("ping_error", {msg: `${arg.to}: not a user`, id: arg.id});
 		return;
 	}
-	tosock.emit("ping_ask", id);
+	tosock.emit("ping_ask", {from: ID_TO_NAME[id], id: arg.id});
 });
-sock.on("ping_rep", from=>{
-	let fromsock = sockets[from];
+sock.on("ping_rep", arg=>{
+	let fromsock = sockets[NAME_TO_ID[arg.from]];
 	if (!fromsock) {
-		sock.emit("error", `${from}: not a user`);
+//This is not a correct error because only the fromsock is waiting!
+//		sock.emit("ping_error", {msg: `${from}: not a user`, id: arg.id});
 		return;
 	}
-	fromsock.emit("ping_rep", id);
+	fromsock.emit("ping_rep", {to: ID_TO_NAME[id], id: arg.id});
 });
 
 
 };//»
 
 const handle_request=async(req, res, url, args)=>{//«
+	const getid=()=>{
+		let id = parseCookies(req.headers.cookie).id;
+		if (!id) return;
+		try{
+			return decrypt(id);
+		}
+		catch(e){}
+	};
+	const barf=(arg)=>{
+		let s = "Error";
+		header(res, 404);
+		if (arg) s+=`: ${arg}`;
+		res.end(s);
+	};
 	const err = (arg)=>{
 let s = "Error";
 if (arg) s+=`: ${arg}`;
 		nogo(res, s);
+	};
+	const ok=(s)=>{
+		okay(res);
+		res.end(s);
 	};
 	"use strict";
 	let meth = req.method;
@@ -545,22 +573,63 @@ log(e);
 				}   
 				else nogo(res);
 			}//»
+else if (url=="/_getname"){
+let id = getid();
+if (!id) {
+	return barf("Not logged in");
+}
+let name = ID_TO_NAME[id];
+if (!name) return barf("No name is set");
+ok(name);
+//res.end();
+}
+else if (url=="/_setname"){
+let id = getid();
+if (!id) {
+	return barf("Not logged in");
+}
+let name = args.name.toLowerCase();
+if (!(name && name.match(/^[a-z]{3,16}$/))) return barf("Name must be alphabetic 3-16 characters long!");
+let gotid = NAME_TO_ID[name];
+if (gotid) {
+	if (gotid === id) res.end("No change");
+	else barf("The name is taken");
+	return;
+}
+let verb = "Set";
+let oldname = ID_TO_NAME[id];
+if (oldname){
+	verb = "Changed";
+	delete NAME_TO_ID[oldname];
+}
+ID_TO_NAME[id] = name;
+NAME_TO_ID[name] = id;
+//log(NAME_TO_ID);
+//log(ID_TO_NAME);
+//log(users);
+fs.appendFileSync(users_file, `${name} ${id}\n`);
+res.end(`${verb} to: ${name}`);
+}
 
 else if (url == "/_oauthcallback"){//«
-
 
 const oAuth2Client = new OAuth2Client(oauth_keys.web.client_id,oauth_keys.web.client_secret,redirect_uri);
 
 let r = await oAuth2Client.getToken(decodeURIComponent(args.code));
 oAuth2Client.setCredentials(r.tokens);
 let url = 'https://people.googleapis.com/v1/people/me?personFields=emailAddresses,names,photos';
-let gmail, encrypted_gmail;
+//let gmail, encrypted_gmail;
+let uid, encrypted_uid;
 let name, photo_url;
 try{
 	let rv = await oAuth2Client.request({url});
 	let dat = rv.data;
+	uid = dat.resourceName.split("/").pop();
+	if (!(uid && uid.match(/^\d+$/))) return nogo(res, `Invalid 'resourceName' (${uid})!?!?`);
+	encrypted_uid = encrypt(uid);
 	if (dat.names && dat.names[0]) name = dat.names[0].displayName;
 	if (dat.photos && dat.photos[0]) photo_url = dat.photos[0].url;
+/*«
 	let emails = dat.emailAddresses;
 	for (let addr of emails){
 		let marr;
@@ -571,6 +640,7 @@ try{
 	}
 	if (!gmail) return nogo(res,"Gmail address not returned");
 	encrypted_gmail = encrypt(gmail);
+»*/
 }
 catch(e){
 	return nogo(res, "oauth error");
@@ -578,7 +648,7 @@ catch(e){
 
 let head = {'Content-Type':"text/html"};
 let expires = (new Date(new Date().setFullYear(new Date().getFullYear() + 2))+"").split("-")[0];
-head['Set-Cookie'] = `id=${encrypted_gmail}; Expires=${expires}`;
+head['Set-Cookie'] = `id=${encrypted_uid}; Expires=${expires}`;
 res.writeHead(200,head);
 let res_str = 
 `
@@ -586,7 +656,6 @@ let res_str =
 <head>
 <title>Logged in</title>
 <script>
-localStorage.setItem("gmail_id","${gmail}");
 localStorage.setItem("gmail_name","${name}");
 localStorage.setItem("gmail_photo_url","${photo_url}");
 </script>
@@ -602,12 +671,16 @@ res.end(res_str);
 }//»
 else if (url=="/_login"){//«
 
-const oAuth2Client = new OAuth2Client(oauth_keys.web.client_id,oauth_keys.web.client_secret,redirect_uri);
-const authorizeUrl = oAuth2Client.generateAuthUrl({
-	access_type: 'offline',
-	scope:'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+let opts = {
+//	access_type: 'offline',
+//	scope:'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+	scope:'https://www.googleapis.com/auth/userinfo.profile',
 	redirect_uri: redirect_uri
-});
+};
+if (args.force) opts['prompt']="consent";
+
+const oAuth2Client = new OAuth2Client(oauth_keys.web.client_id,oauth_keys.web.client_secret,redirect_uri);
+const authorizeUrl = oAuth2Client.generateAuthUrl(opts);
 
 okay(res);
 res.end(authorizeUrl);
@@ -790,6 +863,8 @@ const app =(req,res)=>{//«
 	}
 };//»
 
+const init_servers = () => {//«
+
 if (process.env.LOTW_LIVE) {//«
 
 	http_server = https.createServer({
@@ -815,6 +890,47 @@ else {
 io = new IOServer(http_server);
 io.on('connection', handle_io_conn);
 
+};//»
+
+const init_users=()=>{//«
+
+let str;
+try{
+	str = fs.readFileSync(users_file, 'utf8');
+}catch(e){
+//log("No users file!");
+	return;
+}
+let arr = str.split("\n");
+for (let ln of arr){
+	let recs = ln.split(" ");
+	let nm = recs[0];
+	let id = recs[1];
+	if (!(nm&&id)) continue;
+	let oldname = ID_TO_NAME[id];
+	if (oldname) {
+		if (NAME_TO_ID[oldname]===id){
+//log(`Deleting oldname(${oldname}) entry for id(${id})`);
+			delete NAME_TO_ID[oldname];
+		}
+	}
+	NAME_TO_ID[nm] = id;
+	ID_TO_NAME[id] = nm;
+}
+let s = "";
+for (let nm in NAME_TO_ID){
+	s+=`${nm} ${NAME_TO_ID[nm]}\n`;
+}
+fs.writeFileSync(users_file, s);
+
+}//»
+
+const init=()=>{
+	init_users();
+	init_servers();
+};
+
+init();
 
 /*
 	if (url=="/") {//«

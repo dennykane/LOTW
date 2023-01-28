@@ -4054,90 +4054,150 @@ const do_ls = (args)=>{
 //XXXXXXXXXXXX
 
 builtins = {//«
-logout:async()=>{
-//let rv = await fetch('/_logout');
-//if (!rv.ok) return cberr("Fail");
-//log(await rv.text());
-document.cookie="id=0;max-age=0";
-cbok();
-},
-login:async()=>{
 
-let rv = await fetch('/_login');
-if (!rv.ok) return cberr("Fail");
-let url = await rv.text();
-//log(url);
-let w = window.open(url, "Login", "height=400,width=500");
-let iter=0;
-let interval = setInterval(()=>{
-	if (w && w.close) {
-		let txt;
-		try{txt = w.document.body.innerText;}catch(e){return;}
-		if (!txt) return;
-		if (txt.match(/^You/)) {
-			w.close();
-			cbok();
-			clearInterval(interval);
-		}
-	}
-	iter++;
-	if (iter > 1000){
-		clearInterval(interval);
-	}
-},100);
 
-/*
-sock.on('profile',msg=>{
-//	log("Socket in> ", msg);
-//	if (msg==="GOTCB") {
-log(JSON.parse(msg));
-	if (w && w.close) w.close();
+logout:async()=>{//«
+	document.cookie="id=0;max-age=0";
+	if (globals.socket) globals.socket.kill();
 	cbok();
-//	}
-});
-*/
-},
-socket:()=>{
+},//»
+login:async(args)=>{//«
 
-if (!window.io) return cberr("Call 'ioup' first!");
-let sock = globals.socket;
-if (sock) return cbok("Socket exists");
+	let interval;
+	const clint = ()=>{
+		if (interval) {
+			clearInterval(interval);
+			interval = null;
+		}
+	};
+	let opts = failopts(args,{s:{f:1}});
+	if (!opts) return;
+	let url = '/_login';
+	if (opts.f) url=`${url}?force=1`;
+	let rv = await fetch(url);
+	if (!rv.ok) return cberr("Fail");
+	let w = window.open(await rv.text(), "Login", "height=600,width=500");
+	w.onbeforeunload=()=>{
+		cbok();
+		clint();
+	};
+	let iter=0;
+	interval = setInterval(()=>{
+		if (w && w.close) {
+			let txt;
+			try{txt = w.document.body.innerText;}catch(e){return;}
+			if (!txt) return;
+			if (txt.match(/^You/)) {
+				w.close();
+				cbok();
+				clint();
+			}
+		}
+		iter++;
+		if (iter > 1000) clint();
+	},100);
+},//»
+whoami:async()=>{//«
+	let rv = await fetch("/_getname");
+	werr(await rv.text());
+	if (!rv.ok) cberr();
+	else cbok();
+},//»
+socket:()=>{//«
 
-sock = new window.io();
+const LOTWSocket = function (){//«
+
+let wait_id = 1;
+let waiters = {};
+let sock = new window.io();
 sock.on('error',msg=>{
 	console.error("Socket error> ", msg);
 });
+sock.on('ping_error',arg=>{
+let gotcb = waiters[arg.id];
+if (!gotcb) {
+cwarn("No callback for", arg.id);
+return;
+}
+arg.error = true;
+gotcb(arg);
+
+waiters[arg.id] = undefined;
+delete waiters[arg.id];
+
+});
 sock.on('connect',()=>{
 	log("CONNECTED");
-	globals.socket = sock;
+	globals.socket = this;
 	cbok();
 });
 sock.on('disconnect',()=>{
-	log("DISCONNECTED");
+log("DISCONNECTED");
 	globals.socket = null;
+	delete globals.socket;
 });
-sock.on("ping_ask",from=>{
+sock.on("ping_ask",arg=>{
 //	cwarn("PING ASK", from);
-	sock.emit("ping_rep", from);
+	sock.emit("ping_rep", arg);
 });
-sock.on("ping_rep",to=>{
+sock.on("ping_rep",arg=>{
 //	cwarn("PING ASK", from);
 //	sock.emit("ping_rep", from);
-cwarn("ping in", to);
+let gotcb = waiters[arg.id];
+if (!gotcb) {
+cwarn("No callback for", arg.id);
+return;
+}
+	gotcb({msg: `OK: ${arg.to}`});
+
+	waiters[arg.id] = undefined;
+	delete waiters[arg.id];
+
 });
 
-},
-ping:(args)=>{
+this.ping = to=>{
+return new Promise((Y,N)=>{
+	let s = ""+wait_id;
+	waiters[s] = Y;
+	sock.emit("ping", {to: to, id: s});
+	wait_id++;
+});
+};
+this.kill=()=>{
+cwarn("Socket killed");
+	sock.disconnect();
+	globals.socket = undefined;
+};
 
-let to = args.shift();
-if (!to) return cberr("No 'to' arg!");
-let sock = globals.socket;
-if (!sock) return cbok("No socket!");
-sock.emit("ping", to);
-cbok();
+};//»
 
-},
-ioup:async()=>{
+if (!document.cookie.match(/id=/)) return cberr("You are not logged in!");
+if (!window.io) return cberr("Call 'ioup' first!");
+if (globals.socket) return cbok("Socket exists");
+new LOTWSocket();
+
+},//»
+ping:async(args)=>{//«
+
+	let to = args.shift();
+	if (!to) return cberr("No 'to' arg!");
+	let sock = globals.socket;
+	if (!sock) return cbok("No socket!");
+	let start = performance.now();
+	let rv = await sock.ping(to);
+	if (!rv) return cberr("PINGWUT?!?!?!?");
+	if (rv.error) {
+		werr(rv.msg);
+		cberr();
+	}
+	else {
+		let diff = Math.round(performance.now() - start);
+		werr(`${rv.msg} (${diff} ms)`);
+		cbok();
+	}
+
+},//»
+ioup:async()=>{//«
 
 if (window.io) return cbok("Already loaded");
 if (!await capi.initIO()) return cberr("Blah");
@@ -4145,8 +4205,18 @@ if (!window.io) return cberr("Loaded script but no window.io!?!?!?");
 
 cbok();
 
-},
+},//»
+setname:async(args)=>{//«
+	let name = args.shift();
+	if (!name) return cberr("No name given!");
+	let rv = await fetch(`/_setname?name=${name}`);
+	werr(await rv.text());
+	if (!rv.ok) return cberr();
+	cbok();
+},//»
 
+
+/*«
 'addremuser':async(args)=>{
 
 //Set file
@@ -4161,8 +4231,6 @@ cbok();
 	cbok("OK");
 
 },
-
-///*
 'setremapp':async(args)=>{
 
 	let user = args.shift();
@@ -4178,7 +4246,7 @@ cbok();
 	if (!rv.ok) return cberr("Error");
 	cbok();
 },
-//*/
+»*/
 //Synth stuff«
 
 //Midi file«
@@ -4331,43 +4399,33 @@ cbok();
 },
 
 »*/
-///*
-
-/*//«
-'pink':async(args)=>{
-
-if (!await capi.loadMod("av.voice.pinktrombone")) return cberr("PinkTrombone could not be loaded!");
-
-let mod = NS.mods["av.voice.pinktrombone"];
-let pt = make('pink-trombone');
-try{
-let got = await pt.setAudioContext();
-}catch(e){
-log(e);
-cberr(e);
-return;
+/*//«'hncomments':async()=>{
+const kid = (elem, ...arr)=>{
+let cur = elem;
+for (let num of arr){
+cur = cur.children[num];
 }
-pt.enableUI();
-log(pt.UI);
-////for (let p in pt){
-//if (pt.hasOwnProperty(p)) log(p);
-//}
+return cur;
 
-//pt.connect();
-//pt.newConstriction();
-//pt.start();
-//log(pt.constrictions);
-//log(await pt.getProcessor());
-//log(pt.parameters);
-//log(pt.pinkTrombone);
-//log(pt.setupAudioGraph);
-//log(pt.prototype);
-//log(mod);
+};
+let str = await fsapi.readFile("/home/me/Desktop/snayderr.html");
+if (!str) return cberr("Got nada");
 
+let parser = new DOMParser();
+let doc = parser.parseFromString(str, "text/html");
+let coms = doc.getElementsByClassName("comment-tree")[0].children[0].childNodes;
+for (let com of coms){
+let got = kid(com,0,0,0,0,2);
+//log(got);
+//let got = com.children[0].children[0].children[0].children[0].children[2];
+let user = kid(got, 0, 0, 0);
+log(user.innerText);
+//log(got);
+}
+//log(coms);
 cbok();
-
 },
-//»*/
+»*/
 
 'get':async(args)=>{//«
 
@@ -4401,33 +4459,6 @@ log(doc);
 	cbok();
 
 },//»
-/*//«'hncomments':async()=>{
-const kid = (elem, ...arr)=>{
-let cur = elem;
-for (let num of arr){
-cur = cur.children[num];
-}
-return cur;
-
-};
-let str = await fsapi.readFile("/home/me/Desktop/snayderr.html");
-if (!str) return cberr("Got nada");
-
-let parser = new DOMParser();
-let doc = parser.parseFromString(str, "text/html");
-let coms = doc.getElementsByClassName("comment-tree")[0].children[0].childNodes;
-for (let com of coms){
-let got = kid(com,0,0,0,0,2);
-//log(got);
-//let got = com.children[0].children[0].children[0].children[0].children[2];
-let user = kid(got, 0, 0, 0);
-log(user.innerText);
-//log(got);
-}
-//log(coms);
-cbok();
-},
-»*/
 'midiup':async()=>{
 	if (await capi.initMidi()) return cbok();
 	return cberr("Midi could not be enabled!");
