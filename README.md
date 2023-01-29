@@ -214,7 +214,12 @@ vim is the recommended text editor. The instructions below are specific to vim's
 configuration file, .vimrc.
 
 ### Enabling row folding
-To get row folding to work in the source code, put these lines in your .vimrc:
+
+Since the files in this repository can be quite large 
+(the [desktop module](https://github.com/linuxontheweb/lotw/tree/main/root/code/mods/sys/desk.js)
+contains over 7,000 lines at the time of this writing!), row folding is an
+essential feature of the development side of LOTW. So, to browse the source code
+as intended, the following lines must be included in your .vimrc:
 
 	set foldmethod=marker
 	set foldmarker=«,»
