@@ -56,9 +56,9 @@ is currently 'util.BinView' (code at
 
 2) Using the command <code>$&nbsp;open path/to/somefile.ext</code> in the terminal. 
 
-3) Creating an application icon via the terminal like this: <code>$&nbsp;mkappicon
-audio.Synth > ~/Desktop/MyAppIcon.app</code>, and then using either of the above
-methods to open the application.
+3) Creating an application icon via the terminal like this: 
+<code>$&nbsp;mkappicon audio.Synth > ~/Desktop/MyAppIcon.app</code>, 
+and then using either of the above methods to open the application.
 
 4) Opening the application directly with the `app` command like such: <code>$&nbsp;app audio.Synth</code>. This method allows for tab
 completion of the command's argument, making it a *very* simple way to search for available applications.
