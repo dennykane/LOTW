@@ -327,13 +327,17 @@ Main.top.title="Unicoder";
 const main = mkdv();
 Main.tabIndex="-1";
 main.dis="flex";
-main.bgcol="#999";
+main.bgcol="#bbb";
+Main.fs=32;
+Main.fw=900;
 const side_div=mkdv();
 side_div.overy="scroll";
 
 const side_tab = mk('table');
 side_tab.bor="none";
 side_tab.tcol="#000";
+side_tab.fs=18;
+side_tab.fw=900;
 side_tab.setAttribute("cellpadding",5);
 main.add(side_tab);
 side_div.add(side_tab);
@@ -342,7 +346,7 @@ const main_div=mkdv();
 //log(main_div);
 main_div.style.userSelect="text";
 main_div.pos="relative";
-main_div.fs=24;
+//main_div.fs=32;
 main_div.overy="scroll";
 main_div.flg=1;
 main.add(side_div);
@@ -380,7 +384,9 @@ mag_div.pad=10;
 mag_div.bgcol="#000";
 mag_div.tcol="#fff";
 mag_div.pos="absolute";
-mag_div.loc(0,0);
+//mag_div.loc(0,0);
+mag_div.x=0;
+mag_div.b=0;
 
 //»
 

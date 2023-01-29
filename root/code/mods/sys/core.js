@@ -29,14 +29,14 @@ let DEF_APP = "util.BinView";
 const APP_ARR=[//«
 	"Link",
 	"Application",
-//    "util.TextView",
     "util.TextEdit",
     "util.Unzip",
     "games.Arcade",
     "audio.Synth",
 	"util.ImageView",
 	"media.MediaPlayer",
-	"games.SNES"
+	"dev.HTML",
+	"games.SNES",
 //    "audio.Noisecraft"
 ];//»
 
@@ -49,7 +49,7 @@ const EXT_TO_APP_MAP={//«
     sh:2,
     json:2,
     cfg:2,
-	html:2,
+	html:8,
     zip:3,
     gb:4,
     nes:4,
@@ -68,6 +68,8 @@ for (let k in EXT_TO_APP_MAP) ALL_EXTENSIONS.push(k);
 
 const APPICONS={//«
 //	Folder:"1f5c2",
+//	HTML:"1f5ce",
+	HTML:"1f310",
 	Folder:"1f4c1",
 	Hello:"1f64b",
 	TextView:"1f4dd",
