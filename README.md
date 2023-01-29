@@ -198,8 +198,6 @@ Then, go to: http://localhost:12345
 
 [basic_site.js](https://github.com/linuxontheweb/lotw/tree/main/basic_site.js): The main Node.js service for sending core system files (in [root](https://github.com/linuxontheweb/lotw/tree/main/root)) to the client.
 
-[bin](https://github.com/linuxontheweb/lotw/tree/main/bin): Folder where scripts related to the development and maintenance of the project are kept.
-
 [docs](https://github.com/linuxontheweb/lotw/tree/main/docs): Folder where detailed instructions related to the usage of the system and the development and maintenance of the project are kept.
 
 [root](https://github.com/linuxontheweb/lotw/tree/main/root): Folder where essential client-side files of the core system are kept.
