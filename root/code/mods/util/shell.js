@@ -4173,7 +4173,11 @@ cwarn("Socket killed");
 };//»
 
 if (!window.io){
-	if (!await capi.initIO()) return cberr("Could not load socket.io!");
+	try{
+		if (!await capi.initIO()) return cberr("Could not load socket.io!");
+	}catch(e){
+		return cberr("Could not load socket.io!");
+	}
 	if (!window.io) return cberr("Loaded socket.io but found no 'io' object!?!?!");
 }
 
@@ -4673,6 +4677,10 @@ cerr("Dropping", ret);
 	let check_dir;
 	if (fent.APP === FOLDER_APP) check_dir = fent;
 	else check_dir = fent.par;
+
+	let rtype = fent.root.TYPE;
+	if (rtype !== "fs") return cberr(`Not (yet) handling type == '${rtype}'`);
+
 	if (!fs.check_fs_dir_perm(check_dir, is_root, null, ENV.USER)) {
 		return cberr(`${path}: permission denied`);
 	}

@@ -5375,9 +5375,6 @@ const open_file_by_path = (patharg, cb, opt={}) => {//«
 		if (cb) cb(true)
 	};
 	let objpath = fs.get_path_of_obj;
-//log("OPEN",patharg);
-//if ()
-//if (!patharg) throw new Error();
 	path_to_obj(patharg, (ret, lastdir, gotpath) => {
 		if (!ret) {
 			let marr;
@@ -5387,7 +5384,6 @@ const open_file_by_path = (patharg, cb, opt={}) => {//«
 		if (ret.APP == FOLDER_APP) {
 			ok();
 			return open_folder_win(ret.NAME, objpath(ret.par),null,opt.WINARGS, opt.SAVE_CB, opt.SAVE_FOLDER_CB);
-//			return open_folder_win(ret.NAME, objpath(ret.par),{winargs:opt.WINARGS,fullpath:()=>{return fullpath;}});
 		}
 		let patharr = fullpath.split("/");
 		if (!patharr[patharr.length - 1]) patharr.pop();
@@ -5410,6 +5406,7 @@ const open_file_by_path = (patharg, cb, opt={}) => {//«
 			fakeicon.app = ext_to_app(ext);
 		} else fakeicon.app = DEF_BIN_OPENER;
 		let rtype = ret.root.TYPE;
+		if (rtype!=="fs") return poperr(`Not (yet) handling type(${rtype})!`);
 		fs.getbin(fullpath, ret => {
 			const doit = (bytes) => {
 				ok();
