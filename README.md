@@ -138,8 +138,7 @@ tapping the Tab key in the terminal with nothing at the prompt.  Since, however,
 there may be an arbitrary number of commands (1,000+) in a given LOTW installation,
 an early design decision was to work out a concept of "command libraries", such that
 the commands in a given library may be imported into the current shell's execution context;
-so, to import all of the commands in the 'fs' command library, run: <code>$&nbsp;import
-fs</code>. 
+so, to import all of the commands in the 'fs' command library, run: <code>$&nbsp;import fs</code>. 
 
 Here is the way that you can see which commands are in a given library: <code>$&nbsp;lib &lt;libname&gt;</code>.
 Also, since the `lib` command supports autocompletion for its argument, you can 
