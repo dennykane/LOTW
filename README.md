@@ -21,8 +21,8 @@ accomplished via the keyboard (e.g. resizing windows and moving icons around).
 
 ### Your files are locally stored
 
-Everything that I've ever seen that called itself a "web-based operating
-system" never seemed to have any real concept of *persistent client-side
+Everything else that calls itself a "browser-based operating
+system" never seems to have much of an idea of *persistent client-side
 state*. With LOTW, however, *persistent client-side state* is really the name
 of the game. For example, performing the following simple operation in the
 terminal application indeed creates an entry—containing all of the brilliance
