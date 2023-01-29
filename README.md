@@ -66,14 +66,16 @@ completion of the command's argument, making it a *very* simple way to search fo
 
 ## Taskbar
 
-The visibility of the taskbar at the bottom of the screen can only be toggled
-via the keyboard shortcut, **Toggle taskbar visibility**. The taskbar simply exists as a placeholder for minimized windows. If
-the taskbar is visible, then the windows held by it are kept in the window
+The visibility of the taskbar at the bottom of the screen can be toggled by
+invoking its context menu (right-clicking usually works) and selecting
+**Hide/Show Taskbar** or via the keyboard shortcut, **Toggle taskbar
+visibility**. The taskbar simply exists as a placeholder for minimized windows.
+If the taskbar is visible, then the windows held by it are kept in the window
 stack, and can therefore be accessed by the **Cycle window stack** keyboard
 shortcut. If the taskbar is not visible, the windows held by it are considered
 to be in a "background" state, i.e., they are no longer in the window stack,
-and cannot be accessed via the graphical interface; to regain access, the
-taskbar *must* be brought back into view.
+and cannot be accessed via the graphical interface; to regain access to
+minimized windows, the taskbar *must* be brought back into view.
 
 ## Icon cursor
 
