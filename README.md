@@ -181,27 +181,21 @@ First, clone this repo!
 
 Then, start the site server with [Node.js](https://nodejs.org/) (uses the default port, 8080):
 
-`$ node site.js`
+`$ node basic_site.js`
 
 Finally, in your browser, go to: http://localhost:8080
 
 
 Or if you want to use another port (e.g. 12345), start it like so:
 
-`$ LOTW_PORT=12345 node site.js`
+`$ LOTW_PORT=12345 node basic_site.js`
 
 Then, go to: http://localhost:12345
 
-To make it a "live" site, do something this (you must use sudo here because the live site
-binds to priviledged ports 80/http and 443/https):
-
-`$ sudo LOTW_LIVE=1 node site.js`
-
-Then, assuming that your SSL setup is working, you should be able to see it at: https://yourdomain.ext
 
 ## Project structure
 
-[site.js](https://github.com/linuxontheweb/lotw/tree/main/site.js): The main Node.js service for sending core system files (in [root](https://github.com/linuxontheweb/lotw/tree/main/root)) to the client.
+[basic_site.js](https://github.com/linuxontheweb/lotw/tree/main/basic_site.js): The main Node.js service for sending core system files (in [root](https://github.com/linuxontheweb/lotw/tree/main/root)) to the client.
 
 [bin](https://github.com/linuxontheweb/lotw/tree/main/bin): Folder where scripts related to the development and maintenance of the project are kept.
 

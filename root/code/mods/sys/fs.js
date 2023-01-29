@@ -132,6 +132,9 @@ const read_file = (fname, cb, opts = {}, killcb_cb) => {//«
 		if (opts.text || opts.FORCETEXT || (get_var_str("FORCE_TEXT").match(/^t(rue)?$/i))) is_blob = false;
 		let type = ret.root.TYPE;
 		if (type == "fs") {
+			if (!check_fs_dir_perm(ret.par, is_root, null, opts.user)) {
+				return cb(null, null, fname + ":\x20permission denied");
+			}
 			get_fs_by_path(path, (ret2, err) => {
 				if (ret2) {
 					if (isbin) {
@@ -594,7 +597,7 @@ const write_fs_file = async(fent, blob, cb, if_append, if_trunc, opts={}) => {//
 }
 this.write_fs_file = write_fs_file;//»
 
-const check_fs_dir_perm = (obj, is_root, is_sys) => {//«
+const check_fs_dir_perm = (obj, is_root, is_sys, userarg) => {//«
 	if (is_sys) return true;
 	let iter = 0;
 	while (obj.treeroot !== true) {
@@ -613,7 +616,9 @@ const check_fs_dir_perm = (obj, is_root, is_sys) => {//«
 			}
 			else if (isstr(perm)) {
 				if (is_root) return true;
-				return (Core.get_username() === perm);
+				let checkname = userarg || Core.get_username();
+				return (checkname === perm);
+//				return (Core.get_username() === perm);
 			}
 			else {
 console.error("Unknown obj.perm field:", obj);

@@ -4299,16 +4299,14 @@ const icon_dblclick = (icon, e, win_cb) => {//«
 					const noopen = (mess) => {
 						icon.ready.error = "File not found";
 						let str = "The file could not be opened:&nbsp;" + fullpath;
-						if (mess) str += "<br><br>Additional message:&nbsp;" + mess;
+						if (mess) str += ` (${mess})`;
 						poperr(str);
 					};
 					if (gotext) fullpath = fullpath + "." + gotext;
 					let roottype = parobj.root.TYPE;
 					if (roottype == "fs") {
-if (MEDIAPLAYER_EXTENSIONS.includes(gotext)){
-open_app("media.MediaPlayer", null, false, null, {file: fullpath});
-return;
-}
+						if (MEDIAPLAYER_EXTENSIONS.includes(gotext)) return open_app("media.MediaPlayer", null, false, null, {file: fullpath});
+						if (!fs.check_fs_dir_perm(parobj)) return noopen("permission denied");
 						fs.get_fs_data(fullpath, (ret, mess) => {
 							if (!ret) return noopen(mess);
 							icon.ready.state = "File loaded";

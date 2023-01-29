@@ -3519,6 +3519,8 @@ const read_file_args_or_stdin = (args, cb, opts={}) => { /*SHELLNOTES:8*/
 			}
 		};
 		opts.exports = shell_exports;
+//log(ENV.USER);
+		opts.user = ENV.USER;
 		fs.read_file(fname, read_cb, opts);
 	};
 	dofile();
@@ -4055,7 +4057,6 @@ const do_ls = (args)=>{
 
 builtins = {//«
 
-
 logout:async()=>{//«
 	document.cookie="id=0;max-age=0";
 	if (globals.socket) globals.socket.kill();
@@ -4103,7 +4104,7 @@ whoami:async()=>{//«
 	if (!rv.ok) cberr();
 	else cbok();
 },//»
-socket:()=>{//«
+sockup:async()=>{//«
 
 const LOTWSocket = function (){//«
 
@@ -4171,11 +4172,20 @@ cwarn("Socket killed");
 
 };//»
 
+if (!window.io){
+	if (!await capi.initIO()) return cberr("Could not load socket.io!");
+	if (!window.io) return cberr("Loaded socket.io but found no 'io' object!?!?!");
+}
+
 if (!document.cookie.match(/id=/)) return cberr("You are not logged in!");
-if (!window.io) return cberr("Call 'ioup' first!");
-if (globals.socket) return cbok("Socket exists");
+if (globals.socket) return cbok("The socket is already up");
 new LOTWSocket();
 
+},//»
+sockdown:()=>{//«
+if (!globals.socket) return cbok("There is no active socket");
+globals.socket.kill();
+cbok();
 },//»
 ping:async(args)=>{//«
 
@@ -4184,7 +4194,7 @@ ping:async(args)=>{//«
 	let sock = globals.socket;
 	if (!sock) return cbok("No socket!");
 	let start = performance.now();
-	let rv = await sock.ping(to);
+	let rv = await sock.ping(to.toLowerCase());
 	if (!rv) return cberr("PINGWUT?!?!?!?");
 	if (rv.error) {
 		werr(rv.msg);
@@ -4197,15 +4207,6 @@ ping:async(args)=>{//«
 	}
 
 },//»
-ioup:async()=>{//«
-
-if (window.io) return cbok("Already loaded");
-if (!await capi.initIO()) return cberr("Blah");
-if (!window.io) return cberr("Loaded script but no window.io!?!?!?");
-
-cbok();
-
-},//»
 setname:async(args)=>{//«
 	let name = args.shift();
 	if (!name) return cberr("No name given!");
@@ -4214,218 +4215,12 @@ setname:async(args)=>{//«
 	if (!rv.ok) return cberr();
 	cbok();
 },//»
-
-
-/*«
-'addremuser':async(args)=>{
-
-//Set file
-//let rv = await fetch(`/_1001?q=${btoa("username p@$$w0rd Filename.js")}`,{method: "POST", body:bytes.buffer});
-
-	let user = args.shift();
-	let pass = args.shift();
-	if (!(user&&pass)) return cberr("Need username and password!");
-	let q = btoa(`${user} ${pass}`);
-	let rv = await fetch(`/_aru?q=${q}`);
-	if (!rv.ok) return cberr("Error");
-	cbok("OK");
-
-},
-'setremapp':async(args)=>{
-
-	let user = args.shift();
-	let pass = args.shift();
-	let fname = args.shift();
-	if (!fname) return cberr("No arg!");
-	let bytes = await readFile(fname, {binary: true});
-	if (!bytes) return cberr(`${fname}: not found`);
-	let usename = fname.split("/").pop();
-	log(usename);
-	let q = btoa(`${user} ${pass} ${usename}`);
-	let rv = await fetch(`/_sra?q=${q}`,{method: "POST", body:bytes.buffer});
-	if (!rv.ok) return cberr("Error");
-	cbok();
-},
-»*/
-//Synth stuff«
-
-//Midi file«
-/*How to convert from ticks to seconds:«
-
-Question:
-I want to know how to convert MIDI ticks to actual playback seconds.
-
-For example, if the MIDI PPQ (Pulses per quarter note) is 1120, how would I
-convert it into real world playback seconds?
-
-Answer:
-The formula is 60000 / (BPM * PPQ) (milliseconds).
-
-Where BPM is the tempo of the track (Beats Per Minute).
-
-(i.e. a 120 BPM track would have a MIDI time of (60000 / (120 * 192)) or 2.604 ms for 1 tick.
-
-If you don't know the BPM then you'll have to determine that first. MIDI times
-are entirely dependent on the track tempo.
-
-»*/
-/*JSON Object«
-
-
-
-{
-  // the transport and timing data
-  header: {
-    name: String,                     // the name of the first empty track, 
-                                      // which is usually the song name
-    tempos: TempoEvent[],             // the tempo, e.g. 120
-    timeSignatures: TimeSignatureEvent[],  // the time signature, e.g. [4, 4],
-
-    PPQ: Number                       // the Pulses Per Quarter of the midi file
-                                      // this is read only
-  },
-
-  duration: Number,                   // the time until the last note finishes
-
-  // an array of midi tracks
-  tracks: [
-    {
-      name: String,                   // the track name if one was given
-
-      channel: Number,                // channel
-                                      // the ID for this channel; 9 and 10 are
-                                      // reserved for percussion
-      notes: [
-        {
-          midi: Number,               // midi number, e.g. 60
-          time: Number,               // time in seconds
-          ticks: Number,              // time in ticks
-          name: String,               // note name, e.g. "C4",
-          pitch: String,              // the pitch class, e.g. "C",
-          octave : Number,            // the octave, e.g. 4
-          velocity: Number,           // normalized 0-1 velocity
-          duration: Number,           // duration in seconds between noteOn and noteOff
-        }
-      ],
-
-      // midi control changes
-      controlChanges: {
-        // if there are control changes in the midi file
-        '91': [
-          {
-            number: Number,           // the cc number
-            ticks: Number,            // time in ticks
-            time: Number,             // time in seconds
-            value: Number,            // normalized 0-1
-          }
-        ],
-      },
-
-      instrument: {                   // and object representing the program change events
-        number : Number,              // the instrument number 0-127
-        family: String,               // the family of instruments, read only.
-        name : String,                // the name of the instrument
-        percussion: Boolean,          // if the instrument is a percussion instrument
-      },          
-    }
-  ]
-}
-//»*/
-/*
-'midi':async(args)=>{//«
-
-//Midi note to freq
-//Midi note 50 is the frequency at freqs[50]
-let freqs = [];
-for (let i=0; i <= 127; i++) freqs[i]= 13.75*(2**((i-9)/12));
-
-if (!await capi.loadMod("av.miditojson")) return cberr("Midi could not be loaded!");
-
-let mod = NS.mods["av.miditojson"].Midi;
-let path = args.shift();
-if (!path) return cberr("No path given!");
-let node = await pathToNode(path);
-if (!node) return cberr(`${path}: not found`);
-let t = node.root.TYPE;
-
-let rv = await readFile(node.fullpath);
-if (!(rv instanceof Blob)) return cberr("Did not get a blob!");
-let midi = new mod(await capi.toBuf(rv));
-let head = midi.header;
-let tracks = midi.tracks;
-let ppq = head.ppq;
-wout(`PPQ: ${ppq}`);
-wout(`Tracks: ${tracks.length}`);
-let temps = head.tempos;
-wout("Tempos (ms per tick):");
-for (let i=0; i < temps.length; i++){
-	//The formula is 60000 / (BPM * PPQ) (milliseconds).
-	let tmp = temps[i];
-	//log(tmp);
-	let ms_per_tick = 60000/(tmp.bpm*ppq);
-	wout(`${i}) ${ms_per_tick}`);
-}
-log(head);
-log(tracks);
-
-//}
-//else return cberr(`'${t}: not yet implemented'`);
-
-cbok();
-
+delname:async()=>{//«
+	let rv = await fetch("/_delname");
+	werr(await rv.text());
+	if (!rv.ok) cberr();
+	else cbok();
 },//»
-*/
-//»
-
-/*
-'midiup':async()=>{
-	if (await capi.initMidi()) return cbok();
-	return cberr("Midi could not be enabled!");
-},
-'synth':()=>{
-//	termobj.ENV['?']=0;
-	termobj.init_app_mode("synth", 
-		ret=>{//«
-//			if (servobj.killed) {
-//				termobj.app_line_out("Killed");
-//				return termobj.end_app_mode();
-//			}
-			let gotcom = ret.trim();
-			if (gotcom) wout(`OK: ${gotcom}`);
-			termobj.response_end();
-		},//» 
-		cbok
-	)
-},
-
-»*/
-/*//«'hncomments':async()=>{
-const kid = (elem, ...arr)=>{
-let cur = elem;
-for (let num of arr){
-cur = cur.children[num];
-}
-return cur;
-
-};
-let str = await fsapi.readFile("/home/me/Desktop/snayderr.html");
-if (!str) return cberr("Got nada");
-
-let parser = new DOMParser();
-let doc = parser.parseFromString(str, "text/html");
-let coms = doc.getElementsByClassName("comment-tree")[0].children[0].childNodes;
-for (let com of coms){
-let got = kid(com,0,0,0,0,2);
-//log(got);
-//let got = com.children[0].children[0].children[0].children[0].children[2];
-let user = kid(got, 0, 0, 0);
-log(user.innerText);
-//log(got);
-}
-//log(coms);
-cbok();
-},
-»*/
 
 'get':async(args)=>{//«
 
@@ -4459,20 +4254,19 @@ log(doc);
 	cbok();
 
 },//»
-'midiup':async()=>{
+'midiup':async()=>{//«
 	if (await capi.initMidi()) return cbok();
 	return cberr("Midi could not be enabled!");
-},
-'ip':async(args)=>{
+},//»
+'ip':async(args)=>{//«
 	let rv = await fetch("https://ifconfig.me/ip")
 	if (!(rv && rv.ok)) return cberr("Could not get ip address");
 	cbok(await rv.text());
-},
-//*/
-'id':()=>{
+},//»
+'id':()=>{//«
 	wout(termobj.winid);
 	cbok();
-},
+},//»
 'mount':async(args)=>{//«
 	let mntkids = fs.root.KIDS.mnt.KIDS
 	let name = args.shift();
@@ -4606,11 +4400,11 @@ cerr("Dropping", ret);
 });//»
 
 },//»
-'audio':(args)=>{
+'audio':(args)=>{//«
 	if (globals.audio) return cberr("Audio is already up!");
 	capi.mkAudio();
 	cbok();
-},
+},//»
 'exists':async(args)=>{let opts=failopts(args,{SHORT:{a:1,o:1},LONG:{all:1,one:1}});if(!opts)return;let if_one=opts.one || opts.o;let if_all=opts.all || opts.a;if(if_one && if_all)return cberr("Cannot simultaneously specify both 'one' and 'all' options");if(!if_one)if_all=true;if(!args.length){if(if_one)return cberr();else return cbok();}let gotone=false;for(let path of args){if(!await pathToNode(path)){if(if_all)return cberr(normpath(path)+":\x20not found");}else gotone=true;}if(if_one && !gotone)return cberr("option 'one' specified,\x20but none found");cbok();},
 'mkappicon': args => {//«
 	let appargs = getopts(args,{ALL:true})[0];
@@ -4623,7 +4417,7 @@ cerr("Dropping", ret);
 	wout(JSON.stringify(out,null,"\t"));
 	cbok();
 },//»
-'lib': args => {
+'lib': args => {//«
 	let which = args.shift();
 	if (!which) return cberr("No lib given!");
 	let doit = () => {
@@ -4635,8 +4429,8 @@ cerr("Dropping", ret);
 		if (!ret) return cberr("No such module:\x20" + which);
 		doit();
 	});
-},
-'setdeskpath': async args => {
+},//»
+'setdeskpath': async args => {//«
 	let opts = failopts(args, {
 		SHORT: {
 			d: 1
@@ -4657,8 +4451,8 @@ cerr("Dropping", ret);
 	path = objpath(obj);
 	if (!await Desk.set_desk_path(path)) return cberr("Could not set desktop path");
 	cbok("OK");
-},
-'mkdir': args => {
+},//»
+'mkdir': args => {//«
 	let opts = failopts(args, {
 		LONG: {
 			kind: 3,
@@ -4699,10 +4493,10 @@ cerr("Dropping", ret);
 		}, null, is_root, opts);
 	};
 	domake();
-},
+},//»
 'cp': args=>{fs.com_mv(shell_exports, args, true);},
 'mv': args=>{fs.com_mv(shell_exports, args);},
-'rm': args => {
+'rm': args => {//«
 	let do_full_dirs = false;
 	let opts = failopts(args, {
 		SHORT: {
@@ -4728,18 +4522,18 @@ cerr("Dropping", ret);
 		ROOT: is_root,
 		FULLDIRS: do_full_dirs
 	});
-},
-'kill': args => {
+},//»
+'kill': args => {//«
 	if (args.length != 1) return cberr("Expected exactly one arg");
 	let num = strnum(args[0]);
 	if (!(isint(num) && num > 0)) return cberr("Need a positive integer!");
 	Core.kill_job(num);
 	cbok();
-},
+},//»
 //'jobs':args=>{if(args.length)return cberr("Expected 0 arguments");woutarr(Core.get_job_list());cbok();},
 'ls': com_ls,
 'eof':()=>{wout(EOF);cbok();},
-'cd': args => {
+'cd': args => {//«
 	let res;
 	let got_dir, dir_str, dirobj;
 	const cd_end = () => {
@@ -4768,8 +4562,8 @@ cerr("Dropping", ret);
 		got_dir = regpath;
 		cd_end();
 	});
-},
-'cat': args => {
+},//»
+'cat': args => {//«
 	let sws = failopts(args, {
 		SHORT: {
 			w: 1,
@@ -4803,22 +4597,17 @@ cerr("Dropping", ret);
 	opts.COPY = sws.copy||sws.c;
 	if (opts.BINARY && opts.NUMBERLINES) return cberr("Incompatible arguments:\x20line numbering and binary output!");
 	com_cat(args, opts);
-},
-'wrap': args=>{
-	if (!failnoopts(args)) return cberr();
-	com_cat(args, {WRAPLINES: true});
-},
-'copy': args=>{
-	if (!failnoopts(args)) return cberr();
-	com_cat(args, {COPY: true});
-},
-'bcat': args=>{
-	if (!failnoopts(args)) return cberr();
-	com_cat(args, {BINARY: true});
-},
-'su': async args => {
+},//»
+'wrap':args=>{if(!failnoopts(args))return cberr();com_cat(args,{WRAPLINES:true});},
+'copy':args=>{if(!failnoopts(args))return cberr();com_cat(args,{COPY:true});},
+'bcat':args=>{if(!failnoopts(args))return cberr();com_cat(args,{BINARY:true});},
+'su': async args => {//«
 	let who = args.shift();
 	let rv;
+	kill_register(cb=>{
+		termobj.unset_password_mode();
+		cb&&cb();
+	});
 	if (who) {
 		who = who.regstr();
 		let curuser = Core.get_username();
@@ -4831,7 +4620,9 @@ cerr("Dropping", ret);
 		termobj.set_root_state(false);
 		Core.set_username(who);
 		let homedir = `/home/${who}`;
+		globals.home_path = homedir;
 		let deskdir = `${homedir}/Desktop`;
+		globals.desk_path = deskdir;
 		cur_dir = homedir;
 		await fsapi.popHtml5Dir(homedir);
 		ENV.USER = who;
@@ -4842,9 +4633,6 @@ cerr("Dropping", ret);
 		});
 		cbok();
 		if (Desk) Desk.set_desk_path(deskdir);
-//	if (!await Desk.set_desk_path(path)) return cberr("Could not set desktop path");
-//		if (Desk) Desk.set_desktop_stats();
-
 	} else {
 		if (is_root) return cbok("Already root");
 		rv = await getLineInput("Password:\x20", true);
@@ -4859,7 +4647,7 @@ cerr("Dropping", ret);
 			cbok();
 		} else cberr("Password mismatch");
 	}
-},
+},//»
 'pwd':()=>{cbok(cur_dir);},
 'exit':args=>{let num=args.shift();if(!num)num="1";if(num.match(/^[0-9]+$/)){sys_abort=true;use_return_val=parseInt(num);cb(make_ret(use_return_val));if(istty()&& termobj && termobj.close)termobj.close();}else{sys_abort=true;cb(sh_error("invalid exit value:"+num,null,get_redir(redir,2)));}},
 'false': cberr,
@@ -4867,7 +4655,7 @@ cerr("Dropping", ret);
 'shift':args=>{if(args.length>1)return cberr("too many arguments");let num;if(!args.length)num=1;else{let numstr=args.shift();num=strnum(numstr);if(!isnum(num))return cberr(numstr+":\x20numeric argument required");if(num<0)return cberr(numstr+":\x20shift count out of range");}if(!global_args){if(num===0)return cbok();else return cberr();}for(let i=0;i<num;i++){if(global_args.shift()===undefined)return cberr();}return cbok();},
 'true': cbok,
 'close':args=>{if(!Desk)return cberr(ENODESK);let id=args.shift();if(!id)return cberr("No app given!");if(!id.match(/^win_\d+$/))return cberr("Invalid window id");let win=document.getElementById(id);if(!win)return cberr("Nothing found");win.force_kill();cbok();},
-'open': async args => {
+'open': async args => {//«
 //	let opts = getwinargopts(args);
 //	if (!opts) return;
 	let opts = {};
@@ -4877,14 +4665,21 @@ cerr("Dropping", ret);
 	let fent = await pathToNode(path);
 	if (!fent) return cberr(path + ":\x20file not found");
 	if (!fent.fullpath){
-log(fent);
+//log(fent);
 		cberr("No path of the file entry!");
 		return;
 	}
+
+	let check_dir;
+	if (fent.APP === FOLDER_APP) check_dir = fent;
+	else check_dir = fent.par;
+	if (!fs.check_fs_dir_perm(check_dir, is_root, null, ENV.USER)) {
+		return cberr(`${path}: permission denied`);
+	}
 	Desk.open_file_by_path(fent.fullpath, null, opts);
 	cbok();
-},
-'app': async args => {
+},//»
+'app': async args => {//«
 
 /*
 Autocompletion behavior:
@@ -4965,9 +4760,9 @@ return;
 		if (!(isarr(rv)&&isstr(rv[0]))) return cberr("Unknown input received (check console)");
 		openit({TEXT: rv.join("\n")});
 	})
-},
+},//»
 'alias':args=>{for(let i=0;i<args.length;i++){let got=args[i];let com,rep;if(got.match(/=$/)&& args[i+1]){com=got.replace(/=$/,"");i++;rep=args[i];}else if(got.match(/=/)){let arr=got.split("=");com=arr[0];rep=arr[1];}if(com.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/))termobj['ALIASES'][com]=rep;else werr("Bad command name:\x20"+com);}cbok();},
-'env': () => {
+'env': () => {//«
 	let keys = Object.keys(var_env).concat(Object.keys(tmp_env));
 	let arr = [];
 	let val;
@@ -5002,12 +4797,12 @@ return;
 	woutarr(arr);
 	cbok();
 //	cbok(arr, "lines");
-},
+},//»
 
 'argshift':()=>{if(global_args)global_args.shift();cb(ret_true());},
 'len':args=>{let name=args.shift();if(!name){suse("name");return;}let obj=var_env[name];if(obj){let len=obj.length;if(len !=undefined)cbok(len+"");else serr(name+":\x20not an array");}else serr(name+":\x20undefined");},
 'echoint':args=>{let doit=()=>{let tok=args.shift();if(!tok)return cbok(EOF);wout(tok);setTimeout(doit,500);};setTimeout(doit,250);},
-'import': async args => {
+'import': async args => {//«
 //	if (!failnoopts(args)) return;
 	let opts = failopts(args,{s:{v:1}});
 	if (!opts) return;
@@ -5053,12 +4848,11 @@ return;
 	if (!rv) return cberr("No such module:\x20" + which);
 	if (typeof rv === "string") Core.do_update(`libs.${which}`, rv);
 	add_imports();
-},
-
+},//»
 
 'hist':args=>{let sws=failopts(args,{SHORT:{n:3,r:1,a:1}});if(!sws)return;let num=null;let do_rep=sws.r;let do_add=sws.a;let is_mod=do_rep||do_add;if(do_rep&&do_add)return cberr("Conflicting flags given:\x20-r(replace)and-a(append)");if(sws.n){num=strnum(sws.n);if(!(isint(num)&&num>=0))return cberr("Expected a non-negative integer number");}if(is_mod){let file=args.shift();if(!file)return cberr("No file given");gettextfile(file,ret=>{if(!ret)return cberr(file+":\x20No contents");let arr=ret.split("\n");let outarr=[];for(let ln of arr){let str=ln.trim();if(!str)continue;outarr.push(str);}if(!outarr.length)return cberr(file+":\x20No usable contents");if(do_rep)termobj.replace_command_history(outarr);else termobj.append_command_history(outarr);cbok();});}else{let which="shell";if(args.length)which=args.shift();if(!isid(which))return cberr("Bad history arg:\x20"+which);Core.get_history(which,ret=>{if(!ret)return cberr(which+":\x20No history found");if(num===null)woutarr(ret);else{let str=ret[num];if(!str)return cberr("No value at line:\x20"+num);wout(str);}cbok(EOF);},true);}},
 'getch':args=>{let opts=failopts(args,{SHORT:{p:3}});if(!opts)return;let reader=get_reader();if(!reader.is_terminal)return cberr("Read from terminal only");if(opts.p){termobj.set_prompt(opts.p,{NOPUSH:1,NOSCROLL:1});refresh();}termobj.getch(cbok);},
-'wc': args => {
+'wc': args => {//«
 	let _ = shell_exports;
 	let curfile = null;
 	let words = null,
@@ -5106,8 +4900,8 @@ return;
 	}, {
 		SENDEOF: true
 	});
-},
-'pipe': args => {
+},//»
+'pipe': args => {//«
 	let opts = failopts(args, {
 		LONG: {
 			append: 3
@@ -5134,17 +4928,17 @@ return;
 		OBJOK: true,
 		SENDEOF: true
 	});
-},
-'time':()=>{
+},//»
+'time':()=>{//«
 wout(`${(new Date()+"").split(" ")[4]}`)
 cbok();
-},
-'date':()=>{
+},//»
+'date':()=>{//«
 let arr = (new Date()+"").split(" ");
 wout(`${arr[1]}-${arr[2]}-${arr[3]}`)
 cbok();
-},
-'log': async args => {
+},//»
+'log': async args => {//«
 /*
 	const dowait=()=>{
 		return new Promise((Y,N)=>{
@@ -5157,8 +4951,8 @@ cbok();
 		if (isobj(ret) && ret.EOF) return cbok();
 		log(ret);
 	});
-},
-'dl': async args => {
+},//»
+'dl': async args => {//«
 	if (!failnoopts(args)) return cberr();
 	if (args.length){
 		if (args.length > 1) return cberr("Too many args!");
@@ -5198,8 +4992,8 @@ cbok();
 			log(ret);
 		}
 	});
-},
-'buf': args => {
+},//»
+'buf': args => {//«
 	let sws = failopts(args, {
 		SHORT: {
 			r: 1,
@@ -5217,7 +5011,7 @@ cbok();
 	if (sws.n) buf = Core.api.numberLines(buf);
 	wout(buf.join("\n"));
 	cbok(EOF);
-},
+},//»
 'parse': args=>{com_cat(args, {OBJOK: true, PARSE: true});},
 'stringify': args=>{com_cat(args, {OBJOK: true, STRINGIFY: true});},
 'typeof': args=>{com_cat(args, {OBJOK:true, ECHOTYPE: true});},
@@ -5345,7 +5139,7 @@ cbok();
 },//»
 'sleep':args=>{let arg1=args.shift();if(!arg1){suse("seconds");return;}let time_str=toks_to_string([arg1]);let time_arr;if(time_str && time_str.match(/^[0-9]+(\.[0-9]+)?$/)){let time=parseFloat(time_str);let msecs=parseInt((Math.floor(time*10000))/10);if(typeof(msecs)=="number"){const end_sleep=()=>{if(!sleep_timer)return;sleep_timer=null;cbok();};let sleep_timer=setTimeout(end_sleep,msecs);kill_register(killcb=>{end_sleep();killcb&&killcb();});global_timeouts.push(sleep_timer);return;}}cberr("could not parse args");},
 'msleep':args=>{let arg1=args.shift();if(!arg1){cb(sys_error("msleep:\x20missing operand"));return;}let time_str=toks_to_string([arg1]);if(time_str && time_str.match(/^[0-9]+$/)){let num=parseInt(time_str);if(num==0)num=1;respbr();let timer=setTimeout(()=>{cb(ret_true());},num);global_timeouts.push(timer);return;}else{cb(sys_error("msleep:\x20invalid time interval:"+time_str));}},
-'echo': args => {
+'echo': args => {//«
 	let sws = failopts(args, {
 		SHORT: {
 			r: 1,
@@ -5371,7 +5165,7 @@ cbok();
 		wout(EOF);
 		cbok();
 	}
-},
+},//»
 'clear':()=>{termobj.clear();},
 'builtins':()=>{let arr=Object.keys(builtins);if(is_root)arr.push(...Object.keys(sys_builtins));cbok(fmt(arr.sort().join(" ")));},
 'passwd': async args => {//«
@@ -5401,6 +5195,7 @@ cbok();
 	});
 »*/
 }//»
+
 }//»
 
 sys_builtins = {//«
@@ -5684,8 +5479,220 @@ run_script(runcom, retval => {
 
 }
 
-/*Old«
+//Old«
 
+/*«
+'addremuser':async(args)=>{
+
+//Set file
+//let rv = await fetch(`/_1001?q=${btoa("username p@$$w0rd Filename.js")}`,{method: "POST", body:bytes.buffer});
+
+	let user = args.shift();
+	let pass = args.shift();
+	if (!(user&&pass)) return cberr("Need username and password!");
+	let q = btoa(`${user} ${pass}`);
+	let rv = await fetch(`/_aru?q=${q}`);
+	if (!rv.ok) return cberr("Error");
+	cbok("OK");
+
+},
+'setremapp':async(args)=>{
+
+	let user = args.shift();
+	let pass = args.shift();
+	let fname = args.shift();
+	if (!fname) return cberr("No arg!");
+	let bytes = await readFile(fname, {binary: true});
+	if (!bytes) return cberr(`${fname}: not found`);
+	let usename = fname.split("/").pop();
+	log(usename);
+	let q = btoa(`${user} ${pass} ${usename}`);
+	let rv = await fetch(`/_sra?q=${q}`,{method: "POST", body:bytes.buffer});
+	if (!rv.ok) return cberr("Error");
+	cbok();
+},
+»*/
+//Synth stuff«
+
+//Midi file«
+/*How to convert from ticks to seconds:«
+
+Question:
+I want to know how to convert MIDI ticks to actual playback seconds.
+
+For example, if the MIDI PPQ (Pulses per quarter note) is 1120, how would I
+convert it into real world playback seconds?
+
+Answer:
+The formula is 60000 / (BPM * PPQ) (milliseconds).
+
+Where BPM is the tempo of the track (Beats Per Minute).
+
+(i.e. a 120 BPM track would have a MIDI time of (60000 / (120 * 192)) or 2.604 ms for 1 tick.
+
+If you don't know the BPM then you'll have to determine that first. MIDI times
+are entirely dependent on the track tempo.
+
+»*/
+/*JSON Object«
+
+
+
+{
+  // the transport and timing data
+  header: {
+    name: String,                     // the name of the first empty track, 
+                                      // which is usually the song name
+    tempos: TempoEvent[],             // the tempo, e.g. 120
+    timeSignatures: TimeSignatureEvent[],  // the time signature, e.g. [4, 4],
+
+    PPQ: Number                       // the Pulses Per Quarter of the midi file
+                                      // this is read only
+  },
+
+  duration: Number,                   // the time until the last note finishes
+
+  // an array of midi tracks
+  tracks: [
+    {
+      name: String,                   // the track name if one was given
+
+      channel: Number,                // channel
+                                      // the ID for this channel; 9 and 10 are
+                                      // reserved for percussion
+      notes: [
+        {
+          midi: Number,               // midi number, e.g. 60
+          time: Number,               // time in seconds
+          ticks: Number,              // time in ticks
+          name: String,               // note name, e.g. "C4",
+          pitch: String,              // the pitch class, e.g. "C",
+          octave : Number,            // the octave, e.g. 4
+          velocity: Number,           // normalized 0-1 velocity
+          duration: Number,           // duration in seconds between noteOn and noteOff
+        }
+      ],
+
+      // midi control changes
+      controlChanges: {
+        // if there are control changes in the midi file
+        '91': [
+          {
+            number: Number,           // the cc number
+            ticks: Number,            // time in ticks
+            time: Number,             // time in seconds
+            value: Number,            // normalized 0-1
+          }
+        ],
+      },
+
+      instrument: {                   // and object representing the program change events
+        number : Number,              // the instrument number 0-127
+        family: String,               // the family of instruments, read only.
+        name : String,                // the name of the instrument
+        percussion: Boolean,          // if the instrument is a percussion instrument
+      },          
+    }
+  ]
+}
+//»*/
+/*
+'midi':async(args)=>{//«
+
+//Midi note to freq
+//Midi note 50 is the frequency at freqs[50]
+let freqs = [];
+for (let i=0; i <= 127; i++) freqs[i]= 13.75*(2**((i-9)/12));
+
+if (!await capi.loadMod("av.miditojson")) return cberr("Midi could not be loaded!");
+
+let mod = NS.mods["av.miditojson"].Midi;
+let path = args.shift();
+if (!path) return cberr("No path given!");
+let node = await pathToNode(path);
+if (!node) return cberr(`${path}: not found`);
+let t = node.root.TYPE;
+
+let rv = await readFile(node.fullpath);
+if (!(rv instanceof Blob)) return cberr("Did not get a blob!");
+let midi = new mod(await capi.toBuf(rv));
+let head = midi.header;
+let tracks = midi.tracks;
+let ppq = head.ppq;
+wout(`PPQ: ${ppq}`);
+wout(`Tracks: ${tracks.length}`);
+let temps = head.tempos;
+wout("Tempos (ms per tick):");
+for (let i=0; i < temps.length; i++){
+	//The formula is 60000 / (BPM * PPQ) (milliseconds).
+	let tmp = temps[i];
+	//log(tmp);
+	let ms_per_tick = 60000/(tmp.bpm*ppq);
+	wout(`${i}) ${ms_per_tick}`);
+}
+log(head);
+log(tracks);
+
+//}
+//else return cberr(`'${t}: not yet implemented'`);
+
+cbok();
+
+},//»
+*/
+//»
+
+/*
+'midiup':async()=>{
+	if (await capi.initMidi()) return cbok();
+	return cberr("Midi could not be enabled!");
+},
+'synth':()=>{
+//	termobj.ENV['?']=0;
+	termobj.init_app_mode("synth", 
+		ret=>{//«
+//			if (servobj.killed) {
+//				termobj.app_line_out("Killed");
+//				return termobj.end_app_mode();
+//			}
+			let gotcom = ret.trim();
+			if (gotcom) wout(`OK: ${gotcom}`);
+			termobj.response_end();
+		},//» 
+		cbok
+	)
+},
+
+»*/
+/*//«'hncomments':async()=>{
+const kid = (elem, ...arr)=>{
+let cur = elem;
+for (let num of arr){
+cur = cur.children[num];
+}
+return cur;
+
+};
+let str = await fsapi.readFile("/home/me/Desktop/snayderr.html");
+if (!str) return cberr("Got nada");
+
+let parser = new DOMParser();
+let doc = parser.parseFromString(str, "text/html");
+let coms = doc.getElementsByClassName("comment-tree")[0].children[0].childNodes;
+for (let com of coms){
+let got = kid(com,0,0,0,0,2);
+//log(got);
+//let got = com.children[0].children[0].children[0].children[0].children[2];
+let user = kid(got, 0, 0, 0);
+log(user.innerText);
+//log(got);
+}
+//log(coms);
+cbok();
+},
+»*/
+
+/*«
 'swon': async () => {
 	if (await capi.initSW()) return cbok("The service worker has been registered");
 	cberr("There was a problem registering the service worker");
@@ -5835,6 +5842,7 @@ else{
 	runit(s);
 }
 },//»
+//»*/
 
-»*/
+//»
 

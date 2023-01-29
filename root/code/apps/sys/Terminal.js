@@ -386,6 +386,11 @@ this.onblur=_=>{//«
 	textarea.blur();
 	if (cur_scroll_command) insert_cur_scroll();
 }//»
+this.unset_password_mode=()=>{
+	echo_mode = true;
+//	no_prompt_mode = false;
+	shadow_lines = null;
+}
 this.set_password_mode=_=>{//«
 	echo_mode = false;
 	shadow_lines = [];
@@ -1783,7 +1788,6 @@ const get_prompt_str=()=>{//«
 //		if (term_mode=="ssh") {if (ssh_dir) return ssh_dir+":"+app_prompt;}
 		return app_prompt;
 	}
-//log(user);
 	let goodch = ["u", "U", "h", "H", "d", "t", "w"];
 	let gotps = ENV.PS1;
 	let ds = "\$";
@@ -1821,7 +1825,9 @@ const get_prompt_str=()=>{//«
 			}
 			else str += c;
 		}
+//log(ENV.USER);
 		cur_prompt = str;
+//log(cur_prompt);
 	}//»
 	if (ENV.USER) {
 		if ((new RegExp("^/home/"+ENV.USER+"\\$$")).test(cur_prompt)) {
