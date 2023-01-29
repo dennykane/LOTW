@@ -105,35 +105,6 @@ let port = use_port||8080;
 
 //Util«
 
-/*
-const hard_spawn=(name, args, cb, send_json)=>{//«
-
-//	spawn('sh', ['-c', 'unoconv -f pdf --stdout sample.doc | pdftotext -layout -enc UTF-8 - out.txt']);
-//let arg_str = args
-	let do_unescape = true;
-
-	let com_args = args.join(" ");
-	if (do_unescape) com_args = com_args.replace(/\\x27/g,"'").replace(/\\x22/g,'"');
-	let com = spawn('sh', ['-c', name+" "+com_args]);
-    var str = '';
-    com.on('error', function() {
-        cb(null);
-    }); 
-    com.stdout.on('data', function(dat) {
-        str += dat.toString();
-    });
-    com.on('close', function() {
-		if (send_json) {
-			let arr = str.split("\n");
-			if (!arr.length) arr=[" "];
-			if (arr.length && arr[arr.length-1]==="")  arr.pop();
-			cb(JSON.stringify(arr));
-		}
-		else cb(str);
-    }); 
-}//»
-*/
-
 const mime_from_path=(path, force_bin)=>{//«
 	if (path.match(/\.jpg$/i)) return "image/jpeg"
 	else if (path.match(/\.gif$/i)) return "image/gif"
