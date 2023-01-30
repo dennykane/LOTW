@@ -93,7 +93,7 @@ the LOTW file system).
 - **Open terminal**: Alt+t
 - **Invoke context menu**: Alt+c
 - **Toggle taskbar visibility**: Alt+b
-- **Toggle icon cursor visibility**: /
+- **Toggle icon cursor visibility**: / (forward slash)
 
 ### Windows
 - **Maximize window**: Alt+m
