@@ -15,16 +15,19 @@ const Win = Main.top;
 
 //Var«
 
+const BADTAGS = ["SCRIPT","IFRAME"];
+
 //»
+
+//DOM«
+
+Main.over="auto";
 Main.bgcol="#fff";
-//let iframe = mk('iframe');
-//iframe.w="100%";
-//iframe.h="100%";
-//iframe.bor="none";
-//Main.add(iframe);
+Main.style.userSelect="text";
+
+//»
 
 //Funcs«
-
 
 const init=()=>{//«
 }//»
@@ -35,22 +38,28 @@ const init=()=>{//«
 
 this.onappinit=()=>{};
 
-this.onloadfile=bytes=>{
+this.onloadfile=bytes=>{//«
 	let text = Core.api.bytesToStr(bytes);
 	let parser = new DOMParser();
 	let doc = parser.parseFromString(text, "text/html");
-	let nodes = doc.body.children;
-	for (let n of nodes){
-		if(n.tagName.match(/^script$/i)) n.innerHTML="";
+	let tot=0;
+	for (let tag of BADTAGS){
+		let arr = Array.from(doc.body.getElementsByTagName(tag));
+		let iter=0;
+		while (arr.length) {
+			tot++;
+			let node = arr.shift();
+//log(node);
+			node.parentNode.removeChild(node);
+		}
 	}
 	Main.innerHTML = doc.body.innerHTML;
-};
+	Win.status_bar.innerHTML = `${tot} nodes deleted`;
+};//»
 
 this.onkeydown = function(e,s) {//«
-	if (s==="SPACE_") vol(1);
 }//»
 this.onkeyup=(e)=>{//«
-	if (e.code=="Space") vol(0);
 };//»
 this.onkeypress=e=>{//«
 };//»
