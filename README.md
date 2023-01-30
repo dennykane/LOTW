@@ -52,7 +52,7 @@ state.
 below) with the icon cursor over—a file' s icon. If the file does not have an extension that is recognized by the system,
 a default application will be invoked as the handler. The default application
 is currently 'util.BinView' (code at 
-[root/code/apps/util/BinView.js](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/util/BinView.js)).
+[BinView.js](https://github.com/linuxontheweb/lotw/tree/main/root/code/apps/util/BinView.js)).
 
 2) Using the command <code>$&nbsp;open path/to/somefile.ext</code> in the terminal. 
 
