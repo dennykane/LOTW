@@ -23,7 +23,7 @@ accomplished via the keyboard (e.g. resizing windows and moving icons around).
 
 Everything else that calls itself a "browser-based operating
 system" never seems to have much of an idea of *persistent client-side
-state*. With LOTW, however, *persistent client-side state* is really the name
+state*. With LOTW, however, persistent client-side state is really the name
 of the game. For example, performing the following simple operation in the
 terminal application indeed creates an entry—containing all of the brilliance
 you can muster—at `~/file.txt`, held in the browser's sandboxed local storage,
