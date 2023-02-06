@@ -4025,8 +4025,13 @@ Given the first repeat of an action type, I just want to remove the original sta
 	out.time=Date.now();
 	if (state_iter!=states.length-1) {
 //log("!!!");
-//		stat_err("The states are now out of sequence!");
-//cwarn("OUTOFSEQUENCE?");
+if (states.length) {
+//cwarn("OUTOFSEQUENCE?", state_iter, states.length-1);
+stat_warn(`Popping ${states.length-1-state_iter} states`);
+cwarn(`Popping ${states.length-1-state_iter} states`);
+states=states.slice(0, state_iter+1);
+//log("INSEQUENCE?", state_iter, states.length-1);
+}
 	}
 	states.push(out);
 	state_iter=states.length-1;

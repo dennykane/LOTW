@@ -1,3 +1,10 @@
+/*!!!   Important change on Jan 31, 2023 !!!
+Just added the "Open with..." option for the icon's context menu.
+The new workflow starts off @RMSKJUBPU, where the icon_dblclick's are called
+with a fourth option (use_app), which is then fed into open_icon_app, then
+open_file, and finally open_new_window, as opts.altApp. The final determination
+is made @TIDMJUYTS.
+*/
 /*@SHUPWMJD Moving window edges with hotkeys: Chromebooks have no PGUP, PGDOWN, HOME, or END keys and
 ChromeOS likes to eat up a lot of hotkey combinations that use arrow keys!!!
 */
@@ -156,7 +163,7 @@ Desk.ENV=_;
 const MODS = NS.mods;
 const{KC,kc,simulate,globals,log,cwarn,cerr,sys_url,xget}=Core;
 //const{menu:MENU,widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions}=globals;
-const{home_path, widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions,FOLDER_APP, TEXT_APP, is_local}=globals;
+const{home_path, widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions,FOLDER_APP, TEXT_APP, TEXT_EXTENSIONS, is_local}=globals;
 const path_to_obj = (path, cb, if_root, getlink) => {
 	fs.path_to_obj(path, cb, if_root, getlink);
 };
@@ -214,7 +221,7 @@ let DEF_NO_DELETE_ICONS = false;
 let PREV_DEF_ALL_KEYS = false;
 let CYCLE_MIN_WINS = true;
 let init_with_cur_showing;
-if (is_local) init_with_cur_showing = true;
+if (is_local&&!qobj.nocursor) init_with_cur_showing = true;
 else init_with_cur_showing = false;
 //let init_with_cur_showing = false;
 let cur_showing = false;
@@ -1347,7 +1354,8 @@ return new Promise(async (y,n)=>{//«
 		await set_bg_img(DEF_BG_IMG_PATH);
 	}
 */
-	desk_imgdiv.style.backgroundImage='url("/www/img/lotw256.png")';
+//log(qobj);
+	if (!qobj.nobgimg) desk_imgdiv.style.backgroundImage='url("/www/img/lotw256.png")';
 
 	let bgimg_op = DEF_BG_IMG_OP;
 	if (await fsapi.pathToNode(USER_BG_IMG_OP_PATH)) bgimg_op=await fsapi.readHtml5File(USER_BG_IMG_OP_PATH);
@@ -1419,6 +1427,18 @@ bar.show=()=>{
 	windows = windows.concat(minimized_windows);
 	minimized_windows = [];
 };
+Desk.toggle_expert_mode = ()=>{//«
+	if (taskbar_expert_mode){
+		taskbar_expert_mode = false;
+		delete localStorage[lst_expert];
+		st.dis="";
+	}
+	else{
+		taskbar_expert_mode = true;
+		localStorage[lst_expert]="true";
+		st.dis="none";
+	}
+}//»
 bar.oncontextmenu=e=>{//«
 e.preventDefault();
 e.stopPropagation();
@@ -1440,19 +1460,25 @@ else{
 }
 if (taskbar_expert_mode){
 	items_arr.push("Expert\x20Mode\x20Off");
+	items_arr.push(Desk.toggle_expert_mode);
+/*
 	items_arr.push(()=>{
 		taskbar_expert_mode = false;
 		delete localStorage[lst_expert];
 		st.dis="";
 	});
+*/
 }
 else{
 	items_arr.push("Expert\x20Mode\x20On");
+	items_arr.push(Desk.toggle_expert_mode);
+/*
 	items_arr.push(()=>{
 		taskbar_expert_mode = true;
 		localStorage[lst_expert]="true";
 		st.dis="none";
 	});
+*/
 }
 
 deskcontext({
@@ -4263,7 +4289,7 @@ Desk.iconGen=igen;
 
 //»
 
-const icon_dblclick = (icon, e, win_cb) => {//«
+const icon_dblclick = (icon, e, win_cb, use_app) => {//«
 	if (icon.disabled) return;
 //	if (icon.app==FOLDER_APP && e) return;
 	icon.ready={};
@@ -4310,7 +4336,7 @@ const icon_dblclick = (icon, e, win_cb) => {//«
 						fs.get_fs_data(fullpath, (ret, mess) => {
 							if (!ret) return noopen(mess);
 							icon.ready.state = "File loaded";
-							open_icon_app(icon, ret, gotext, null, try_force_open);
+							open_icon_app(icon, ret, gotext, use_app, try_force_open);
 						});
 					}
 					else if (roottype == "www") {
@@ -4318,7 +4344,7 @@ const icon_dblclick = (icon, e, win_cb) => {//«
 						let rv = await fetch((icon.ref&&icon.ref.fullpath) || fullpath);
 						if (!rv.ok) return poperr("Could not fetch the data!");
 						icon.ready.state = "File loaded";
-						open_icon_app(icon, await rv.arrayBuffer(), gotext, null, try_force_open);
+						open_icon_app(icon, await rv.arrayBuffer(), gotext, use_app, try_force_open);
 					}
 					else if (roottype == "local") {
 						let name;
@@ -4339,7 +4365,7 @@ console.error(e);
 						Core.xget(Core.loc_url(parobj.root.port, parts.join("/"))+"&range=0-end",(ret)=>{
 							if (!ret) return noopen();
 							icon.ready.state = "File loaded";
-							open_icon_app(icon, ret, gotext, null, try_force_open);
+							open_icon_app(icon, ret, gotext, use_app, try_force_open);
 						},
 						null,
 						null,
@@ -5332,7 +5358,7 @@ this.openApp = (appname, force_open, winargs, appobj) => {
 //»
 const open_icon_app = async(icon, bytes, ext, useapp, force_open) => {//«
 	if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
-	if (ext == "app") {
+	if (!useapp && ext == "app") {
 		icon.ready.state = "Dereferencing app icon";
 		let obj;
 		try {
@@ -5363,7 +5389,7 @@ const open_icon_app = async(icon, bytes, ext, useapp, force_open) => {//«
 		open_app(which, null, true, icon.winargs, obj.args, null, icon);
 //		open_app(which, null, force_open, icon.winargs, obj.args, null, icon);
 	}
-	else open_file(bytes, icon);
+	else open_file(bytes, icon, useapp);
 	
 }//»
 const open_file_by_path = (patharg, cb, opt={}) => {//«
@@ -5423,7 +5449,7 @@ const open_file_by_path = (patharg, cb, opt={}) => {//«
 }
 this.open_file_by_path=open_file_by_path;
 //»
-const open_file = (bytes, icon) => {//«
+const open_file = (bytes, icon, useapp) => {//«
 	open_new_window(icon, win => {
 		if (win) {
 			if (icon.ext) win.ext = icon.ext;
@@ -5433,7 +5459,7 @@ const open_file = (bytes, icon) => {//«
 			}
 			else win.obj.onloadfile();
 		}
-	});
+	}, {altApp: useapp});
 }//»
 const open_new_window = (icon, cb, opts={}) => {//«
 	if (!(icon.fullpath instanceof Function)) {
@@ -5443,8 +5469,12 @@ const open_new_window = (icon, cb, opts={}) => {//«
 		return;
 	}
 	let useid = null;
+
+//TIDMJUYTS TODO: Verify that this is a correct determination
 	let app = icon.app;
-	if (icon.linkapp) app = icon.linkapp;
+	if (opts.altApp) app = opts.altApp;
+	else if (icon.linkapp) app = icon.linkapp;
+
 	let usemime = null;
 	let usename = icon.linkname||icon.name;
 	let usepath = icon.linkpath||icon.path;
@@ -6148,16 +6178,23 @@ CG.off();
 
 	/*Open context menu of selected icon, desktop or current window*/
 	if (kstr == "c_A") {
-//		let goticn = CUR.geticon();
-		if (ICONS.length===1){
-			let icn = ICONS[0];
-			if (!desk.contains(icn)){
+//log(CUR);
+		let curicon;
+		if (CUR.ison()) curicon = CUR.geticon();
+		if (curicon || ICONS.length===1){
+			let useicon;
+			if (curicon) useicon = curicon;
+			else {
+				let icn = ICONS[0];
+				if (!desk.contains(icn)){
 cwarn("There was an unattached icon in ICONS!");
-				icon_array_off(13);
-				return;
+					icon_array_off(13);
+					return;
+				}
+				useicon = icn;
 			}
-			let r = icn.gbcr();
-			icn.wrapper.oncontextmenu({clientX: r.x, clientY: r.y, isFake: true});
+			let r = useicon.gbcr();
+			useicon.wrapper.oncontextmenu({clientX: r.x, clientY: r.y, isFake: true});
 		}
 		
 		else if (!cwin) {
@@ -6389,6 +6426,7 @@ else if (kstr=="UP_CS") resize_window("D", true);
 /*A lonely escape has escaped to the desktop!*/
 	if (kstr == "ESC_") return handle_ESC();
 	else if (kstr=="1_CA") return open_text_editor();
+	else if (kstr=="e_CAS") Desk.toggle_expert_mode();
 }
 this.keydown=dokeydown;
 //»
@@ -6762,23 +6800,32 @@ wrapper.onclick = e => {//«
 	e.stopPropagation();
 };//»
 wrapper.oncontextmenu = e => {//«
-	if (!e.isFake) nopropdef(e);
-	if (have_window_cycle) return;
-	deskcontext({
-		x: e.clientX,
-		y: e.clientY
-	}, {
-		items: ["Rename", () => {
-			setTimeout(() => {
-//				if (icon.link)return poperr("Cannot rename links yet!");
-				icon._nodelete = true;
-				init_icon_editing(icon);
-			}, 25);
-		}, "Delete", () => {
-			delete_icons(icon);
-		}]
-	});
+
+if (!e.isFake) nopropdef(e);
+if (have_window_cycle) return;
+let menu = [//«
+"Rename", () => {
+	setTimeout(() => {
+		icon._nodelete = true;
+		init_icon_editing(icon);
+	}, 25);
+}, 
+"Delete", () => {delete_icons(icon);}
+];//»
+//RMSKJUBPU
+let open_opts=["Binary\xa0Viewer", ()=>{icon_dblclick(icon,{},null,DEF_BIN_OPENER);}];
+if (icon.app !== FOLDER_APP){
+	if (TEXT_EXTENSIONS.includes(icon.ext)){
+		open_opts.unshift(()=>{icon_dblclick(icon,{},null,TEXT_EDITOR_APP);});
+		open_opts.unshift("Text\xa0Editor");
+	}
+	menu.unshift(open_opts);
+	menu.unshift("Open\xa0with...");
+}
+deskcontext({x:e.clientX,y:e.clientY},{items:menu});
+
 };//»
+
 wrapper.ondblclick = e => {//«
 	e.stopPropagation();
 	icon.dblclick = true;

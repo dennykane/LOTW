@@ -107,7 +107,19 @@ let VERNUM=1;
 const NOOP=()=>{};
 const FOLDER_APP = "sys.Folder";
 const TEXT_APP = "util.TextView";
-
+const TEXT_EXTENSIONS = [//«
+"txt",
+"sh", 
+"js", 
+"json",
+"cfg",
+"app",
+"html",
+"htm",
+"css",
+"bashrc",
+"synth"
+];//»
 const INIT_SCRIPT="/etc/init.sh";
 let init_str;
 
@@ -366,12 +378,14 @@ ctx: ctx
 //»
 const globals = {//«
 //	audio:AUDIO,
+	NO_TERM_INIT_MESS: qobj.noinitmess,
 	memory:[],
 	LINK_EXT: LINK_EXT,
 	LINK_RE: LINK_RE,
 	emulators:{},
 	FOLDER_APP: FOLDER_APP,
 	TEXT_APP: TEXT_APP,
+	TEXT_EXTENSIONS: TEXT_EXTENSIONS,
 	lst:lst,
 	ext_app_arr: APP_ARR,
 	ext_to_app_map: EXT_TO_APP_MAP,
@@ -1971,7 +1985,7 @@ let rv;
 let marr;
 //	if (is_app){}
 if (winpath=="/shell") is_shell = true;
-else if (winpath == "/desk") is_desk = true;
+else if (winpath == "/desk"||winpath=="/_") is_desk = true;
 else if (marr = winpath.match(/^\/(.+)\.app$/)) {
 //	is_app=marr[1].replace(/\x2f/g,".");
 	app_path = marr[1]+".js";
@@ -2229,7 +2243,7 @@ const init_end = ()=>{//«
 }//»
 
 const init_term = async () => {//«
-	document.title = SYSACRONYM+" shell";
+	if (!qobj.notitle) document.title = SYSACRONYM+" shell";
 	terminals = {};
 	document.onkeyup = null;
 	initlog("Initializing console mode...");
@@ -2381,7 +2395,7 @@ const init_term = async () => {//«
 
 };//»
 const init_desk = async () => {//«
-	document.title = SYSACRONYM+" desktop";
+	if (!qobj.notitle) document.title = SYSACRONYM+" desktop";
 	document.onkeyup = null;
 	step=await initstep("Loading the 'widgets' module");
 	rv = await loadModule('sys.widgets');
@@ -2779,6 +2793,13 @@ for (let i=0; i < qarr.length; i++) {
 	qobj[key] = val;
 	if (nogo.indexOf(key) > -1) {didrep = true}
 	else rep_qarr.push(qarr[i]);
+}
+
+if (qobj.plain){
+qobj.nobgimg=1;
+qobj.noinitmess=1;
+qobj.notitle=1;
+qobj.nocursor=1;
 }
 
 if (didrep) {//«

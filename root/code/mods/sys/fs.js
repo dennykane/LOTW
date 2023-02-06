@@ -36,7 +36,7 @@ export const mod = function(Core, root) {
 //const root = arg;
 const fsobj = this;
 const{api:capi,fs_url,mod_url,loc_url,xget,xgetobj,sys_url,log,cwarn,cerr,NS,globals}=Core;
-const{FSLET, FSBRANCH, FSPREF,fs_root,lst,util,FOLDER_APP, LINK_RE, LINK_EXT}=globals;
+const{FSLET, FSBRANCH, FSPREF,fs_root,lst,util,FOLDER_APP, LINK_RE, LINK_EXT, TEXT_EXTENSIONS}=globals;
 const{strnum,isid,isarr,isobj,isfunc,isnum,isnull,isint,isstr}=util;
 const{isEOF,isArr,isStr,xgetText}=capi;
 const ispos = arg=>{return isnum(arg,true);}
@@ -52,7 +52,7 @@ const READONLY=()=>{
 
 const api={};
 const register_fs_api_func=(name,func)=>{if (api[name]) throw new Error(`The fs api function (${name}) already exists!`);api[name] = func;};
-
+/*
 const TEXT_EXTENSIONS = [//«
 "txt",
 "sh",
@@ -66,6 +66,7 @@ const TEXT_EXTENSIONS = [//«
 "bashrc",
 "synth"
 ];//»
+*/
 
 const MAX_REMOTE_SIZE = 1 * 1024 * 1024;
 const MB = 1024*1024;

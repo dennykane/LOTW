@@ -120,8 +120,8 @@ const DEL_LIBS=[
 //"audio.webm"
 ];
 const DEL_MODS=[
-	"util.shell",
-//	"util.vim",
+//	"util.shell",
+	"util.vim",
 //	"math.trading",
 //	"sys.idb",
 //	"iface.net",
@@ -156,7 +156,8 @@ const{strnum,isstr,isnum,make}=util;
 const main = Main;
 const topwin = main.top;
 const winid = topwin.id;
-const init_prompt = arg.PROMPT||globals.name.NAME+`\x20(${winid.replace("_","#")})`;
+let init_prompt;
+if (!globals.NO_TERM_INIT_MESS) init_prompt = arg.PROMPT||globals.name.NAME+`\x20(${winid.replace("_","#")})`;
 
 const termobj = this;
 termobj.winid = winid;
