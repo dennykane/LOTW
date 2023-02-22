@@ -35,8 +35,11 @@ binary file/codec insanity and filling up this nice little file with every conce
 EBML/Matroska type of thing...
 »*/
 
-export const lib = (comarg, args, Core, Shell)=>{
+let aumod = await window[__OS_NS__].api.fs.getMod("av.audio",{STATIC: true});
+if (!aumod) throw new Error("No audio module!");
 
+
+export const lib = (comarg, args, Core, Shell)=>{
 
 const COMS = {
 
@@ -643,7 +646,9 @@ globals.termrec_snap=(obj)=>{//«
 			start();
 		}
 		else {
-			fs.get_json_file(_.normpath(which),(arr,err)=>{
+cberr("Reimplement this command without fs.get_json_file!");
+/*
+			fs.Get_json_file(_.normpath(which),(arr,err)=>{
 				if (!arr) return cberr(which+ " Could not get the json file!");
 				if (!(arr && arr.length==2 && arr[0].length==arr[1].length)) return cberr("Invalid json waveform data");
 				try {
@@ -655,6 +660,7 @@ globals.termrec_snap=(obj)=>{//«
 				}
 				start();
 			});
+*/
 		}
 	}
 	else start();
@@ -757,7 +763,7 @@ globals.termrec_snap=(obj)=>{//«
 			var FFTSIZE = 2**(fftnum);
 			analyser = ctx.createAnalyser();
 			analyser.fftSize = FFTSIZE;
-//				analyser_arr = new Float32Array(analyser.frequencyBinCount)
+//			analyser_arr = new Float32Array(analyser.frequencyBinCount)
 			analyser_arr = new Uint8Array(analyser.frequencyBinCount)
 			analyser.smoothingTimeConstant = 0;
 			src.connect(analyser);
@@ -774,7 +780,7 @@ globals.termrec_snap=(obj)=>{//«
 		});
 	});//»
 },//»
-'opusdec':function(){//«
+'opusdec':async function(){//«
 	var arr = [];
 	//«
 	var sws = failopts(args,{//«
@@ -812,24 +818,25 @@ globals.termrec_snap=(obj)=>{//«
 	var od;
 	var is_ready=false;
 	const BUFSIZE = 2**12;
-	fs.getmod("util.wasm",(wasm)=>{//«
-		if (!wasm) return cberr("No wasm module!");
-		Core.get_wasm('opus',(wasmret)=>{
-			if (!wasmret) return cberr("No opus.wasm!");
-			wasm.WASM({wasmBinary:wasmret}, "opus", (modarg)=>{
-				mod=modarg;
-				asm = mod.asm;
-				heapu8 = mod.HEAPU8;
-				heap32 = mod.HEAP32;
-				malloc=mod._malloc;
-				od = asm._opus_decoder_create(rate, channels, malloc(4));
-				if (!od) return cberr("_opus_decoder_create: fail");
-				packin = malloc(1000);
-				outbuf = malloc(MAX_FRAME_SIZE*4);
-				is_ready=true;
-			});
+//	fs.getmod("util.wasm",(wasm)=>{//«
+	let wasm = await fsapi.getMod("sys.wasm");
+	if (!wasm) return cberr("No wasm module!");
+	Core.get_wasm('opus',(wasmret)=>{
+		if (!wasmret) return cberr("No opus.wasm!");
+		wasm.WASM({wasmBinary:wasmret}, "opus", (modarg)=>{
+			mod=modarg;
+			asm = mod.asm;
+			heapu8 = mod.HEAPU8;
+			heap32 = mod.HEAP32;
+			malloc=mod._malloc;
+			od = asm._opus_decoder_create(rate, channels, malloc(4));
+			if (!od) return cberr("_opus_decoder_create: fail");
+			packin = malloc(1000);
+			outbuf = malloc(MAX_FRAME_SIZE*4);
+			is_ready=true;
 		});
-	});//»
+	});
+//	});//»
 	read_stdin(obj=>{//«
 		if (iseof(obj)) return cbok();
 		if (!is_ready) return;
@@ -844,7 +851,7 @@ globals.termrec_snap=(obj)=>{//«
 		woutobj(mkfakeobj("auf32",{is_audio:true, data: samps},[samps.length]));
 	});//»
 },//»
-'opusenc':function(){//«
+'opusenc':async function(){//«
 	var tmp, ret; //«
 	var sws = failopts(args,{//«
 		SHORT:{
@@ -925,30 +932,31 @@ globals.termrec_snap=(obj)=>{//«
 	var min_bytes = max_frame_bytes;
 	var packet,input;
 	var mod,asm;
-	fs.getmod("util.wasm",(wasm)=>{//«
-		if (!wasm) return cberr("No wasm module!");
-		Core.get_wasm('opus',(wasmret)=>{
-			if (!wasmret) return cberr("No opus.wasm!");
-			wasm.WASM({wasmBinary:wasmret}, "opus", (modarg)=>{
-				if (!modarg) return cberr("No module!!");
-				mod = modarg;
-				asm = mod.asm;
-				heapu8 = mod.HEAPU8;
-				heap32 = mod.HEAP32;
-				malloc = mod._malloc;
-				error = malloc(4);
-				packet = malloc(max_frame_bytes);
-				input = malloc(frame_size*4);
-				oe = asm._opus_encoder_create(coding_rate, channels, OPUS_APPLICATION_AUDIO, error);
-				if (!oe) return cberr("_opus_encoder_create: fail");
-				var bitrate_arr = new Uint8Array((new Uint32Array([bitrate])).buffer);
-				var bitrate_ptr = oe+(37*4);
-				heapu8.set(bitrate_arr, bitrate_ptr);
-				heapu8.set(bitrate_arr, bitrate_ptr+4);
-				is_ready = true;
-			});
+//	fs.getmod("util.wasm",(wasm)=>{//«
+	let wasm = await fsapi.getMod("sys.wasm");
+	if (!wasm) return cberr("No wasm module!");
+	Core.get_wasm('opus',(wasmret)=>{
+		if (!wasmret) return cberr("No opus.wasm!");
+		wasm.WASM({wasmBinary:wasmret}, "opus", (modarg)=>{
+			if (!modarg) return cberr("No module!!");
+			mod = modarg;
+			asm = mod.asm;
+			heapu8 = mod.HEAPU8;
+			heap32 = mod.HEAP32;
+			malloc = mod._malloc;
+			error = malloc(4);
+			packet = malloc(max_frame_bytes);
+			input = malloc(frame_size*4);
+			oe = asm._opus_encoder_create(coding_rate, channels, OPUS_APPLICATION_AUDIO, error);
+			if (!oe) return cberr("_opus_encoder_create: fail");
+			var bitrate_arr = new Uint8Array((new Uint32Array([bitrate])).buffer);
+			var bitrate_ptr = oe+(37*4);
+			heapu8.set(bitrate_arr, bitrate_ptr);
+			heapu8.set(bitrate_arr, bitrate_ptr+4);
+			is_ready = true;
 		});
-	});//»
+	});
+//	});//»
 	var hold = null;
 	var buffer = null;
 	var zeros = new Uint8Array(max_frame_bytes);
@@ -993,7 +1001,7 @@ globals.termrec_snap=(obj)=>{//«
 		}
 	});//»
 },//»
-'resample':function(){//«
+'resample':async function(){//«
 	var which = args.shift();
 	if (!(which=="up"||which=="down")) return cberr("Need 'up' or 'down'!");
 
@@ -1019,53 +1027,54 @@ globals.termrec_snap=(obj)=>{//«
 	var malloc, tmp, ret, error;
 	var is_ready = false;
 	var asm;
-	fs.getmod("util.wasm",(wasm)=>{//«
-		if (!wasm) return cberr("No wasm module!");
-		Core.get_wasm('samplerate',(wasmret)=>{
-			if (!wasmret) return cberr("No samplerate.wasm!");
-			wasm.WASM({wasmBinary:wasmret}, "samplerate", (modarg)=>{
-				if (!modarg) return cberr("No module!!");
-				mod = modarg;
-				asm = mod.asm;
-				heapu8 = mod.HEAPU8;
-				malloc = mod._malloc;
-				src_data = malloc(36);
-				src_data_ptrs ={//«
-					data_in:src_data,
-					data_out:src_data+4,
-					input_frames:src_data+8,
-					output_frames:src_data+12,
-					input_frames_used:src_data+16,
-					output_frames_gen:src_data+20,
-					end_of_input:src_data+24,
-					src_ratio:src_data+28
-				}//»
-				src_data_val = (key)=>{//«
-					var loc = src_data_ptrs[key];
-					if (!loc) {
-					cerr("Unknown src_data key: " + key);
-						return null;
-					}
-					if (key=="src_ratio") return (new Float64Array(heapu8.slice(loc,loc+8).buffer))[0];
-					return (new Uint32Array(heapu8.slice(loc,loc+4).buffer))[0];
-				}//»
-				error = malloc(4);
-				src_state = asm._src_new(converter, NUM_CHANNELS , error);
+//	fs.getmod("util.wasm",(wasm)=>{//«
+	let wasm = await fsapi.getMod("sys.wasm");
+	if (!wasm) return cberr("No wasm module!");
+	Core.get_wasm('samplerate',(wasmret)=>{
+		if (!wasmret) return cberr("No samplerate.wasm!");
+		wasm.WASM({wasmBinary:wasmret}, "samplerate", (modarg)=>{
+			if (!modarg) return cberr("No module!!");
+			mod = modarg;
+			asm = mod.asm;
+			heapu8 = mod.HEAPU8;
+			malloc = mod._malloc;
+			src_data = malloc(36);
+			src_data_ptrs ={//«
+				data_in:src_data,
+				data_out:src_data+4,
+				input_frames:src_data+8,
+				output_frames:src_data+12,
+				input_frames_used:src_data+16,
+				output_frames_gen:src_data+20,
+				end_of_input:src_data+24,
+				src_ratio:src_data+28
+			}//»
+			src_data_val = (key)=>{//«
+				var loc = src_data_ptrs[key];
+				if (!loc) {
+				cerr("Unknown src_data key: " + key);
+					return null;
+				}
+				if (key=="src_ratio") return (new Float64Array(heapu8.slice(loc,loc+8).buffer))[0];
+				return (new Uint32Array(heapu8.slice(loc,loc+4).buffer))[0];
+			}//»
+			error = malloc(4);
+			src_state = asm._src_new(converter, NUM_CHANNELS , error);
 
-				input = malloc(BUFFER_LEN);
-				tmp = new Uint32Array([input]);
-				heapu8.set(new Uint8Array(tmp.buffer), src_data);//*data_in
+			input = malloc(BUFFER_LEN);
+			tmp = new Uint32Array([input]);
+			heapu8.set(new Uint8Array(tmp.buffer), src_data);//*data_in
 
-				output = malloc(BUFFER_LEN);
-				tmp = new Uint32Array([output]);
-				heapu8.set(new Uint8Array(tmp.buffer), src_data+4);//*data_out
-				ret = asm._src_set_ratio_init(src_data, src_ratio);
-				tmp = new Uint32Array([(BUFFER_LEN/NUM_CHANNELS)/BYTES_PER_FRAME]);
-				heapu8.set(new Uint8Array(tmp.buffer), src_data+12);//output_frames
-				is_ready = true;
-			});
-		})
-	});//»
+			output = malloc(BUFFER_LEN);
+			tmp = new Uint32Array([output]);
+			heapu8.set(new Uint8Array(tmp.buffer), src_data+4);//*data_out
+			ret = asm._src_set_ratio_init(src_data, src_ratio);
+			tmp = new Uint32Array([(BUFFER_LEN/NUM_CHANNELS)/BYTES_PER_FRAME]);
+			heapu8.set(new Uint8Array(tmp.buffer), src_data+12);//output_frames
+			is_ready = true;
+		});
+	})
+//	});//»
 	read_stdin(samps=>{//«
 		if (iseof(samps)) return cbok();
 		if (!is_ready) return;
@@ -1116,441 +1125,6 @@ globals.termrec_snap=(obj)=>{//«
 		if (!(isobj(obj)&&obj.is_audio)) return;
 		samps_arr.push(obj.data);
 	});
-
-},//»
-'midi2synth':function() {//«
-
-	var eout = function(str){werr(str);refresh();};
-	var pi = _=>parseInt(_);
-
-	var didparse = false;
-
-	var defs = [];
-
-function evtin(e) {//«
-	var einval = _=>eout("Invalid midi packet");
-//console.log(e);
-	if (!isobj(e)) return;
-	if (iseof(e)) return cbok();
-	if (!didparse) return;
-	var dat = e.data;
-	if (!(dat&&isarr(dat))) return;
-	var datlen = dat.length;
-	if (!(datlen==2||datlen==3)) return einval();
-	var n1 = dat[0], n2 = dat[1];
-	if (!(n1 >= 0 && n1 <= 255 && n2 >=0 && n2 <= 255)) return einval();
-	var n3;
-	if (datlen==3) {
-		n3 = dat[2];
-		if (!(n3 >= 0 && n3 <= 255)) return einval();
-	}
-
-	let maj = defs[n1];
-	if (!maj) return cwarn("No major: " + n1);
-	if (!isarr(maj)) {
-		cerr("MAJ NOT AN ARRAY!??!?!??!");
-		log(maj);
-		return;
-	}
-	if (maj[0] instanceof Function) {
-		for (let f of maj) f(dat);
-		return;
-	}
-
-	let min = maj[n2];
-	if (!min) return cwarn("No minor: " + n2);
-	if (isobj(min)) {//«
-		if (dat.length==2) return cwarn("Got value object with dat.length==2");
-		let marr;
-		for (let k of getkeys(min)) {
-			if (marr=k.match(/^(\d+)(?:-(\d+))?$/)) {
-				let low = pi(marr[1]);
-				if (!marr[2]) {
-					if (n3===low) {
-						if (isarr(min[k])) {
-							for (let f of min[k]) f(dat);
-						}
-					}
-				}
-				else {
-					let hi = pi(marr[2]);
-					if (n3 >= low && n3 <= hi) {
-						if (isarr(min[k])) {
-							for (let f of min[k]) f(dat);
-						}
-					}
-				}
-			}
-		}
-	}//»
-	else if (isarr(min)) {
-		if (min[0] instanceof Function) {
-//log(min);
-			for (let f of min) f(dat);
-		}
-		else {
-cerr("WHADDA HELL IM YIM MIN");
-log(min)
-		}
-	}
-	else {
-cwarn("WHAT IM YIM MIN");
-log(min)
-	}
-}//»
-
-	function parse(arr, exports){//«
-/*«
-0
-
-176 , 1
-
-knob/k1 $VAL 
-
-»*/
-		var curarr, curmin, curmax;
-		var marr;
-		var iter = 0;
-		for (let ln of arr) {
-			iter++;
-			let lnerr = str=>{cberr(str+", line "+iter);}
-			ln = ln.trim();
-			if (!ln) continue;
-			if (marr=ln.match(/^(\d+)(?: *, *(\d+)(?:-(\d+))?(?: *, *(\d+)(?:-(\d+))?)?)?$/)) {//«
-
-			/*«
-
-			MAJDEFS:=[ 
-					   Maj_Function_1 | MINOR_DEF_1, 
-					   Maj_Function_2 | MINOR_DEF_2, 
-					   ..., 
-					   Maj_Function_N | MINOR_DEF_N
-					 ]
-
-			MINOR_DEF:= [
-						Min_Function_1 | {"val1_1": Val_Function_1} | {"val1_1-val2_1": Val_Function_1},
-						Min_Function_2 | {"val1_2": Val_Function_2} | {"val1_2-val2_2": Val_Function_2},
-						...
-						Min_Function_3 | {"val1_3": Val_Function_3} | {"val1_3-val2_3": Val_Function_3},
-					]
-
-			»*/
-
-			let maj = pi(marr[1]),min1,min2,val1,val2;
-			if (marr[2]) {
-				min1 = pi(marr[2]);
-				if (marr[3]) {
-					min2 = pi(marr[3]);
-					if (min2 <= min1) return lnerr("Bad minor range");
-				}
-				if (marr[4]) {
-					val1 = pi(marr[4]);
-					if (marr[5]) {
-						val2 = pi(marr[5]);
-						if (val2 <= val1) return lnerr("Bad value range");
-					}
-				}
-			}
-	//cwarn("MIDI DEF IN");log(maj,min1,min2,val1,val2);
-			if (isnull(min1)) {
-				curarr = defs;
-				curmin = maj;
-				curmax = maj;
-			}
-			else {
-				let gotarr = defs[maj];
-				if (!gotarr) {
-					gotarr = [];
-					defs[maj] = gotarr;
-				}
-				curarr = gotarr;
-				curmin = min1;
-				if (isnum(min2)) curmax = min2;
-				else curmax = min1;
-				if (isnum(val1)) {
-					let valstr = ""+val1;
-					if (isnum(val2)) valstr+="-"+val2;
-					let gotobj;
-
-					for (let i=curmin; i <= curmax; i++) {
-						gotobj = curarr[i];
-						if (!gotobj) {
-							gotobj = {};
-							curarr[i] = gotobj;
-						}
-		//				let obj = {};
-						gotobj[valstr] = 0;
-					}
-				}
-			}
-
-			}//»
-			else {
-		//	path/to/func 	val_to_send 	[val_func]
-	// 
-		//log(curarr);
-		//log(curmin, curmax);
-				let toks = [];
-	//Get toks«
-				let chars = ln.split("");
-				let tok="";
-
-				let instr = false;
-				for (let i=0; i < chars.length; i++) {
-					let ch = chars[i];
-					if (ch==='"') {
-						if (!instr) {
-							if (tok) toks.push(tok);
-							instr = true;
-							tok = "";
-						}
-						else {
-							toks.push(tok);
-							instr = false;
-							tok = "";
-						}
-						continue;
-					}
-					else if (!instr) {
-						if (ch==" "||ch=="\t") {
-							if (tok) {
-								toks.push(tok);
-								tok="";
-							}
-							continue;
-						}
-						else if (ch=="#") break;
-						else tok+=ch;
-					}
-					else tok+=ch;
-				}
-				if (instr) return cberr("Unterminated quote, line: "+iter);
-
-				if (tok) toks.push(tok);
-				//»
-				if (toks.length < 2) return lnerr("Need at least a function and value");
-				let funcname = toks[0];
-				let strval = toks[1];
-				let expfunc = exports[funcname];
-				if (!(expfunc instanceof Function)) return lnerr(funcname+": Not a function");
-				let func = function(args){
-					let val;
-					if (strval=="$VAL") val = args[2];
-					else if (strval=="$MAJ") val = args[0];
-					else if (strval=="$MIN") val = args[1];
-					else {
-						val = strval;
-						if (val.match(/^\d+$/)) val = pi(val);
-					}
-					expfunc(val);
-				}
-				for (let i = curmin; i <= curmax; i++) {//«
-					let obj = curarr[i];
-					let arr;
-					if (isobj(obj)) {
-						for (let k of getkeys(obj)) {
-							arr = obj[k];
-							if (!arr) {
-								arr = [];
-								obj[k] = arr;
-							}
-							arr.push(func);
-						}
-					}
-					else {
-						arr = curarr[i];
-						if (!arr) {
-							arr = [];
-							curarr[i] = arr;
-						}
-						arr.push(func);
-					}
-				}//»
-			}
-		}
-		return true;
-	}//»
-
-	var sws = failopts(args,{SHORT:{},LONG:{}});
-	if (!sws) return;
-
-	var reader = get_reader();
-	var ispipe = reader.is_pipe;
-	var conffile = args.shift();
-	if (!conffile) return cberr("No configuration file!");
-	var name;
-	arg2con(conffile, function(ret) {//«
-		if (!isstr(ret)) return cberr(conffile+": Could not get the contents");
-		var arr = ret.split("\n");
-
-/*NOTES«
-
-//VARS:
-
-//$MAJ = current major number
-//$MIN = current minor number
-//$VAL = current value
-
-//File format:
-
-//<num> or link_path #This is the first line
-
-//maj[,min0[-min1][,val0[-val1]]] 
-//	path/to/func/1 val_to_send_1 opt_val_func_1 #comments
-//	path/to/func/2 val_to_send_2 opt_val_func_2 #comments
-
-
-Map 1, 2, or 3  numbers to: a number, string, or boolean
-
-VARS:
-
-$MAJ = current major number
-$MIN = current minor number
-$VAL = current value
-
-File format:
-
-<num> or link_path #This is the first line
-
-maj[,min0[-min1][,val0[-val1]]] path/to/func val_to_send opt_val_func #comments
-
-
-For each, event we can have any number of values that map to 
-any number of functions, which are named by files in /serv/<num>/.
-
-Get the functions like this:
-fs.get_serv_func(fullpath, function(funcret, errret){});
-
-So, for example, for any given keydown, we can do this:
-
-1) write a frequency to something like /serv/synth<n>/data/dat1 
-2) call a start function of an envelope/trigger at /serv/synth<n>/triggers/trg1
-
-There is also the possibility to use a data node to trigger an 
-envelope.
-
-Right now in Data, we do: 
-1) check for a setval function
-2) try{conn.value=inval}. 
-But we can also check for other kinds of functions (like trigger).
-Or possibly, we can have a "default" function that the node wants us
-to call if there are no preconceptions about what is happening.
-
-
-
-
-***************************************************************
-
-
-
-Just need to parse this file something like:
-
-MAJ 144 	#For all keydowns (major)
-MIN 48-72	#For every key in this range (minor), 
-
-type key 					#Set "type" field to string "key"
-key some_name_func($min) 	#Set the "key" field to a value given by function: 
-						 	#some_name_func
-is_down bool(true) 			#Set the "is_down" field to the boolean
-blah WHATEVER				#Set the "blah" field to the string "WHATEVER"
-forks: num(50)				#Set the "forks" field to the number 50
-
-Send this object:
-
-{
-	type: "key",
-	key:<the_output_name>, 
-	is_down: true,
-	blah: "WHATEVER",
-	forks: 50
-}
-
-»*/
-
-		if (!arr.length) return cberr(conffile+": No contents");
-		var id_or_path = arr.shift();
-		if (!id_or_path) {
-			cberr(conffile+": Bad id in file");
-			return;
-		}
-
-		var path;
-
-		if (id_or_path.match(/^\d+$/)) path = "/serv/synth"+id_or_path.trim();
-		else path = id_or_path.trim();
-		eout("Getting service: "+path);
-		ptw(path, function(ret) {//«
-			if (!ret) return cberr("Nothing returned: " + path);
-
-			if (ret.par.TYPE!="service") return cberr(path+": Not a service");
-
-			var servobj = ret._;
-
-			if (!servobj) return cberr(path+": Got no servobj?!?!? HAHAHA");
-
-			var exports=servobj.exports;
-			if (!exports) return cberr(path+": the service has no exports!?!?!? YOYOYO");
-
-			if (!parse(arr,exports)) return;
-
-			servobj.register_reload(()=>{parse(arr,servobj.exports);});
-
-			didparse = true;
-			respbr();
-			if (ispipe) eout("Reading from pipe...");
-			else {
-				let startms = Date.now();
-				let min_ms_diff = 250;
-				let gotevt = false;
-				let is_reading = false;
-				setTimeout(function() {
-					if (!is_reading) eout("/dev/midi seems okay!");
-				}, min_ms_diff);
-				eout("Trying to read from /dev/midi...");
-				fs.read_file("/dev/midi", (ret, arg2, arg3)=>{
-					if (arg2) {
-//console.warn("ARG2");
-//console.log(arg2);
-return;
-					}
-					if (iseof(ret)) {
-						if (gotevt) return cbok();
-						let diff = Date.now() - startms;
-						if (diff > min_ms_diff) return cbok();
-						else if (reader.is_terminal){
-							eout("Falling back to reading parsed stdin from console...");
-							is_reading = true;
-							read_stdin(str=>{
-								let obj;
-								try {
-									evtin(JSON.parse(str));
-								}
-								catch(e) {
-									eout(e.message);
-								}
-							});
-						}
-						else cberr("Invalid reader!");
-					}
-					else {
-						gotevt = true;
-						evtin(ret);
-					}
-
-				}, null, cb=>{
-			termobj.kill_register(cbarg=>{
-console.warn("midi2synth: KILLED!!!");
-//cbok();
-cb&&cb();
-cbarg&&cbarg();
-});
-				});
-			}
-		});//»
-	});//»
-	if (ispipe) read_stdin(evtin);
-	else {
-	}
 
 },//»
 'wavetable':function() {//«
@@ -1731,20 +1305,13 @@ let iseof=Core.api.isEOF;
 let fs = globals.fs;
 
 let fs_url = Core.fs_url;
-let aumod=null;
 //»
 
-const {NS}=Core;
-
-const fsapi = NS.api.fs;
-
-fs.getmod("av.audio", modret=>{//«
-	if (!modret) return cerr("No audio module!");
-	aumod = modret;
-}, {STATIC: true});
-
-
-//»
+//fs.getmod("av.audio", modret=>{//«
+//	if (!modret) return cerr("No audio module!");
+//	aumod = modret;
+//}, {STATIC: true});
+////»
 
 const {//«
 	wclerr,

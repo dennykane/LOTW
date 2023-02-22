@@ -1,102 +1,56 @@
-//Issues«
-/*@ODJTBQIKXH XXX IS IT CORRECT TO DO: 'if (y>=h) {' XXX??? «
 
-Just added the math to include num_stat_lines inside of scroll_into_view().
-Whenever we've had stat_lines before, we've never needed to call scroll_into_view(), because
-it has always been in vim or less, where we had a completely different control flow of
-how to handle keypresses and output.
+/*@GYWJNFGHXP: Just started on a "solution" to the issue referenced on the Bug below.«
+
+For now, we are doing replacements for open paren, open square brace and plus sign.
+What about period, asterisk and question mark?
 
 
-Looking for a way, in normal shell mode, to subract n (1, maybe 2) lines from the bottom of
-the screen to use it as a output area for instructions/status related to the given 
-'getch_loop' mode that a command might be doing. How does vim/less do the status line thing
-anyway?
+We now allow for the tab completion like:
 
-OK: In this.getch_loop, we added an nstatlns arg (like in this.init_edit_mode), which lets us
-use the bottom nstatlns of the screen as a quick and dirty status/app messaging area.
-Now we have a this.stat_render, which lets us set the stat_lines array, then do a render.
+$ cat 'Some (weird) f<TAB>
 
-In the render loop @PDJNUWLKH, we do a regex to negative lookahead with <'s, to see that
-it is not a span tag (slosing or opening). So, all non-span-tag <'s get replaced with "&lt;".
+to become:
 
-Also, all &'s are being turned into &amp;'s.
+$ cat 'Some (weird) filename.txt'
 
-»*/
-//METACHAR_ESCAPE: This escapes the shell's metacharacters when autocompleting
-/*
+But this also actually works when we are at the beginning:
 
-TYhdlT65: When typing Ctrl+d during app mode, we need to send an EOF, and let the current
-command finish on its own terms!
+$ 'Some (weird) f<TAB>
 
-*/
-/*«
+becomes:
 
-Step 1) Tidy up terminal, so that 'fs.' => '(await)? fsapi.'//«
+$ 'Some (weird) filename.txt'
 
-
-FS444: get_dir_contents, if it is type==fs and it isn't "done"
-FS666: get_dir_contents, if not above, but there are no kids and we are not remote or local (maybe /serv?) 
-fs.populate_dirobj => api.popDir //Given a node
-
-FS555: get_dir_contents, and no kids with remote or local
-fs.populate_rem_dirobj => api.popDir
-
-FS777: TAB gives one result that is a Folder
-fs.populate_dirobj_by_path => api.populateDirObjByPath
-
-FS888: TAB gives one result that is a Link, then...
-fs.path_to_obj => api.pathToNode
-
-
-
-
-//»
-
-Step 2) Implement a minimal fs//«
-pathToNode
-popDir //Given a node
-populateDirObjByPath
-readHtml5File
-//»
-
-Step 3) Implement a minimal shell//«
-
-shell = new mods["util.shell"](Core, termobj);
-
-shell.execute(str, cur_dir, {init:if_init, root:root_state})
-	returns Promise that resolves to return value (non-zero is error)
-
-//Minimal echoing shell
-this.execute = (runcom, dir_arg, opts={}) => {
-	return new Promise((Y,N)=>{
-		//response({SUCC:wrap_line(runcom).split("\n")});
-		response({SUCC:fmt(runcom).split("\n")});
-		Y(0);
-	});
-}
-
-...then do a basic 'ls', etc.
-//»
-
-Step 4) Implement simple interfaces to vim, less, man, help, etc.
-
+...this is *really* only supposed to search in the command pathway.
 
 »*/
-//Issues«
+/*Bug found on Feb. 14, 2023://«
 
-/*
+There seems to be an issue with commands that wrap around that have long
+arguments (like filenames) with embedded spaces that are escaped. Say
+the terminal is only like 40 chars wide:
 
-Example of using 'wout' to print an error message with darkish red background
-wout("Unknown size",{color:["","#a00"],error:1});
+$ ls /home/me/videos/This\ is\ a\ video\
+with\ embedded\ spaces.mp4
 
-Doing encrypt, which might call read_stdin, thisline looks like [""]. How does this null
-string get in lines? Also, what puts a single space in? 
-//GHTYEKS
-		else if (!if_force_nl && thisline.length == 1 && thisline[0]==" ") lines[lines.length-1] = outi.split("");
-*/
-///XXX BADBUG123 (Found 1/23/20 @7:30am)
-//»
-//»
+There was actually a line break inserted here in the command history, probably
+related to doing a tab completion that had to wrap around.
+
+I want to implement tab completions that are inside of quotes (like bash does).
+Given a file named "file with spaces.txt", doing:
+
+$ cat 'file w<TAB>
+
+...should complete to:
+
+$ cat 'file with spaces.txt'
+
+There needs to be some basic parsing done to ensure that this does not work,
+i.e. there should be an odd number of non-escaped quotes.
+
+$ cat ' 'file w<TAB>
+
+//»*/
 
 //Development COM/LIB/MOD deleting«
 
@@ -106,9 +60,10 @@ const DEL_COMS=[
 const DEL_LIBS=[
 //	"math.trading",
 //	"admin"
-//	"wasm"
+//	"wasm",
 //	"synth",
 //	"net",
+//	"util",
 //	"fs",
 //	"net.hn",
 //"dev.testing",
@@ -117,11 +72,11 @@ const DEL_LIBS=[
 //	"av"
 //	"crypto",
 //	"imap"
-//"audio.webm"
+"audio.webm"
 ];
 const DEL_MODS=[
-//	"util.shell",
-	"util.vim",
+//	"sys.shell",
+//	"sys.vim",
 //	"math.trading",
 //	"sys.idb",
 //	"iface.net",
@@ -132,9 +87,6 @@ const DEL_MODS=[
 //	"util.pager"
 ];
 //»
-
-//let GREEK_LANG_OK = false;
-let GREEK_LANG_OK = true;
 
 export const app = function (arg) {
 
@@ -150,9 +102,9 @@ const init_cb = arg.INIT_CB;
 let did_init = false;
 const global_winname = arg.window_name;
 const{api:capi,KC,kc,log,cwarn,cerr,globals, Desk}=Core;
+const {get_fullpath}=globals.fs;
 const{util,FOLDER_APP}=globals;
 const{strnum,isstr,isnum,make}=util;
-
 const main = Main;
 const topwin = main.top;
 const winid = topwin.id;
@@ -168,6 +120,9 @@ termobj.num_prompts=0;
 
 //»
 //Var«
+
+//let GREEK_LANG_OK = false;
+let GREEK_LANG_OK = true;
 
 let terminal_locked  = false;
 const ENV = {PATH:"/bin"}
@@ -355,13 +310,15 @@ this.onkill = (if_dev_reload)=>{//«
 	execute_kill_funcs();
 
 if (if_dev_reload) {
-let s="Deleting";
-
+//let s="Deleting";
+let s="";
 if (DEL_MODS.length) s+=` mods: ${DEL_MODS.join(",")}`;
 if (DEL_LIBS.length) s+=` libs: ${DEL_LIBS.join(",")}`;
 if (DEL_COMS.length) s+=` coms: ${DEL_COMS.join(",")}`;
-log(s);
+//log(s);
 //log(`Deleting mods: ${DEL_MODS.join(", ")}, libs: ${DEL_LIBS.join(", ")}, coms: ${DEL_COMS.join(", ")}`);
+if (!s) return;
+cwarn(`${s}`);
 	delete_mods();
 	delete_libs();
 	delete_coms();
@@ -1094,6 +1051,7 @@ const ok_alt_lang = ch => {//«
 
 //»
 //Util«
+
 const scroll_middle=()=>{
 	let y1 = main.scrollTop;
 	main.scrollTop=(main.scrollHeight-main.clientHeight)/2;
@@ -1928,9 +1886,9 @@ const insert_cur_scroll=()=>{//«
 	cur_scroll_command = null;
 	return str;
 };//»
-const get_dir_contents=async(dir, pattern, cb)=>{//«
+const get_dir_contents=async(dir, pattern, cb, if_keep_ast)=>{//«
 	if (dir===null) throw new Error("get_dir_contents() no dir!");
-	let ret = await fsapi.pathToNode(dir,{root:root_state});
+	let ret = await fsapi.pathToNode(dir);
 	if (!(ret&&ret.APP==FOLDER_APP)) return cb([]);
 	let type = ret.root.TYPE;
 	let kids=ret.KIDS;
@@ -1939,9 +1897,10 @@ const get_dir_contents=async(dir, pattern, cb)=>{//«
 		kids = ret.KIDS;
 		keys = Object.keys(kids);
 		let match_arr = [];
-		pattern = pattern.replace(/\*/g, "[a-zA-Z_]*");
+		if (!if_keep_ast) pattern = pattern.replace(/\*/g, "[a-zA-Z_]*");
 		pattern = pattern.replace(/\xa0/g, " ");
 		let re = new RegExp("^" + pattern.replace(/\./g,"\\."));
+//log(re);
 		for (let i=0; i < keys.length; i++) {
 			let key = keys[i];
 			if (key=="."||key=="..") continue;
@@ -2031,18 +1990,17 @@ this.response_end = response_end;
 //»
 const resperrch=(str)=>{response({"CH": str}, {NOEND: true});};
 const respsuccch=(str)=>{response({"CH": str}, {NOEND: true});};
-const resperr=(str, if_no_cur, cb, opts)=>{//«
-	if (!opts) opts = {};
-//cerr("ERR", str);
-//	response({"ERR": [str]}, {NOEND: true, NOCUR: if_no_cur, CLEAR: opts.CLEAR});
-	response({"ERR": fmt(str)}, {NOEND: true, NOCUR: if_no_cur, CLEAR: opts.CLEAR});
-
+const resperr=(str, if_no_cur, cb, opts={})=>{//«
+	let out;
+	if (!opts.CLEAR) out = fmt(str);
+	else out = [str];
+	response({"ERR": out}, {NOEND: true, NOCUR: if_no_cur, CLEAR: opts.CLEAR});
 };//»
-const respsucc=(str, if_no_cur, cb, opts)=>{//«
-	if (!opts) opts = {};
-//cwarn("SUCC", str);
-//	response({"SUCC": [str]}, {NOEND: true, NOCUR: if_no_cur, CLEAR: opts.CLEAR, NONL: opts.NONL, FORCELINE: opts.FORCELINE});
-	response({"SUCC": fmt(str)}, {NOEND: true, NOCUR: if_no_cur, CLEAR: opts.CLEAR, NONL: opts.NONL, FORCELINE: opts.FORCELINE});
+const respsucc=(str, if_no_cur, cb, opts={})=>{//«
+	let out;
+	if (!opts.CLEAR) out = fmt(str);
+	else out = [str];
+	response({"SUCC": out}, {NOEND: true, NOCUR: if_no_cur, CLEAR: opts.CLEAR, NONL: opts.NONL, FORCELINE: opts.FORCELINE});
 	if (cb) cb(1);
 };//»
 const respsuccobj=(obj, if_no_cur, cb, if_clear, if_nonl)=>{//«
@@ -2063,8 +2021,16 @@ const respsuccblob=(blob, if_no_cur, cb, if_clear, noarg, if_nonl)=>{//«
 	response({"SUCC": [blob.toString()]}, {NOEND: true, NOCUR: if_no_cur, CLEAR: if_clear, NONL: if_nonl});
 	if (cb) cb(1);
 };//»
-const response = (outarg, opts)=>{//«
-	if (!opts) opts = {};
+const response = (outarg, opts={})=>{//«
+	const doend=()=>{//«
+		use_cb();
+		y=lines.length-1-scroll_num;
+		x=lines[cy()].length;
+		cur_prompt_line = lines.length - 1;
+		if (!if_noend) response_end();
+	}//»
+
+//Vars«
 	let if_noend = opts.NOEND;//1
 	let next_cb = opts.NEXTCB;//3
 	let if_nocur = opts.NOCUR;//4
@@ -2082,6 +2048,7 @@ const response = (outarg, opts)=>{//«
 	let outi;
 	let use_cb=()=>{};
 	if (next_cb) use_cb = next_cb;
+//»
 
 	if (outarg['CONT']) {//«
 		setTimeout(()=>{
@@ -2103,59 +2070,54 @@ const response = (outarg, opts)=>{//«
 		return;
 	}//»
 
+//«
 	let colors = outarg['COLORS'];
 
-	if (outarg['SUCC']) {
-		out = outarg['SUCC'];
-//		if (ssh_mode) stdout_cb(out);
-	}
-	else if (outarg["ERR"]) {
-		out = outarg["ERR"];
-//		if (ssh_mode) stderr_cb(out);
-	}
-
+	if (outarg['SUCC']) out = outarg['SUCC'];
+	else if (outarg["ERR"]) out = outarg["ERR"];
+	
 	let do_append = false;
 	if (if_clear === false) do_append = true;
 	
 	let thisline = lines[lines.length-1];
+
 	let is_empty = null;
+//»
+
+	if (if_clear && thisline && !thisline.length && lines.length){
+		lines.pop();
+		thisline = lines[lines.length-1];
+	}
+
 	if (thisline) {
-		if (if_clear) thisline = [];
+		if (if_clear) {
+			thisline = [];
+		}
 		if (!thisline.length) is_empty = true;
 	}
 	let use_inc = 1;
 	if (is_empty) use_inc = 0;
 	if (colors) {
-		for (let i=0; i < colors.length; i++) {
-			line_colors[scroll_num + y + i + use_inc] = colors[i];
-		}
+		for (let i=0; i < colors.length; i++) line_colors[scroll_num + y + i + use_inc] = colors[i];
 	}
-	const doend=()=>{//«
-		use_cb();
-		y=lines.length-1-scroll_num;
-		x=lines[cy()].length;
-		cur_prompt_line = lines.length - 1;
-		if (!if_noend) response_end();
-	}//»
 	let numlines = out.length;
 	if (!if_break&&!if_force_nl&&out.length==1&&out[0]==="\x00") return;
-	if (out.length==1&&out[0]==="") {
+
+	if (out.length==1&&out[0]==="") {//«
 		if (if_force_nl) lines.push([""]);
 		doend();
 		return;
-	}
+	}//»
 	for (let i=0; i < out.length; i++) {//«
 		outi = out[i];
-//log(outi);
 		if(outi.EOF===true) continue;
 
-//Coerce it into a string
-		if (outi.toString instanceof Function) outi = outi.toString();
+		if (outi.toString instanceof Function) outi = outi.toString();//Coerce it into a string
 		else outi+="";
 
+		if (outi == "\x00") {//«
 //If a null byte, push a Newline
 //But we didn't do a formfeed, ie, increasing the cur_prompt_line
-		if (outi == "\x00") {//«
 			if ((if_soft_break || !if_force_nl) && is_empty) {
 				if (cur_shell){
 					if (if_soft_break) return;
@@ -2163,51 +2125,65 @@ const response = (outarg, opts)=>{//«
 				else return;
 			}
 			if (line_continue_flag) return doend();
+			
 			if (if_force_nl) lines.push([null]);
 			else lines.push([]);
+			
 			scroll_into_view();
 			y=lines.length-1-scroll_num;
 			x=lines[cy()].length;
 			cur_prompt_line = lines.length - 1;
 			continue;
 		}//»
-//If no line, make a new one
-//If not a char, output an object type
-		if (!thisline) {
+
+		if (!thisline) {//«
+//If no line, make a new one, if not a char, output an object type
 			thisline = [];
 			lines.push(thisline);
-		}
-//If there is just a space here, stick all the chars there
-		if (do_append) {
-			lines[lines.length-1] = lines[lines.length-1].concat(outi.split(""));
-		}
-//GHTYEKS
-		else if (!if_force_nl && thisline.length == 1 && (thisline[0]==""||thisline[0]==" ")) lines[lines.length-1] = outi.split("");
+		}//»
+		if (do_append) lines[lines.length-1] = lines[lines.length-1].concat(outi.split(""));//If there is just a space here, stick all the chars there
+		else if (!if_force_nl && thisline.length == 1 && (thisline[0]==""||thisline[0]==" ")) lines[lines.length-1] = outi.split("");//GHTYEKS
 		else {
+			if (w-outi.length < 0) {//«
 //Overflow marker
-			if (w-outi.length < 0) {
-cwarn("Overflow");
+if (!if_clear) {
+//cwarn("Overflow");
 log(outi);
+}
 				outi = outi.slice(0,w-1)+"+";
 				let col = {};
-				col[w-1+""]=[1,"#000","#cc0"];
+				col[w-1+""]=[1,"#000","#ccc"];
 				let usenum = lines.length;
-				if (is_empty)usenum--;
+				if (is_empty){
+					usenum--;
+				}
 				line_colors[usenum] = col;
-			}
+			}//»
 			if (is_empty) {
 				lines[lines.length-1] = outi.split("");
-				if (!if_clear) lines.push([]);
+//log("EMPTY",outi, if_clear);
+				if (!if_clear) {
+//log("NOCLEAR", outi);
+					lines.push([]);
+				}
 			}
-			else lines.push(outi.split(""));
+			else {
+//log("NOT EMPTY", outi, if_clear);
+				lines.push(outi.split(""));
+			}			
 			scroll_into_view();
 		}
 	}//»
+
 	doend();
+
 };
 this.response = response;
 //»
-
+//this.popblank=()=>{
+//	let ln = lines[lines.length-1];
+//	if (ln && !ln.length) lines.pop();
+//};
 //»
 //KeyHandlers«
 
@@ -2279,50 +2255,7 @@ const handle_line_str=(str, from_scroll, uselen, if_no_render)=>{//«
 };
 this.handle_line_str = handle_line_str;
 //»
-
-const normalize_path = (path, cwd) => {//«
-	if (!(path.match(/^\x2f/) || (cwd && cwd.match(/^\x2f/)))) {
-		cerr("normalize_path():INCORRECT ARGS:", path, cwd);
-		return null;
-	}
-	if (!path.match(/^\x2f/) && cwd) path = cwd + "/" + path;
-	let str = path.regpath();
-	while (str.match(/\/\.\x2f/)) str = str.replace(/\/\.\x2f/, "/");
-	str = str.replace(/\/\.$/, "");
-	str = str.regpath();
-	let arr = str.split("/");
-	for (let i = 0; i < arr.length; i++) {
-		if (arr[i] == "..") {
-			arr.splice(i - 1, 2);
-			i -= 2;
-		}
-	}
-	let newpath = arr.join("/").regpath();
-	if (!newpath) newpath = "/";
-	return newpath;
-}//»
-
-const get_fullpath = (path, cur_dir) => {//«
-	if (!path) return;
-	if (path.match(/^\x2f/)) return path;
-	if (!cur_dir) return cwarn("get_fullpath():No cur_dir given with relative path:" + path);
-	let usedir;
-	if (cur_dir == "/") usedir = "/";
-	else usedir = cur_dir + "/";
-	return normalize_path(usedir + path);
-}//»
-
 const handle_tab=async()=>{//«
-/*
-If term_mode !=
-*/
-if (term_mode != "shell"){
-cwarn(`TAB: term_mode='${term_mode}'`);
-return;
-}
-	if (cur_scroll_command) insert_cur_scroll();
-	let contents;
-	let use_dir = cur_dir;
 	const docontents=async()=>{//«
 		if (contents.length == 1) {//«
 
@@ -2382,13 +2315,14 @@ cwarn("handle_tab():  GOWDA LINK YO NOT FULLPATH LALA");
 				let name_lens = [];
 				for (let nm of names_sorted) name_lens.push(nm.length);
 				fmt_ls(names_sorted, name_lens);
-				let holdx = x;
+//				let holdx = x;
 				response({"SUCC": command_return}, {NOEND: true, NOCUR: true});
 				response_end();
 				for (let i=0; i < repeat_arr.length; i++) handle_letter_press(repeat_arr[i]);
-				render();
 				command_return = [];
-				x = holdx;
+//				x = holdx;
+				x = arr_pos + prompt_len;
+				render();
 			}//»
 			else {//«
 				if (!tok.length) {await_next_tab = true;return;}
@@ -2425,12 +2359,101 @@ cwarn("handle_tab():  GOWDA LINK YO NOT FULLPATH LALA");
 			}//»
 		}//»
 	};//»
+	const do_gdc = () => {
+		get_dir_contents(use_dir, tok, ret => {
+			if (!ret.length) return;
+			contents = ret;
+			docontents();
+		});
+	};
+/*
+If term_mode !=
+*/
+if (term_mode != "shell"){
+cwarn(`TAB: term_mode='${term_mode}'`);
+return;
+}
+	if (cur_scroll_command) insert_cur_scroll();
+	let contents;
+	let use_dir = cur_dir;
 	if (cur_shell) return;
 	let arr_pos = get_com_pos();
+//log(arr_pos);
 	let arr = get_com_arr();
 	let tok = "";
 	let new_arr = arr.slice(0, arr_pos);
-	new_arr = new_arr.join("").split(/ +/);
+	let rem_str = arr.slice(arr_pos).join("").replace(/\x20+/,"");
+	let com_str = new_arr.join("");
+
+//At the end of a string with exactly one non-backtick quote character...
+//Just a quick and dirty way to do tab completion with quotes
+//if (arr_pos == arr.length && (com_str.match(/[\x22\x27]/g)||[]).length===1 && !com_str.match(/\x60/)){
+if ((com_str.match(/[\x22\x27]/g)||[]).length===1){//«
+
+const sharedStart=(array)=>{
+    let A= array.concat().sort(), 
+    a1= A[0], a2= A[A.length-1], L= a1.length, i= 0;
+    while(i<L && a1.charAt(i)=== a2.charAt(i)) i++;
+    return a1.substring(0, i);
+}
+
+let have_quote;
+let s="";
+
+for (let i=arr_pos-1; i >=0; i--){
+	let ch = arr[i];
+	if (ch.match(/[\x22\x27]/)){
+		have_quote = ch;
+		break;
+	}
+	s=`${ch}${s}`;
+}
+if (s.match(/\x2f/)){
+	if (s.match(/^\x2f/)) use_dir="";
+	let ar = s.split("/");
+	s = ar.pop();
+	use_dir=`${use_dir}/${ar.join("/")}`;
+}
+//GYWJNFGHXP
+let use_str= s.replace(/([\[(+*?])/g,"\\$1");
+
+get_dir_contents(use_dir, use_str, async ret => {
+	if (!ret.length) return;
+	if(ret.length===1){
+		let rem = ret[0][0].slice(s.length);
+		for (let ch of rem) handle_letter_press(ch);
+		if (ret[0][1]===FOLDER_APP){
+			handle_letter_press("/");
+			await_next_tab = true;
+		}
+		else if (ret[0][1]==="Link"){
+			let obj = await fsapi.pathToNode(`${use_dir}/${use_str}${rem}`);
+			if (obj && obj.APP===FOLDER_APP){
+				handle_letter_press("/");
+				await_next_tab = true;
+			}
+			else handle_letter_press(have_quote);
+		}
+		else handle_letter_press(have_quote);
+		return;
+	}
+	if (await_next_tab){
+		contents = ret;
+		docontents();
+		return;
+	}
+	let all=[];
+	for (let ar of ret) all.push(ar[0]);
+	let rem = sharedStart(all).slice(s.length);
+	for (let ch of rem) handle_letter_press(ch);
+	await_next_tab = true;
+}, true);
+
+return;
+
+}//»
+
+	new_arr = com_str.split(/ +/);
 	if (!new_arr[0] && new_arr[1]) new_arr.shift();
 	let tokpos = new_arr.length;
 	if (tokpos > 1) {
@@ -2440,7 +2463,7 @@ cwarn("handle_tab():  GOWDA LINK YO NOT FULLPATH LALA");
 	let tok0 = new_arr[0];
 	tok = new_arr.pop();
 	tok = tok.replace(/^[^<>=]*[<>=]+/,"")
-
+//log();
 	if (tok.match(/^[^\x60;|&(]*[\x60;|&(][\/.a-zA-Z_]/)) {
 		tok = tok.replace(/^[^\x60;|&(]*[\x60;|&(]/,"");
 		tokpos = 1;
@@ -2514,13 +2537,6 @@ log("YARR WHAT MAN OPTIONS????");
 	}
 »*/
 
-	const do_gdc = () => {
-		get_dir_contents(use_dir, tok, ret => {
-			if (!ret.length) return;
-			contents = ret;
-			docontents();
-		});
-	};
 	if (!got_path && (tokpos==1||(tokpos==2 && com_completers.includes(tok0)))) {
 		if (tokpos==1) {
 			get_command_arr(use_dir, tok, rv=>{
@@ -2956,7 +2972,11 @@ const handle_enter=async(if_paste)=>{//«
 		}//»
 		x=0;
 		y++;
-		response({"SUCC":["\x00"]}, {BREAK: true,NOEND:true});
+//SHYRPLMUW
+		response({"SUCC":["\x00"]}, {BREAK: true, NOEND:true});
+//		response({"SUCC":[""]}, {BREAK: true,NOEND:true});
+//		response({"SUCC":[]}, {BREAK: true,NOEND:true});
+//		response({"SUCC":[""]}, {NOEND: true});
 		render();
 		if (cur_shell && cur_shell.stdin) return cur_shell.stdin(str);
 		if (!(add_com || str || term_mode != "shell")) return response_end();
@@ -3201,7 +3221,7 @@ else if (sym=="l_A") log(line_colors);
 };
 //»
 
-const check_scrolling=()=>{
+const check_scrolling=()=>{//«
 	if (is_scrolling){
 		scroll_num = scrollnum_hold;
 //		y = yhold;
@@ -3210,7 +3230,7 @@ const check_scrolling=()=>{
 		return true;
 	}
 	return false;
-}
+}//»
 
 const handle=(sym, e, ispress, code, mod)=>{//«
 	let marr;
@@ -3353,7 +3373,7 @@ const start=async()=>{//«
 	fsapi=globals.fs.api;
 	const cursorinit=()=>{if(global_winname)topwin.title=global_winname;setTimeout(()=>{sleeping=null;},5);}
 	const init=async()=>{
-		shell = new mods["util.shell"](Core, termobj);
+		shell = new mods["sys.shell"](Core, termobj);
 		if(init_str) {
 			respsucclines(["Initializing the system..."]);
 			await execute(init_str, true, true);
@@ -3365,26 +3385,21 @@ const start=async()=>{//«
 		cursorinit();
 	};
 	const load_mods=async()=>{
-//		if (mods["util.shell"]&&mods["util.pager"]) return init();
-		if (mods["util.shell"]) return init();
-		let rv = await capi.loadMod("util.shell");
+		if (mods["sys.shell"]) return init();
+		let rv = await capi.loadMod("sys.shell");
 		if (!rv){
 			main.pad=10;
 			main.bgcol="#000";
 			main.tcol="#aaa";
 			main.fs=21;
-			main.innerHTML ="<br><div style='text-align:center;color:#f55;font-size:34;font-weight:bold;'>Error</div><br><b>Fatal: the util.shell module could not be loaded</b>";
+			main.innerHTML ="<br><div style='text-align:center;color:#f55;font-size:34;font-weight:bold;'>Error</div><br><b>Fatal: the sys.shell module could not be loaded</b>";
 			return;
 		}
-/*
-		rv = await capi.loadMod("util.pager");
-		if (!rv) resperr("Could not load the system pager!");
-*/
 		init();
 	}
 	sleeping = true;
 	let load_com;
-	let rv = await fsapi.readHtml5File(`${globals.home_path}/.bashrc`);
+	let rv = await fsapi.readFsFile(`${globals.home_path}/.bashrc`);
 	cur_dir = get_homedir();
 	if (rv) load_com = rv;
 	else load_com = ":";

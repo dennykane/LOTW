@@ -32,6 +32,29 @@ export const lib = (comarg, args, Core, Shell)=>{
 
 const COMS={
 
+'GETUNIQUEPATH':async args=>{
+let path = args.shift();
+if (!path) return cberr("No path");
+let rv = await NS.api.fs.getUniquePath(normpath(path));
+if (!rv) return cberr("Error");
+wout(rv[0]);
+//log(rv);
+cbok();
+},
+GRUND:()=>{
+werr("1a");
+werr("1b");
+wclerr("2");
+wclerr("2");
+wclerr("2");
+werr("3a");
+werr("3b");
+wclerr("4");
+wclerr("4");
+wclerr("4");
+cbok();
+},
+
 /*Simple API to spin up indexedDB's.«
 
 let db = await new capi.db("DBName", DBVersion);
@@ -2781,6 +2804,372 @@ COMS[comarg](args);
 }
 
 
+//Old«
+
+/*«
+'addremuser':async(args)=>{
+
+//Set file
+//let rv = await fetch(`/_1001?q=${btoa("username p@$$w0rd Filename.js")}`,{method: "POST", body:bytes.buffer});
+
+	let user = args.shift();
+	let pass = args.shift();
+	if (!(user&&pass)) return cberr("Need username and password!");
+	let q = btoa(`${user} ${pass}`);
+	let rv = await fetch(`/_aru?q=${q}`);
+	if (!rv.ok) return cberr("Error");
+	cbok("OK");
+
+},
+'setremapp':async(args)=>{
+
+	let user = args.shift();
+	let pass = args.shift();
+	let fname = args.shift();
+	if (!fname) return cberr("No arg!");
+	let bytes = await readFile(fname, {binary: true});
+	if (!bytes) return cberr(`${fname}: not found`);
+	let usename = fname.split("/").pop();
+	log(usename);
+	let q = btoa(`${user} ${pass} ${usename}`);
+	let rv = await fetch(`/_sra?q=${q}`,{method: "POST", body:bytes.buffer});
+	if (!rv.ok) return cberr("Error");
+	cbok();
+},
+»*/
+//Synth stuff«
+
+//Midi file«
+/*How to convert from ticks to seconds:«
+
+Question:
+I want to know how to convert MIDI ticks to actual playback seconds.
+
+For example, if the MIDI PPQ (Pulses per quarter note) is 1120, how would I
+convert it into real world playback seconds?
+
+Answer:
+The formula is 60000 / (BPM * PPQ) (milliseconds).
+
+Where BPM is the tempo of the track (Beats Per Minute).
+
+(i.e. a 120 BPM track would have a MIDI time of (60000 / (120 * 192)) or 2.604 ms for 1 tick.
+
+If you don't know the BPM then you'll have to determine that first. MIDI times
+are entirely dependent on the track tempo.
+
+»*/
+/*JSON Object«
+
+
+
+{
+  // the transport and timing data
+  header: {
+    name: String,                     // the name of the first empty track, 
+                                      // which is usually the song name
+    tempos: TempoEvent[],             // the tempo, e.g. 120
+    timeSignatures: TimeSignatureEvent[],  // the time signature, e.g. [4, 4],
+
+    PPQ: Number                       // the Pulses Per Quarter of the midi file
+                                      // this is read only
+  },
+
+  duration: Number,                   // the time until the last note finishes
+
+  // an array of midi tracks
+  tracks: [
+    {
+      name: String,                   // the track name if one was given
+
+      channel: Number,                // channel
+                                      // the ID for this channel; 9 and 10 are
+                                      // reserved for percussion
+      notes: [
+        {
+          midi: Number,               // midi number, e.g. 60
+          time: Number,               // time in seconds
+          ticks: Number,              // time in ticks
+          name: String,               // note name, e.g. "C4",
+          pitch: String,              // the pitch class, e.g. "C",
+          octave : Number,            // the octave, e.g. 4
+          velocity: Number,           // normalized 0-1 velocity
+          duration: Number,           // duration in seconds between noteOn and noteOff
+        }
+      ],
+
+      // midi control changes
+      controlChanges: {
+        // if there are control changes in the midi file
+        '91': [
+          {
+            number: Number,           // the cc number
+            ticks: Number,            // time in ticks
+            time: Number,             // time in seconds
+            value: Number,            // normalized 0-1
+          }
+        ],
+      },
+
+      instrument: {                   // and object representing the program change events
+        number : Number,              // the instrument number 0-127
+        family: String,               // the family of instruments, read only.
+        name : String,                // the name of the instrument
+        percussion: Boolean,          // if the instrument is a percussion instrument
+      },          
+    }
+  ]
+}
+//»*/
+/*
+'midi':async(args)=>{//«
+
+//Midi note to freq
+//Midi note 50 is the frequency at freqs[50]
+let freqs = [];
+for (let i=0; i <= 127; i++) freqs[i]= 13.75*(2**((i-9)/12));
+
+if (!await capi.loadMod("av.miditojson")) return cberr("Midi could not be loaded!");
+
+let mod = NS.mods["av.miditojson"].Midi;
+let path = args.shift();
+if (!path) return cberr("No path given!");
+let node = await pathToNode(path);
+if (!node) return cberr(`${path}: not found`);
+let t = node.root.TYPE;
+
+let rv = await readFile(node.fullpath);
+if (!(rv instanceof Blob)) return cberr("Did not get a blob!");
+let midi = new mod(await capi.toBuf(rv));
+let head = midi.header;
+let tracks = midi.tracks;
+let ppq = head.ppq;
+wout(`PPQ: ${ppq}`);
+wout(`Tracks: ${tracks.length}`);
+let temps = head.tempos;
+wout("Tempos (ms per tick):");
+for (let i=0; i < temps.length; i++){
+	//The formula is 60000 / (BPM * PPQ) (milliseconds).
+	let tmp = temps[i];
+	//log(tmp);
+	let ms_per_tick = 60000/(tmp.bpm*ppq);
+	wout(`${i}) ${ms_per_tick}`);
+}
+log(head);
+log(tracks);
+
+//}
+//else return cberr(`'${t}: not yet implemented'`);
+
+cbok();
+
+},//»
+*/
+//»
+
+/*
+'midiup':async()=>{
+	if (await capi.initMidi()) return cbok();
+	return cberr("Midi could not be enabled!");
+},
+'synth':()=>{
+//	termobj.ENV['?']=0;
+	termobj.init_app_mode("synth", 
+		ret=>{//«
+//			if (servobj.killed) {
+//				termobj.app_line_out("Killed");
+//				return termobj.end_app_mode();
+//			}
+			let gotcom = ret.trim();
+			if (gotcom) wout(`OK: ${gotcom}`);
+			termobj.response_end();
+		},//» 
+		cbok
+	)
+},
+
+»*/
+/*//«'hncomments':async()=>{
+const kid = (elem, ...arr)=>{
+let cur = elem;
+for (let num of arr){
+cur = cur.children[num];
+}
+return cur;
+
+};
+let str = await fsapi.readFile("/home/me/Desktop/snayderr.html");
+if (!str) return cberr("Got nada");
+
+let parser = new DOMParser();
+let doc = parser.parseFromString(str, "text/html");
+let coms = doc.getElementsByClassName("comment-tree")[0].children[0].childNodes;
+for (let com of coms){
+let got = kid(com,0,0,0,0,2);
+//log(got);
+//let got = com.children[0].children[0].children[0].children[0].children[2];
+let user = kid(got, 0, 0, 0);
+log(user.innerText);
+//log(got);
+}
+//log(coms);
+cbok();
+},
+»*/
+
+/*«
+'swon': async () => {
+	if (await capi.initSW()) return cbok("The service worker has been registered");
+	cberr("There was a problem registering the service worker");
+},
+'swoff':async()=>{if(await capi.initSW(true))return cbok("The service worker has been unregistered");cberr("There was a problem unregistering the service worker");},
+
+'comstr':(args)=>{//«
+	let opts = failopts(args,{LONG:{nowrap:1},SHORT:{}});
+	if (!opts) return;
+	let com = args.shift();
+	if (!com) return cberr("No arg given!");
+	let func = builtins[com];
+	if (!func) {
+		let got = shell_lib[com];
+		if (got) func = got._func();
+		if (!func) return cberr(`${com}:\x20function not found`);
+	}
+	let arr = func.toString().split("\n");
+	for (let ln of arr){
+		if (opts.nowrap) wout(ln);
+		else wout(wrap_line(ln));
+	}
+	cbok();
+},//»
+//Help«
+
+const builtins_help={
+ls:`List out the contents of one or more directories`,
+cd:`Change into a new directory`,
+swon: 'Enable service workers for the current url for offline usage',
+swoff: 'Disable the active service worker',
+swurl:'Print out the url for which the active service worker is registered',
+help:'Show a short message about system usage (no args) or an individual command',
+libs:'List out the available command libraries',
+lib:'List out the commands in a given command library',
+mkdir:'Make a directory',
+login:`Login to the system via the standard google app engine login procedure. No permissions are asked for.`,
+logout:`Logout of the system`,
+import:`Import a command library into the current shell execution context`,
+pwd:`Print out the current working directory`,
+setname:`Set your public facing username to something other than the username used for your gmail address`,
+lockname:`Lock your username so that setname -u doesn't work`,
+unlockname:`Allows you to change your username via setname -u`,
+cp:`Copy files`,
+mv:`Move or rename files or folders`,
+cat:`Print out the contents of files`,
+echo:`Print out the command arguments`,
+open:`Open an application window in the Desktop environment`,
+close:`Close an application window given its id`,
+hist:`Print out the command line history`
+};
+
+
+//»
+
+'help': async args => {
+
+	let which = args.shift();
+
+	let str = null;
+	if (!which) {
+		str = help_str;
+		which = "overview";
+	}
+	else if (builtins[which]) str = builtins_help[which];
+	else if (shell_lib[which]) str = shell_lib[which]._help();
+	else return cberr(`help:\x20${which}:\x20command not found`);
+	if (!str) {
+		werr(`help:\x20${which}:\x20nothing was returned`);
+		cbok();
+		return;
+	}
+	let mod = NS.mods["util.pager"];
+	if (!mod){
+		wout(fmt_lines(str));
+		cbok();
+		return;
+	}
+	let pager = new mod(Core, shell_exports);
+	pager.init(fmt_lines(str).split("\n"),`help(${which})`,cbok);
+},
+'libs': async() => {
+	let arr=[];
+	let rv;
+	let hashes = "#".rep(Math.ceil((termobj.w-11)/2));
+	arr=arr.concat(fmt("Here are the directory listings of the locally cached and server-side command libaries that are available for importing into the shell's runtime environment. To refer to a library, remove its file path up to '/libs/', replace subdirectories with a '.', and remove the '.js' extension, for example:"));
+	arr.push("$ import fs");
+	arr.push("$ import math.stats");
+	arr.push(" ");
+	arr.push(`${hashes}\xa0\xa0Cached\xa0\xa0${hashes}`);
+	arr.push(" ");
+	arr=arr.concat(...(await do_ls(["-pfR", "/code/libs"])));
+	arr.push(" ");
+	arr.push(`${hashes}\xa0\xa0Server\xa0\xa0${hashes}`);
+	arr.push(" ");
+	arr=arr.concat(...(await do_ls(["-pfR", "/site/root/code/libs"])));
+	let str = arr.join("\n");
+	let mod = NS.mods["util.pager"];
+	if (!mod){
+		wout(str);
+		cbok();
+		return;
+	}
+	let pager = new mod(Core, shell_exports);
+	pager.init(str.split("\n"),`libs`,cbok);
+},
+'swon':async()=>{if(await capi.initSW())return cbok("The service worker has been registered");cberr("There was a problem registering the service worker");},
+'swoff':async()=>{if(await capi.initSW(true))return cbok("The service worker has been unregistered");cberr("There was a problem unregistering the service worker");},
+'swurl':()=>{try{cbok(window.location.origin+(decodeURIComponent(navigator.serviceWorker.controller.scriptURL.split("?")[1]).replace(/^path=\./,"")));}catch(e){cberr("ServiceWorker not activated!");}},
+
+jseval:(args)=>{//«
+const runit = s=>{
+	if (!s.length){
+		cbok();
+		return;
+	}
+//log(s);
+	run_js_script(s, "eval", [], "eval");
+};
+let didrun=false;
+if (!args.length||args[0]=="-"){
+	let s = '';
+	read_stdin(ret => {
+		if (isobj(ret) && ret.EOF) {
+			if (didrun) return;
+			runit(s);
+			return;
+		}
+		if (isarr(ret)) {
+			if (!isstr(ret[0])) return cberr("Bad input");
+			didrun=true;
+			runit(ret.join("\n"));
+		}
+		else if (isstr(ret)){
+			s+=ret+"\n";
+		}
+		else{
+cwarn(ret);
+		}
+	}, {
+		SENDEOF: true
+	});
+}
+else{
+	let s = '';
+	for (let arg of args) s+= " " + arg;
+	runit(s);
+}
+},//»
+//»*/
+
+//»
 
 /*
 

@@ -1,17 +1,4 @@
-/*Major system "house cleaning" on Jan. 9, 2023://«
 
-Removed: SNESEmulator.js (4MB!) and SNESEmulator.mem from mods/games/ and put into SNES.zip
-Removed: snes-wasm.js and walt.js from mods/util/wasm/ and put into WASM_UTIL.zip
-Removed: esprima.js and escodegen.js from mods/util/es and put into ESPRIMA_UTIL.zip
-Removed: mods/av/webm/ and put into WEBM_WASM.zip
-Removed: mods/math/* (stats.js and trading.js)
-Removed: mods/synth/ (Tone.js and dx7/)
-Removed: 2 games from www/examples
-Removed: many apps from apps/* and put into OLDAPPS.zip
-
-Want to think about an "LOTW-ext" repo in order to keep the core project to a decent size...
-
-»*/
 window.__OS_NS__="LOTW";
 window[__OS_NS__]={error:{message:""},libs:{}, test:{}, coms:{}, devapps:{}, apps:{}, mods:{}, sys:{}, api:{}, init:{}};
 const NS = window[__OS_NS__];
@@ -36,7 +23,7 @@ const APP_ARR=[//«
 	"util.ImageView",
 	"media.MediaPlayer",
 	"dev.HTML",
-	"games.SNES",
+//	"games.SNES",
 //    "audio.Noisecraft"
 ];//»
 
@@ -49,6 +36,8 @@ const EXT_TO_APP_MAP={//«
     sh:2,
     json:2,
     cfg:2,
+	css:2,
+	walt:2,
 	html:8,
     zip:3,
     gb:4,
@@ -118,7 +107,8 @@ const TEXT_EXTENSIONS = [//«
 "htm",
 "css",
 "bashrc",
-"synth"
+"synth",
+"walt"
 ];//»
 const INIT_SCRIPT="/etc/init.sh";
 let init_str;
@@ -126,7 +116,6 @@ let init_str;
 let Desk;
 
 const Core = this;
-Core.do_update=()=>{};
 Core.NS=NS;
 
 let initlog = NS.initlog;
@@ -1229,7 +1218,7 @@ const load_mod = async(modname, cb, opts = {})=>{//«
 	if (fs_url) modpath = fs_url;
 	else if (which=="coms") modpath = `/root/${path}.js`;
 	else modpath = `/root/code/${which}/${path}.js`;
-	if (!modpath.match(/\/root\/code\/mods\/sys/))modpath+=`?v=${VERNUM++}`;
+	modpath+=`?v=${VERNUM++}`;
 	let scr = make('script');
 	if (!fs_url) scr.type = "module";
 	scr.onload = async() => {
@@ -1327,123 +1316,45 @@ this.loc_url = loc_url;
 //»
 //Terminal«
 
-/*
-//Jobs//«
-const JobApp=function(jobid){//«
 
-let servobj;
-let servid=null;
-let JobService=function(){
-this.is_job = true;
-let stdin_cb=null;
-let stdout_cb=null;
-let stderr_cb=null;
-let exports={name:"job","job-id":""+jobid,stdin:arg=>{if(stdin_cb)stdin_cb(arg);else cwarn("NO STDIN_CB!");},stdout:arg=>{if(stdout_cb)stdout_cb(arg);else{if(arg instanceof Function)stdout_cb=arg;else{if(arg && arg.EOF && Object.keys(arg).length==1)return;console.log("[JOB "+jobid+" STDOUT]",arg);}} },stderr:arg=>{if(stderr_cb)stderr_cb(arg);else{if(arg instanceof Function)stderr_cb=arg;else{if(arg && arg.EOF && Object.keys(arg).length==1)return;console.log("[JOB "+jobid+" STDERR]",arg);}} }};
-this.exports = exports;
-this.setid=idarg=>{servid=idarg;}
-this.set_stdin_cb=cbarg=>{stdin_cb=cbarg;}
-this.set_stdout_cb=cbarg=>{stdout_cb=cbarg;return()=>{stdout_cb=null;}}
-this.set_stderr_cb=cbarg=>{stderr_cb=cbarg;return()=>{stderr_cb=null;}}
-}
-
-this.file_objects = {};
-this.dirty = {};
-this.kill=()=>{
-cwarn("Stopping JobService: " + servid);
-if (servid !== null) fs.stop_service(servid+"");
-if (this.dirty) {
-let keys = Object.keys(this.dirty);
-let arr = [];
-for (let i=0; i < keys.length; i++) if (this.dirty[keys[i]]) arr.push(keys[i]);
-let iter = -1;
-let sync=()=>{
-iter++;
-let key = arr[iter];
-let obj = this.dirty[key];
-if (obj) {
-obj.write.sync(ret=>{
-if (!ret){
-cerr("Job: "+jobid+" NO RET FROM SYNC!!!!!!");
-}
-sync();
-});
-}
-else {
-this.file_objects={};
-this.dirty={};
-}
-}
-sync();
-}
-}
-servobj = new JobService();
-this.service = servobj;
-
-fs.start_service(servobj);
-
-//fs.start_service(servobj).then(rv=>{
-//log(rv);
-//});
-//let rv = await fs.start_service(servobj);
-
-
-}//»
-
-this.register_job=comarg=>{jobs[last_job_id]={str:comarg,cbs:[],_:new JobApp(last_job_id)};return last_job_id++;}
-this.check_job_id=idarg=>{return jobs[idarg];}
-this.set_job_cb=(idarg,cb)=>{let obj=jobs[idarg];if(!obj){cerr("register_job_cb():GOT NO JOB???? "+idarg);return;}obj.cbs.push(cb);}
-this.unregister_job=idarg=>{cwarn("unregister_job:"+idarg);let job=jobs[idarg];if(job)job._.kill();jobs[idarg]=undefined;}
-this.get_job_list=()=>{var ret=[];for(let i=0;i<jobs.length;i++){let job=jobs[i];if(job)ret.push(i+"  "+job.str);}return ret;}
-this.kill_job = idarg => {
-	let job = jobs[idarg];
-	if (!job) return false;
-	job._.kill();
-	for (let cb of job.cbs) cb();
-	jobs[idarg] = undefined;
-	return true;
-}
-
-//»
-*/
-
-this.save_hook=path=>{let arr=path.split("/");if(!arr[arr.length-1])arr.pop();let fname=arr.pop();fs.add_new_kid(arr.join("/"),fname,_=>{});}
-
-const get_history = (which, cb, if_getonly) => {
+const get_history = async(which, cb, if_getonly) => {//«
 	let gothist;
 	let _historys = historys;
 	gothist = _historys[which];
 	if (gothist) return cb(gothist.slice(0));
 	let hist_fname = "/var/history/" + which + ".txt";
-	fs.getfile(hist_fname, ret => {
-		if (ret) {
-			let arr = ret.split("\n");
-			if (!arr.length - 1) arr.pop();
-			if (if_getonly) return cb(arr);
-			_historys[which] = arr;
-		} else {
-			if (if_getonly) return cb(null);
-			_historys[which] = [];
+	let ret = await fsapi.readFile(hist_fname,{root: true});
+	if (ret) {
+		let arr = ret;
+		if (!arr.length - 1) arr.pop();
+		if (if_getonly) return cb(arr);
+		_historys[which] = arr;
+	} else {
+		if (if_getonly) return cb(null);
+		_historys[which] = [];
+	}
+	let iter_str = which + "_ITER";
+	let iter = lst[iter_str];
+	let hist = _historys[which];
+	if (iter) {
+		let sh_iter = parseInt(iter);
+		for (let i = 0; i <= sh_iter; i++) {
+			let k = which + ":" + i;
+			hist.push(lst[k]);
+			delete lst[k];
 		}
-		let iter_str = which + "_ITER";
-		let iter = lst[iter_str];
-		let hist = _historys[which];
-		if (iter) {
-			let sh_iter = parseInt(iter);
-			for (let i = 0; i <= sh_iter; i++) {
-				let k = which + ":" + i;
-				hist.push(lst[k]);
-				delete lst[k];
-			}
-			hist = hist.uniq();
-			fs.save_fs_by_path(hist_fname, hist.join("\n"), (ret2, err) => {
-				lst[iter_str] = "-1";
-				cb(hist.slice(0));
-			},{});
-		} else cb(hist.slice(0));
-	},{});
+		hist = hist.uniq();
+		let rv = await fsapi.saveFsByPath(hist_fname, hist.join("\n"),{ROOT: true});
+		if (!(rv&&rv.fullpath===hist_fname)) {
+cerr(`saveFsByPath: ${hist_fname} FAILED`);
+		}
+		lst[iter_str] = "-1";
+		cb(hist.slice(0));
+	} else cb(hist.slice(0));
 }
 this.get_history = get_history;
 this.api.getHistory=(which,getonly)=>{return new Promise((y,n)=>{get_history(which,y,getonly);});};
+//»
 const set_local_storage=(k,v)=>{
 	k=`${FSPREF}-${k}`;
 	localStorage[k]=v;
@@ -1702,23 +1613,7 @@ api.initSW = if_unreg => {//«
 }//»
 */
 api.configPath=path=>{return new Promise(async(Y,N)=>{let trypath=home_path+"/.config/"+path;if(await fsapi.pathToNode(trypath))return Y(trypath);Y("/etc/config/"+path);});};
-api.getInitStr = (path, opts = {}) => {
-	return new Promise(async (Y, N) => {
-		let initpath, trypath;
-		if (!opts.noGet) {
-			await fsapi.cacheFileIfNeeded("/etc/" + path, {
-				def: opts.def,
-				FSROOT: opts.FSROOT
-			});
-		}
-		trypath = home_path + "/." + path;
-		if (await fsapi.pathToNode(trypath)) initpath = trypath;
-		if (!initpath) initpath = "/etc/" + path;
-		let step = await NS.initstep("Using file:\xa0'" + initpath + "'");
-		Y(await fsapi.readHtml5File(initpath));
-		step.ok();
-	});
-};
+
 const blob_as_text=(blob,cb)=>{let reader=new FileReader();reader.onloadend=()=>{cb(reader.result);};reader.onerror=function(){cb();};reader.readAsText(blob);};
 const simulate=(element,eventName,locarg)=>{let oEvent,eventType=null;const eventMatchers={'HTMLEvents':/^(?:load|unload|abort|error|select|change|submit|reset|focus|blur|resize|scroll)$/,'MouseEvents':/^(?:contextmenu|dragstart|click|dblclick|mouse(?:enter|leave|down|up|over|move|out))$/};const options={pointerX:0,pointerY:0,button:0,ctrlKey:false,altKey:false,shiftKey:false,metaKey:false,bubbles:true,cancelable:true};if(locarg){options.pointerX=locarg.x;options.pointerY=locarg.y;}for(let name in eventMatchers){if(eventMatchers[name].test(eventName)){eventType=name;break;}}if(!eventType)throw new SyntaxError('Only HTMLEvents and MouseEvents interfaces are supported');oEvent=document.createEvent(eventType);if(eventType=='HTMLEvents')oEvent.initEvent(eventName,options.bubbles,options.cancelable);else oEvent.initMouseEvent(eventName,options.bubbles,options.cancelable,document.defaultView,options.button,options.pointerX,options.pointerY,options.pointerX,options.pointerY,options.ctrlKey,options.altKey,options.shiftKey,options.metaKey,options.button,element);element.dispatchEvent(oEvent);return element;}
 this.simulate = simulate;
@@ -2111,10 +2006,10 @@ const get_current_user=(fsarg)=>{//«
 		try{
 			step=await initstep("Creating all the system directories");
 			let fs = fsapi || fsarg;
-			await fs.touchHtml5Dirs([home_path],{reject:true});
-			await fs.touchHtml5Dirs([desk_path],{reject:true});
+			await fs._mkFsDirs([home_path],{reject:true});
+			await fs._mkFsDirs([desk_path],{reject:true});
 //			await fsapi.touchHtml5File(desk_path+"/.",{reject:true});
-			await fs.popHtml5Dirs(['/home']);
+			await fs.popFsDirs(['/home']);
 			step.ok();
 		} catch (e) {
 console.error(e);
@@ -2559,82 +2454,27 @@ const init_app = async() => {//«
 //Initialize FS«
 
 	if (!is_app) {
-
 		if (!await loadFs(initstep)) return initlog("Could not load the 'fs' module",true);
-//		await initFs();
 		fsapi = NS.api.fs;
 		await get_current_user();
-//		if (!localStorage._didinit){
-//			await fsapi.writeHtml5File(globals.desk_path+'/HelloWorld.app','{"app":"demo.HelloWorld"}');
-//		}
-		step=await initstep("Finding 'globals.json'");
-		let globals_str = await api.getInitStr("config/globals.json",{noGet:true});
-		if (globals_str) step.ok();
-		else step.fail(true);
-		try{
-			step=await initstep("Parsing 'globals.json'");
-			globals.usr = JSON.parse(globals_str);
-			step.ok();
-		}   
-		catch(e){
-			step.fail(true);
-			globals.usr = {};
-			initlog("Parse fail!");
-			console.log(globals_str);
-		} 
-
-		step=await initstep(`Finding the system init script at '${INIT_SCRIPT}'`);
-		try {
-			init_str = await fsapi.readHtml5File(INIT_SCRIPT,{reject:true});
-//			initlog("OK. See console.");
-			initlog(`*****   Contents of '${INIT_SCRIPT}'   *****`);
-			initlog(init_str);
-			step.ok();
-		}
-		catch(e){
-			step.fail(true);
-//			cerr(e);
-//			console.error(e);
-		}
 	}//»
-
-
-//if (is_shell && qobj.nosyslock){}
-//else if (!is_app) {
 
 if (!is_app) {
 
 if ('BroadcastChannel' in window) {
 
 	step=await initstep("Initializing the BroadcastChannel (for system integrity)");
-//	if (!('BroadcastChannel' in window)) {
-//		step.fail();
-//		return;
-//	}
 	step.ok();
 	system_channel = new BroadcastChannel("system");
 	system_channel.postMessage("init:"+FSPREF);
 	system_channel.onmessage = e=>{//«
 		let mess = e.data;
 		if (mess=="init:"+FSPREF) {
-//			if (SYSTEM_IS_LOCKED) return;
 			if (globals.read_only) return;
 			system_channel.postMessage("ack:"+FSPREF);
 		}
 		else if (mess=="ack:"+FSPREF) {
-//			globals.noevents = true;
-//			SYSTEM_IS_LOCKED = true;
-cwarn("READONLY");
 			globals.read_only = true;
-/*
-			document.onkeydown=e=>{
-				if (Desk) Desk.lock_system();
-				else if (current_term) current_term.obj.lock_term();
-			};
-			document.onkeyup=null;
-			document.onkeypress=null;
-*/
-
 		}
 		else if (mess.match && mess.match(/^(init|ack):/)){
 console.warn("Dropping: " + mess);
@@ -2645,7 +2485,6 @@ console.warn("Message received on the broadcast channel...");
 console.log(mess);
 		}
 	}//»
-
 }
 
 }
@@ -2688,15 +2527,18 @@ const initstep=(str, if_error)=>{//«
 			outtd.innerHTML=str;
 		},
 		ok:()=>{
-			outtd.innerHTML='<span style="color:#0f0;">&#10003;</span>';
+//			outtd.innerHTML='<span style="color:#0f0;">&#10003;</span>';
+			intd.innerHTML+='&nbsp;<span style="color:#0f0;font-size:14px;font-weight:900;">&#10003;</span>';
+
 		},
 		fail:(not_fatal)=>{
 			if (!not_fatal) {
 console.error("FATAL");
 				_initlog.style.display="";
 			}
-			outtd.style.opacity=1;
-			outtd.innerHTML='<span style="color:#f00;">&#10007;</span>';
+//			outtd.style.opacity=1;
+//			outtd.innerHTML='<span style="color:#f00;">&#10007;</span>';
+			intd.innerHTML+='&nbsp;<span style="color:#f00;font-size:14px;font-weight:900;">&#10007;</span>';
 		}
 	}
 	if (if_error) {
@@ -2714,11 +2556,12 @@ console.error("FATAL");
 	numtd.innerHTML= nstr+")";
 	let intd = mk('td');
 	intd.style.width=(window.innerWidth-60)+"px";
+//	intd.style.fontSize="18px";
 	intd.innerHTML=str;
 	tr.appendChild(intd);
-	let outtd = mk('td');
-	outtd.style.fontSize="15px";
-	tr.appendChild(outtd);
+//	let outtd = mk('td');
+//	outtd.style.fontSize="15px";
+//	tr.appendChild(outtd);
 	_initlog.appendChild(tr);
 	let dy = inittab.scrollHeight-window.innerHeight;
 	if (dy > 0) inittab.y = -dy;
@@ -2745,6 +2588,7 @@ const initlog=(str, if_fatal)=>{//«
 	tr.appendChild(intd);
 	let outtd = mk('td');
 	outtd.innerHTML="&nbsp;";
+//console.log(tr);
 	tr.appendChild(outtd);
 	_initlog.appendChild(tr);
 	let dy = inittab.scrollHeight-window.innerHeight;
@@ -2757,8 +2601,9 @@ NS.initlog = initlog;
 
 document.body.style.backgroundColor="#000";
 document.body.style.color="#ccc";
+//console.log("!!!!!!!!!!!");
 inittab.style.height=window.clientHeight;
-
+//console.log(_initlog);
 let verbose;
 let silent;
 let srch = window.location.search;
@@ -2816,6 +2661,7 @@ NS.stepmode = stmode;
 
 if (!verbose) _initlog.style.display="none";
 if (stmode) {
+	_initlog.style.display="";
 	initlog("Entering boot sequence stepping mode");
 	step=await initstep("Please press 'Enter' to execute every step (like this one!)");
 	step.ok();

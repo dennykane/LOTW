@@ -139,6 +139,7 @@ const {poperr}=widgets;
 //»
 
 //VAR«
+let noplay;
 let last_endtime;
 let did_get_end;
 let VIDEO_ASPECT;
@@ -1880,7 +1881,16 @@ cerr(this.error.message);
 	init_streaming();
 
 }//»
+const load_blob = blob=>{
 
+	let  vid = make('video');
+	this.video = vid;
+	Main.add(vid);
+	Main.over="scroll";
+	vid.src=URL.createObjectURL(blob);
+	vid.controls=true;
+
+};
 const load_file=async(path)=>{
 
 if (!path.match(/^\//)) {
@@ -1898,20 +1908,13 @@ file_url = Core.loc_url(path);
 init(file_url);
 }
 else if (rtyp=="fs"){
-
 let fspath = Core.fs_url(path);
-//file_path = path;
-
-//file_url
-//log(node);
-//log(fspath);
-//init(path);
 let  vid = make('video');
+this.video = vid;
 Main.add(vid);
 Main.over="scroll";
 vid.src=fspath;
 vid.controls=true;
-vid.play();
 }
 else{
 return poperr("Unsupported fs type: "+rtyp);
@@ -1949,6 +1952,13 @@ log(obj);
 	}
 */
 }//»
+this.onappinit=apparg=>{
+
+noplay = apparg.noplay;
+if (apparg.file) load_file(apparg.file);
+else if (apparg.blob) load_blob(apparg.blob);
+
+};
 this.onkill = function() {//«
 	if (vid) {
 		vid.pause();

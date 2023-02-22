@@ -30,7 +30,18 @@ Module["read"]=function shell_read(url){var xhr=new XMLHttpRequest;xhr.open("GET
 if(ENVIRONMENT_IS_WORKER){Module["readBinary"]=function readBinary(url){var xhr=new XMLHttpRequest;xhr.open("GET",url,false);xhr.responseType="arraybuffer";xhr.send(null);return xhr.response;};}
 Module["readAsync"]=function readAsync(url,onload,onerror){var xhr=new XMLHttpRequest;xhr.open("GET",url,true);xhr.responseType="arraybuffer";xhr.onload=function xhr_onload(){if(xhr.status==200 || xhr.status==0 && xhr.response){onload(xhr.response);}else{onerror();}};xhr.onerror=onerror;xhr.send(null);};
 if (typeof arguments != "undefined")Module["arguments"] = arguments;
-if(typeof console !=="undefined"){if(!Module["print"]){Module["print"]=function shell_print(x){log(x);};}if(!Module["printErr"]){Module["printErr"]=function shell_printErr(x){cwarn(x);};}}
+if (typeof console !== "undefined") {
+	if (!Module["print"]) {
+		Module["print"] = function shell_print(x) {
+//			log(x);
+		};
+	}
+	if (!Module["printErr"]) {
+		Module["printErr"] = function shell_printErr(x) {
+			cwarn(x);
+		};
+	}
+}
 else{var TRY_USE_DUMP=false;if(!Module["print"]){Module["print"]=TRY_USE_DUMP && typeof dump !=="undefined" ? function(x){dump(x);}:function(x){};}}
 if (ENVIRONMENT_IS_WORKER) Module["load"] = importScripts;
 function globalEval(x){eval.call(null,x);}

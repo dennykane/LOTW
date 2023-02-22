@@ -49,7 +49,7 @@ export const mod = function(Core){
 
 //Imports«
 const{log,cwarn,cerr,globals,NS}=Core;
-const{audio,util,fs}=globals;
+const{util,fs}=globals;
 const{fs:fsapi}=NS.api;
 //let _;
 //_=Core;
@@ -81,7 +81,9 @@ const services = globals.services._;
 const iseof = Core.api.isEOF;
 //»
 //VAR«
-//const audio = globals.audio;
+if (!globals.audio) Core.api.mkAudio();
+
+const audio = globals.audio;
 
 const audio_ctx = audio.ctx;
 const mixer = audio.mixer;

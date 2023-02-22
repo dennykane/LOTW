@@ -42,8 +42,21 @@ let winid = arg['WINID'];
 //»
 
 //Vars«
-let is_saving;
-let cur_save_folder;
+
+const EXTENSIONS=[
+	'txt', 
+	'sh', 
+	'js', 
+	'json', 
+	'app', 
+	'html', 
+	'css', 
+	'synth'
+];
+let USE_EXT = 0;
+
+//let is_saving;
+//let cur_save_folder;
 
 let thisobj = this;
 let yes_cb, no_cb;
@@ -88,18 +101,12 @@ this.onresize = function() {//«
 //	if (popdiv) Core.api.center(popdiv, main);
 }//»
 this.onfocus = function() {//«
-//if (topwin.modified) 
-if (is_saving){
-//cwarn("is_saving == true");
-if (!cur_save_folder){
-cerr("NO cur_save_folder!!!!");
-return;
-}
-setTimeout(()=>{
-if(cur_save_folder) cur_save_folder.winon();
-},10);
-return;
-}
+	if (topwin.cur_save_folder){
+		setTimeout(()=>{
+			if(topwin.cur_save_folder) topwin.cur_save_folder.winon();
+		},10);
+		return;
+	}
 	if (modified) return;
 	focused = true;
 	if (win.area) {
@@ -107,7 +114,7 @@ return;
 		win.area.focus();
 	}
 }//»
-this.blurwin = function() {//«
+this.onblur = function() {//«
 	if (modified) return;
 	focused = false;
 	if (win.area) {
@@ -145,14 +152,15 @@ return;
 	cb(await Core.api.blobAsBytes(new Blob([win.area.value],{type:"blob"})));
 }//»
 
-this.modified = function(bytesarg) {//«
+this.onmodified = function(bytesarg) {//«
 	current_bytes = bytesarg;
 	if (modified) return;
 
-console.error("obj.modified HAS BEEN CALLED!");
-return;
+//console.error("obj.modified HAS BEEN CALLED!");
+//return;
 
-	popdiv = make_popup({STR:"The file has been modified.<br>Reload it now?", TYP:"yesno"},null, main);
+//	popdiv = globals.widgets.make_popup({STR:"The file has been modified.<br>Reload it now?", TYP:"yesno"},null, main);
+	popdiv = globals.widgets.make_popup({STR:"The file has been modified.<br>Reload it now?", TYP:"yesno", WIN: main});
 	modified = true;
 	yes_cb = function() {
 		yes_cb = null;
@@ -211,77 +219,49 @@ if (area.selectionStart!==area.selectionEnd) {
 
 };
 this.onkeydown=(e,k)=>{
-
-if (k=="s_C"){
-save_context_cb();
-}
-else if (k=="TAB_"){
-e.preventDefault();
-if (area.selectionStart===area.selectionEnd) area.setRangeText("\x09",area.selectionStart,area.selectionStart,'end');
-}
-
-}
-
+//log(e);
+	if (k=="s_C"){
+		save_context_cb();
+	}
+	else if (k=="TAB_"){
+		e.preventDefault();
+		if (area.selectionStart===area.selectionEnd) area.setRangeText("\x09",area.selectionStart,area.selectionStart,'end');
+	}
+};
 this.get_context = function() {
-	return ["Save...", save_context_cb]
-//	return ["Save...", save_context_cb, "Nothing", ["Blar",()=>{},"Food",null]]
-}
+//log(document.activeElement);
+	area.blur();
+//setTimeout(()=>{
+//log(document.activeElement);
+//}, 500);
+	let as="";
+	if (!topwin._fullpath) as = "\xa0as...";
+	let arr = [`Save${as}`, save_context_cb]
+	if (!topwin._fullpath){
+		let ext = EXTENSIONS[USE_EXT];
+		arr.push("Set\xa0Ext");
+		let ext_func_arr=[];
+		for (let i=0; i < EXTENSIONS.length; i++){
+			if (i===USE_EXT) continue;
+			ext_func_arr.push(EXTENSIONS[i],()=>{USE_EXT = i;});
+		}
+		arr.push(ext_func_arr);
+		arr.push(`Current\xa0Ext:\xa0${ext}`,null);
+	}
+	return arr;
+};
 
 //»
 
 //Funcs«
 
-function dosave(path, obj) {//«
-//	if (topwin.iconlink && topwin.iconlink.match(/^\/dev\//)) return poperr("Looks like this file is from '/dev' !");
-	if (!path) path = get_win_path();
-	let arr = path.split("/");
-	let fname = arr.pop();
-	let parpath = arr.join("/");
-	fs.ptw(parpath, parfobj=>{
-		function doit(ret) {//«
-			if (ret) {
-				if (obj) {
-//					let parobj = obj.PAR;
-					topwin.set_winname(obj.WINNAME);
-					topwin.name = obj.WINNAME;
-					topwin.path = obj.PATH;
-					topwin.ext = obj.EXT;
-					delete topwin.nosave;
-				}
-				Desk.saveflash(topwin);
-				Desk.make_icon_if_new(path, topwin);
-			}
-			else poperr("Could not save the file!");
-		}//»
-		if (!(parfobj&&parfobj.KIDS)) return poperr(parpath+":could not get the parent file system object");
-		var rtype = parfobj.root.TYPE;
-		if (rtype=="fs") {
-			if (!fs.check_fs_dir_perm(parfobj)) {
-				poperr("Permission denied");
-				return Desk.saveflasherr(topwin);
-			}
-			fs.savefile(path, area.value, doit, {WINID: winid});
-		}
-		else if (rtype=="remote") {
-			if (!fs.check_user_perm(parfobj)) return poperr("Cannot modify the remote file");
-			fs.save_remote(path, area.value, doit);
-		}
-		else if (rtype=="local") poperr("Not (yet) handling saving to local services!");
-		
-		else poperr("What filesystem type: " + rtype);
-	});
-}//»
-function got_save_ok(arg, cb) {//«
-	if (!arg) return;
-	var obj = arg.SUCC;
-	if (obj) {
-		var fullpath = obj.PATH+"/"+obj.FULLNAME;
-		if (obj.OBJ) poperr("The file exists!");
-		else dosave(fullpath, obj);
-	}
-	else if (arg.ERR) poperr(arg.ERR);
-}//»
+
 async function save_context_cb() {//«
+
+if (globals.read_only){
+	globals.widgets.poperr("Cannot save in 'read only' mode");
+	return;
+}
 
 if (topwin._fullpath){
 	let rv = await fsapi.writeFile(topwin._fullpath, area.value, {NOMAKEICON: true});
@@ -289,43 +269,12 @@ if (topwin._fullpath){
 cwarn("Nothing returned!?!?!?");
 	return;
 	}
-	statbar.innerText = `${rv.entry._currentSize} bytes written`;
+	statbar.innerText = `${rv.file.size} bytes written`;
 }
 else{
-
-is_saving = true;
-
-Core.Desk.open_file_by_path(globals.home_path, null, {
-	SAVE_FOLDER_CB: fwin=>{cur_save_folder = fwin;},
-	SAVE_CB:async (fwin)=>{
-		if (!fwin){
-			is_saving = false;
-			cur_save_folder = null;
-			return;
-		}
-		let icn = await Core.Desk.make_new_file(area.value||"","txt", fwin._fullpath, fwin);
-		if (!icn ) {
-cwarn("GOT NO ICON AFTER Desk.make_new_file!!!");
-			cur_save_folder.force_kill();
-		}
-		else {
-//log(icn._entry);
-			icn.parwin.force_kill();
-			topwin._fullpath = icn.fullpath();
-			topwin.title = icn.name;
-			statbar.innerText = `${icn._entry._currentSize} bytes written`;
-		}
-		is_saving = false;
-		cur_save_folder = null;
-		area.focus();
-	}
-});
-
+	await Core.Desk.api.saveAs(topwin, area.value||"", EXTENSIONS[USE_EXT]);
 }
 
-//	if (!topwin.path) win.nosave=true;
-//	if (win.nosave) Desk.save_dialog(win, got_save_ok, ["txt","sh","js","json"]);
-//	else dosave();
 
 }//»
 function get_win_path() {//«
@@ -361,5 +310,8 @@ win.area = area;
 main.add(area);
 //»
 
+
+
 }
+
 

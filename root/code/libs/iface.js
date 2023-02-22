@@ -307,7 +307,7 @@ if (!chan) return cberr("Channel not found");
 let conn = chan.getConnection(parr.shift());
 if (!conn) return cberr("Connection not found");
 
-fs.read_file("/dev/mic", (rv,arg)=>{
+fs.Read_file("/dev/mic", (rv,arg)=>{
 	if (!rv) return;
 	if (rv.EOF===true){
 cwarn("DONE");

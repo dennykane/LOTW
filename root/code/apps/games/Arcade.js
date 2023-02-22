@@ -242,8 +242,8 @@ const init_canvas=(dims)=>{//«
 //},100);
 }//»
 const init_gamepad=(cb)=>{//«
-	fs.get_json_file('/etc/input/gamepad.json',(gpret,gperr)=>{
-//log(gpret, gperr);
+/*
+	fs.Get_json_file('/etc/input/gamepad.json',(gpret,gperr)=>{
 		if (gperr) return poperr("Parse error in gamepad.json: " + gperr);
 		if (gpret) {
 			if (gpret.kb2gp) kb_map = gpret.kb2gp;
@@ -254,6 +254,7 @@ const init_gamepad=(cb)=>{//«
 		}
 		cb();
 	})
+*/
 }//»
 const init_emulator=(jsmodarg, bytes, wasmmodarg, namearg)=>{//«
 	emulator = jsmodarg.init(arcade_obj, bytes, canvas, outgain, (ret,err)=>{
@@ -261,17 +262,16 @@ const init_emulator=(jsmodarg, bytes, wasmmodarg, namearg)=>{//«
 		init();
 	}, wasmmodarg);
 }//»
-const init_js=(jsarg, bytes, wasmarg, namearg)=>{//«
+const init_js=async(jsarg, bytes, wasmarg, namearg)=>{//«
 	var gotjs = js_cache[jsarg];
 	if (gotjs){
 		init_emulator(gotjs, bytes, wasmarg);
 		return;
 	}
-	fs.getmod(jsarg,(modret)=>{
-		if (!modret) return poperr("Could not get the js mod: " + jsarg);
-		js_cache[jsarg] = modret;
-		init_emulator(modret, bytes, wasmarg, namearg);
-	},{STATIC:true});
+	let modret = await fsapi.getMod(jsarg);
+	if (!modret) return poperr("Could not get the js mod: " + jsarg);
+	js_cache[jsarg] = modret;
+	init_emulator(modret, bytes, wasmarg, namearg);
 }//»
 const init_wasm=async(wasm, jsmod, bytes, namearg)=>{//«
 	var gotwasm = wasm_cache[wasm];
@@ -280,18 +280,10 @@ const init_wasm=async(wasm, jsmod, bytes, namearg)=>{//«
 		init_emulator(gotjs, gotwasm);
 		return;
 	}
-	let wasmmod = await fsapi.getMod("util.wasm.wasm");
+	let wasmmod = await fsapi.getMod("sys.wasm");
 	if (!wasmmod) return poperr("No wasm module!");
 	let base_path = '/code/wasms/games/'+wasm+'.wasm';
-	let wasmret;
-	if (await fsapi.pathToNode(base_path,{isRoot:true})) {
-		wasmret = await fsapi.readHtml5File(base_path, {ROOT:true,BLOB:true});
-	}
-	else {
-		wasmret = await capi.xget('/root'+base_path);
-		await fsapi.writeHtml5File(base_path, wasmret, {ROOT:true});
-	}
-	wasmmod.WASM({wasmBinary:wasmret}, wasm, modret=>{
+	wasmmod.WASM({wasmBinary:await (await fetch('/root'+base_path)).arrayBuffer()}, wasm, modret=>{
 		if (!modret) return poperr("No module!!");
 		wasm_mod = modret;
 		init_js(jsmod, bytes, wasm_mod, namearg);
@@ -304,10 +296,10 @@ const load_init=(bytes,name,ext)=>{//«
 	let dims = ext_to_dims[ext];
 	if (!(jsmod&&dims)) return;
 	init_canvas(dims);
-	init_gamepad(()=>{
-		if (wasm) init_wasm(wasm, jsmod, bytes, name+"."+ext);
-		else init_js(jsmod, bytes,null,name+"."+ext);
-	});
+//	init_gamepad(()=>{
+	if (wasm) init_wasm(wasm, jsmod, bytes, name+"."+ext);
+	else init_js(jsmod, bytes,null,name+"."+ext);
+//	});
 }//»
 
 const try_gp_read=()=>{//«
@@ -629,17 +621,6 @@ this.onresize = function() {//«
 
 
 this.topwin = topwin;
-if (arg.file) {
-	let fullpath = arg.file;
-	fs.path_to_contents(fullpath, (ret,err)=>{
-		if (!ret) return poperr("Could not get the data from: " + fullpath);
-		let fullname = fullpath.split("/").pop();
-		let arr = fullname.split(".");
-		let ext = arr.pop();
-		let fname = arr.join(".");
-		load_init(ret,fname,ext);
-	}, true);
-}
 
 //»
 

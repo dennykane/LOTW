@@ -1,5 +1,14 @@
 /*
 
+In groupify, there is a distinction between "var" and "param" subs. I'm not sure what
+the difference is (was?) supposed to be. I don't even know if there is a way for
+the algorithm to even get to the part where "param" subs are created (@WYHBDNFHJ).
+
+*/
+//«
+
+/*//«
+
 @FSPOEIREBG In order to make sure that we do "normal" line wrapping for
 arbitrary wout's that might have embedded newlines (strings without newlines
 are automatically wrapped), I just added a couple of
@@ -20,18 +29,16 @@ $ echo http://www.youtube.com/watch?v=1234556780a
 It was looking at the "?" and then trying to match based on files in PWD, and it
 wasn't finding any like that, but it did not put the argument string 
 (http://www.youtube.com/watch?v=1234556780a) back into the return array!!!!
-In the end, the argument was taken out, and no arguments were sent to  echo!!!
+In the end, the argument was taken out, and no arguments were sent to echo!!!
 
 
 @EOMHDLUNVS TODO No more backgrounding???
 
-*/
-/*Change: July 13, 2022 9am @TSPOIKRBH
+Change: July 13, 2022 9am @TSPOIKRBH
 Escaping spaces in arguments (like in filenames) with backslashes was not working. The escapes were
 being stripped out and multiple arguments were sent to the command. Hopefully, the fix @TSPOIKRBH fixes
 it!
-*/
-//«
+//»*/
 //«
 /*
 
@@ -117,22 +124,23 @@ $ dl path/to/somefile.ext
 
 /*RUNJSSCRIPT: This is the heart of the matter«
 
-All of our system "bins" (eg. /bin, /usr/bin, /sbin) are going to be server mounts. We will 
-test for the existence of the given file, in the order of $PATH. There must be a "main" file
-at (<comname>.js) which has the help text, does command line option parsing, and all of the initialization 
-routines. 
+All of our system "bins" (eg. /bin, /usr/bin, /sbin) are going to be server
+mounts. We will test for the existence of the given file, in the order of
+$PATH. There must be a "main" file at (<comname>.js) which has the help text,
+does command line option parsing, and all of the initialization routines. 
 
-There may be an optional worker file at <comname>-worker.js.  Any algorithm that includes iteration 
-or recursion (including Array functions like forEach, map, reduce, filter, etc) on application data 
-MUST go into into the worker. 
+There may be an optional worker file at <comname>-worker.js.  Any algorithm
+that includes iteration or recursion (including Array functions like forEach,
+map, reduce, filter, etc) on application data MUST go into into the worker. 
 
-The standard workflow is to load application datas as TypedArrays, which have a backing SharedArrayBuffer 
-(SAB).
+The standard workflow is to load application datas as TypedArrays, which have a
+backing SharedArrayBuffer (SAB).
 
 From 'main', the data SAB's are sent to the worker. 
 
-IO is also done (stdin, stdout, stderr) via SAB's. This can be in the form of file redirection,
-terminal keyboard/display, network resources, or the IO of other commands.
+IO is also done (stdin, stdout, stderr) via SAB's. This can be in the form of
+file redirection, terminal keyboard/display, network resources, or the IO of
+other commands.
 
 »*/
 
@@ -146,39 +154,12 @@ $ bcat
 ...that is, without arguments, it reads from the terminal's stdin.
 
 »*/
+
 //»
 
-//5 minutes before "secret" strings get undefined in memory
-const MAX_MS_FOR_SECRET_VAR=5*60*1000;
-//const MAX_MS_FOR_SECRET_VAR=5*1000;
-const FS_COMS=[ 'ln','zip','unzip','vim','less','gzip','gunzip','grep','tar','tee','touch' ];
 
 export const mod = function(Core, termobj) {
 
-const ALL_LIBS = [//«
-
-"admin",
-"av",
-"crypto",
-"gui",
-"local",
-"synth",
-"vox",
-"auto",
-"fs",
-"iface",
-"net",
-"util",
-"wasm",
-"net.yt",
-"net.hn",
-"math.stats"
-
-//"cool",
-//"test",
-//"testing",
-
-];//»
 /*read_stdin: Why would a caller to read_stdin not want an EOF to be sent? That is a very fundamental//«
 concept to the mechanics of pipelines.
 So now: if_send_eof == true
@@ -207,33 +188,32 @@ const jlog=obj=>{log(JSON.stringify(obj, null, "  "));};
 const ENODESK = "The Desktop environment is not active";
 
 const normpath = path=>{return fs.normalize_path(path, cur_dir);}
-const get_path_of_object = fs.get_path_of_object;
-const objpath = get_path_of_object;
-const get_distinct_file_key = arg=>{return fs.get_distinct_file_key(arg);}
-const filekey = get_distinct_file_key;
-const get_fullpath=(path,if_no_resolve,no_deref_link)=>{return fs.get_fullpath(path,if_no_resolve,cur_dir,no_deref_link);}
+const get_fullpath = path => {
+	return fs.get_fullpath(path, cur_dir);
+}
 const atbc = (arg, cb)=>{arg2con(arg, cb, true);} //"Arg To Bin Contents"
-const gettextfile=(path,cb)=>{let fullpath=get_fullpath(path);if(!fullpath)return cb();fs.get_fs_by_path(fullpath,cb,{ROOT:is_root});}
-const path_to_obj = (str, cb, if_getlink) => {
-	if (!str.match(/^\x2f/)) str = (cur_dir + "/" + str).regpath();
-	fs.path_to_obj(str, cb, is_root, if_getlink);
+const gettextfile = async(path, cb) => {
+	let fullpath = get_fullpath(path);
+	if (!fullpath) return cb();
+	let rv = await readFile(fullpath, {root:is_root, text: true});
+	cb(rv.join("\n"));
 }
 const pathToNode = (str, if_getlink) => {
-	return new Promise((Y, N) => {
-		if (!str.match(/^\x2f/)) str = (cur_dir + "/" + str).regpath();
-		fs.path_to_obj(str, rv => {
-			if (!rv) return Y(false);
-			Y(rv);
-		}, is_root, if_getlink);
-	});
+	if (!str.match(/^\x2f/)) str = (cur_dir + "/" + str).regpath();
+	return fsapi.pathToNode(str, if_getlink);
 };
-const ptw = path_to_obj;
 const readFile=(path,opts={})=>{
 	if (!path.match(/^\x2f/)) path = (cur_dir + "/" + path).regpath();
 	return fsapi.readFile(path,opts);
 };
 //»
 //Var«
+
+//5 minutes before "secret" strings get undefined in memory
+const MAX_MS_FOR_SECRET_VAR=5*60*1000;
+const FS_COMS=[ 'ln','zip','unzip','vim','less','gzip','gunzip','grep','tar','tee','touch' ];
+const CONTROL_WORDS=[ "if","then","elif","else","fi","do","while","until","for","in","done","select","case","esac" ];
+
 const SYSNAME = globals.name.NAME;
 const SYSACRONYM = globals.name.ACRONYM;
 const help_str = `
@@ -241,12 +221,6 @@ The ${SYSNAME} (${SYSACRONYM}) shell is a subset of the published POSIX standard
 Many commands exist inside of command libraries which can be accessed via the 'import' command. For example:\n
 ~$ import fs\n~$ vim\n
 `;
-/*
-To see a listing of available libraries, run the 'libs' command.\n
-To see the commands that exist within a given library, run the command: 'lib <name>'\n
-So, to see a listing of commands in the 'fs' library, run the command 'lib fs' and to actually import those commands into the current shell environment, run the command, 'import fs'.\n
-The 'help' command exists for help with individual commands, and can be invoked like this:\n
-*/
 const nlobj = {t: "c_op", c_op: "nl", nl: true};
 const EOF = {EOF: true};
 termobj.EOF = EOF;
@@ -399,19 +373,11 @@ const clear_timeouts=()=>{//«
 	for (let t of global_timeouts) clearTimeout(t);
 	global_timeouts = [];
 }//»
-const path_to_par_and_name=(path, if_no_resolve)=>{//«
-	let fullpath = get_fullpath(path, if_no_resolve);
-	let arr = fullpath.split("/");
-	if (!arr[arr.length-1]) arr.pop();
-	let name = arr.pop();
-	if (arr.length==1 && arr[0]=="") return ["/", name];
-	return [arr.join("/"), name];
-}//»
 const path_from_arg=(arg, if_no_resolve, no_deref_link)=>{//«
 	let path;
 	if (!arg) path = cur_dir;
 	else path = arg;
-	return get_fullpath(path, if_no_resolve, no_deref_link);
+	return get_fullpath(path);
 }//»
 const initialize_term=()=>{//«
 	if (!builtins) return;
@@ -420,10 +386,38 @@ const initialize_term=()=>{//«
 	termobj.sys_builtins = (getkeys(sys_builtins)).sort()
 	
 }//»
-const sync_files=cb=>{let arr=[];let err_arr=[];let succ_arr=[];let keys=getkeys(termobj.dirty);for(let i=0;i<keys.length;i++)if(termobj.dirty[keys[i]])arr.push(keys[i]);let iter=-1;let sync=()=>{iter++;let key=arr[iter];let obj=termobj.dirty[key];if(obj){obj.write.sync(ret=>{if(ret){if(ret==true){}else if(ret['ERR']){err_arr.push(sh_name()+":"+ret['ERR']);delete termobj.dirty[key];}else if(ret['SUCC']){succ_arr.push(ret['SUCC']);delete termobj.dirty[key];}else{}}sync();});}else{if(err_arr.length)cb(err_arr);else cb(null,succ_arr);}};sync();}
-const obj_path=(obj)=>{//«
-	return get_path_of_object(obj);
-}//»
+const sync_files = cb => {
+	let arr = [];
+	let err_arr = [];
+	let succ_arr = [];
+	let keys = getkeys(termobj.dirty);
+	for (let i = 0; i < keys.length; i++)
+		if (termobj.dirty[keys[i]]) arr.push(keys[i]);
+	let iter = -1;
+	let sync = () => {
+		iter++;
+		let key = arr[iter];
+		let obj = termobj.dirty[key];
+		if (obj) {
+			obj.write.sync(ret => {
+				if (ret) {
+					if (ret == true) {} else if (ret.ERR) {
+						err_arr.push(`${sh_name()}: ${ret.ERR}`);
+						delete termobj.dirty[key];
+					} else if (ret['SUCC']) {
+						succ_arr.push(ret['SUCC']);
+						delete termobj.dirty[key];
+					} else {}
+				}
+				sync();
+			});
+		} else {
+			if (err_arr.length) cb(err_arr);
+			else cb(null, succ_arr);
+		}
+	};
+	sync();
+}
 const arg2con=(arg, cb, if_bin)=>{//«
 	if (!arg) return cb();
 	let fullpath = get_fullpath(arg);
@@ -432,19 +426,19 @@ const arg2con=(arg, cb, if_bin)=>{//«
 		cb(ret, fullpath);
 	}, if_bin);
 }//»
-const pathtocontents = (arg, cb, if_dat, nbytes) => {
-	path_to_obj(arg, ret => {
-		if (!ret) return cb();
-		if (ret.root.TYPE == "fs") fs.get_fs_by_path(arg, cb, {
-			BLOB: if_dat,
-			NBYTES: nbytes,
-			ROOT: is_root
-		});
-		else {
-			cwarn("pathtocontents():Not handling root type:" + ret.root.TYPE);
-			cb();
-		}
-	});
+const pathtocontents = async(arg, cb, if_dat) => {
+	let ret = await pathToNode(arg);
+	if (!ret) return cb();
+	if (ret.root.TYPE == "fs") {
+		let obj = {root: is_root};
+		if (if_dat) obj.binary=true;
+		else obj.text = true;
+		cb(await readFile(arg, obj));
+	}
+	else {
+		cwarn("pathtocontents():Not handling root type:" + ret.root.TYPE);
+		cb();
+	}
 }
 const path_to_key=(path, num, sep_char)=>{//«
 	arr = path.split("/");
@@ -485,428 +479,16 @@ let semi = {"t": "c_op", "c_op": ";"};
 const find_not_blank=(arr,start,if_nl,if_rev)=>{for(let i=start;arr[i];){if(arr[i]===" "||arr[i].t=="blank" ||(if_nl && arr[i].c_op=="nl")){}else return{'pos':i,'t':arr[i].t,'tok':arr[i]};if(if_rev){if(i==0)return null;i--;}else i++;}return null;}
 const find_not_blank_rev=(arr,start,if_nl)=>{return find_not_blank(arr,start,if_nl,true);}
 const unexp_tok=(tok_or_str,tok_arg)=>{let str;if(isstr(tok_or_str))str=tok_or_str;else if(isobj(tok_or_str)){let tok=tok_or_str.tok || tok_or_str;if(tok.nl===true)str="newline";else str=tok[tok.t];if(!isstr(str)){str="type="+tok.t;}}else{log(tok);throw new Error("How you calling unexp_tok,dummy asshole?");}let line_str="";if(global_com_name){let ln="?";if(tok_arg){if(!isnum(tok_arg.ln)){cerr("tok_arg has no 'ln' field(line number)");}else ln=tok_arg.ln;}else{cerr("Calling unexp_tok without tok_arg!");}line_str="line "+ln+":";}let out_str=line_str+"syntax error near unexpected token \x60"+str+"'";_sh_error(out_str,null,null,null,global_com_name);return null;}
-let IMPL_ERR=str=>{sh_error("Implementation Error: "+str);}
-let COMP_IMPL_ERR=str=>{sh_error("Implementation Error: Embedding 'naked' compound statements (without braces) is currently unsupported!\n  \n  As a structurally equivalent workaround, please do something like:\n  \n  $ if foo; then { while bar; do baz; done; } fi\n  ");}
 //»
 //Main parsing algos«
 
 const escapes=line_arr=>{for(let i=0;i<line_arr.length;i++){let arr=line_arr[i].split("");for(let j=0;j<arr.length;j++){if(arr[j]=="\\"){if(arr[j+1]){let obj={"t":"esc","esc":arr[j+1]};arr[j]=obj;arr.splice(j+1,1);j--;}} }line_arr[i]=arr;}return line_arr;};
-const quote_strings=(line_arr,from_double,global_com_name,main_com_str_arg)=>{let qtype=null;let hereword="";let qarr=[];let orig_line_num;let orig_pos;let in_heredoc=false;let quote_metas=metas.concat(['"',"\x60","'"]);let ds=null;OUTERLOOP:for(let i=0;i<line_arr.length;i++){let arr=line_arr[i];if(in_heredoc){if(arr.length==hereword.length){for(let i=0;i<arr.length;i++){let tok=arr[i];if(((isstr(tok)&& tok==hereword[i])||(tok.esc && tok.esc==hereword[i])))continue;in_heredoc=false;}}continue;}for(let j=0;j<arr.length;j++){let chneg1=arr[j-1];let ch=arr[j];let ch2=arr[j+1];let ch3=arr[j+2];if(!qtype &&((from_double && ch=="\x60")||(!from_double &&((ch=='"' || ch=="'" || ch=="\x60")||(ch=="<" && ch2=="<" && ch3 && ch3 !="<" &&(j==0 ||(j>0 && chneg1 !="<"))))))){if(ch=="<"){in_heredoc=true;let k=j+2;while(arr[k] && arr[k]==" "){k++;}hereword="";while(arr[k] && !quote_metas.includes(arr[k])){let tok=arr[k];if(isstr(tok)){if(quote_metas.includes(tok))break;hereword+=tok;}else if(tok.esc)hereword+=tok.esc;k++;}if(!hereword.length){sh_error("No valid 'Heredoc' word found");return null;}continue OUTERLOOP;}else qtype=ch;orig_line_num=i;if(arr[j-1]=="$"){if(ch=="'"){arr.splice(j-1,1);ds=true;j--;}else if(ch=='"'){arr.splice(j-1,1);j--;}}orig_pos=j;}else if(qtype){if(ch==qtype ||(!ds && qtype=="'" && ch.esc=="'")){if(ch.esc=="'")qarr.push("\\");else if(ch.esc==="\x60")qtype="\x60";line_arr[orig_line_num].splice(orig_pos,2,{'t':'quote','$':ds,'quote_t':qtype,'quote':qarr});qtype=null;ds=null;qarr=[];if(i>orig_line_num){let rem=arr.splice(j);for(let k=1;k<rem.length;k++)line_arr[orig_line_num].push(rem[k]);line_arr.splice(i,1);i=orig_line_num;arr=line_arr[i];j=orig_pos+j+1;}else j-=1;}else{if(!ds && qtype=="'" && ch.esc){qarr.push("\\");qarr.push(ch.esc);}else if(ch.esc &&(qtype=="\x60" || qtype=='"')){/*There are no escapes in double quotes except $,\x60,and \*/ if(ch.esc=="$" || ch.esc=="\x60" || ch.esc=="\\")qarr.push(ch);else{if(qtype=='"' && ch.esc !='"'){qarr.push("\\");}else if(qtype=="\x60" && ch.esc !="\x60"){qarr.push("\\");}qarr.push(ch.esc);}}else qarr.push(ch);arr.splice(j,1);j--;}}}if(qtype){qarr.push("\n");if(i>orig_line_num){line_arr.splice(i,1);i--;}}}if(qtype){if(!global_com_name){let usestr=main_com_str_arg || main_com_str;return({'CONT':usestr});}else return null;}else{if(!global_com_name){let line=line_arr[line_arr.length-1];let lasttok=line[line.length-1];if(lasttok==="\\")return{CONT:main_com_str_arg || main_com_str};}}return line_arr;};
-this.quote_strings = quote_strings;
+const quote_strings=(line_arr,from_double,global_com_name,main_com_str_arg)=>{let qtype=null;let hereword="";let qarr=[];let orig_line_num;let orig_pos;let in_heredoc=false;let quote_metas=metas.concat(['"',"\x60","'"]);let ds=null;OUTERLOOP:for(let i=0;i<line_arr.length;i++){let arr=line_arr[i];if(in_heredoc){if(arr.length==hereword.length){for(let i=0;i<arr.length;i++){let tok=arr[i];if(((isstr(tok)&& tok==hereword[i])||(tok.esc && tok.esc==hereword[i])))continue;in_heredoc=false;}}continue;}for(let j=0;j<arr.length;j++){let chneg1=arr[j-1];let ch=arr[j];let ch2=arr[j+1];let ch3=arr[j+2];if(!qtype &&((from_double && ch=="\x60")||(!from_double &&((ch=='"' || ch=="'" || ch=="\x60")||(ch=="<" && ch2=="<" && ch3 && ch3 !="<" &&(j==0 ||(j>0 && chneg1 !="<"))))))){if(ch=="<"){in_heredoc=true;let k=j+2;while(arr[k] && arr[k]==" "){k++;}hereword="";while(arr[k] && !quote_metas.includes(arr[k])){let tok=arr[k];if(isstr(tok)){if(quote_metas.includes(tok))break;hereword+=tok;}else if(tok.esc)hereword+=tok.esc;k++;}if(!hereword.length){sh_error("No valid 'Heredoc' word found");return null;}continue OUTERLOOP;}else qtype=ch;orig_line_num=i;if(arr[j-1]=="$"){if(ch=="'"){arr.splice(j-1,1);ds=true;j--;}else if(ch=='"'){arr.splice(j-1,1);j--;}}orig_pos=j;}else if(qtype){if(ch==qtype ||(!ds && qtype=="'" && ch.esc=="'")){if(ch.esc=="'")qarr.push("\\");else if(ch.esc==="\x60")qtype="\x60";line_arr[orig_line_num].splice(orig_pos,2,{'t':'quote','$':ds,'quote_t':qtype,'quote':qarr});qtype=null;ds=null;qarr=[];if(i>orig_line_num){let rem=arr.splice(j);for(let k=1;k<rem.length;k++)line_arr[orig_line_num].push(rem[k]);line_arr.splice(i,1);i=orig_line_num;arr=line_arr[i];j=orig_pos+j+1;}else j-=1;}else{if(!ds && qtype=="'" && ch.esc){qarr.push("\\");qarr.push(ch.esc);}else if(ch.esc &&(qtype=="\x60" || qtype=='"')){/*There are no escapes in double quotes except $,\x60,and \*/ if(ch.esc=="$" || ch.esc=="\x60" || ch.esc=="\\")qarr.push(ch);else{if(qtype=='"' && ch.esc !='"'){qarr.push("\\");}else if(qtype=="\x60" && ch.esc !="\x60"){qarr.push("\\");}qarr.push(ch.esc);}}else qarr.push(ch);arr.splice(j,1);j--;}}}if(qtype){qarr.push("\n");if(i>orig_line_num){line_arr.splice(i,1);i--;}}}if(qtype){if(!global_com_name){let usestr=main_com_str_arg || main_com_str;return({'CONT':usestr});}else return null;}else{if(!global_com_name){let line=line_arr[line_arr.length-1];let lasttok=line[line.length-1];if(lasttok==="\\")return{CONT:main_com_str_arg || main_com_str};}}return line_arr;};this.quote_strings = quote_strings;
 const tokify=(line_arr,no_metas,from_back,from_double,from_heredoc)=>{let lnnum=1;let wordnum=0;let mkword=(str)=>{return{t:"word",word:str,ln:lnnum,wn:(wordnum++)}};let mkcop=(str)=>{return{t:"c_op",c_op:str,ln:lnnum}};let mkrop=(str)=>{return{t:"r_op",r_op:str,ln:lnnum}};let mkds=(str)=>{return{t:"ds",ds:"$",ln:lnnum}};let mknl=()=>{return{"t":"c_op","c_op":"nl","nl":true,ln:lnnum};};if(line_arr==null)return null;let ret=[];let word=null;for(let i=0;i<line_arr.length;i++){let arr=line_arr[i];for(let j=0;j<arr.length;j++){let ch=arr[j];let ch1=arr[j+1];if(!no_metas && metas.includes(ch)){if(word)ret.push(mkword(word.join("")));if(ch=="\t" || ch==" "){if(from_double)ret.push(ch);else{let usej=null;for(let k=j+1;(arr[k]==" " || arr[k]=="\t");k++)usej=k;if(usej)j=usej;ret.push(" ");}}else{let next=arr[j+1];if(next && metas.includes(next)){let comb=ch+next;if(c_op.includes(comb)){if(comb==";;" && arr[j+2]=="&"){ret.push(mkcop(";;&"));arr.splice(j+1,2);}else{ret.push(mkcop(comb));arr.splice(j+1,1);}}else if(r_op.includes(comb)){if(comb=="<<" && arr[j+2]=="<"){ret.push(mkrop("<<<"));arr.splice(j+1,2);}else if(comb=="&>" && arr[j+2]==">"){ret.push(mkrop("&>>"));arr.splice(j+1,2);}else{ret.push(mkrop(comb));arr.splice(j+1,1);}}else{if(c_op.includes(ch))ret.push(mkcop(ch));else if(r_op.includes(ch))ret.push(mkrop(ch));}}else{if(c_op.includes(ch))ret.push(mkcop(ch));else if(r_op.includes(ch))ret.push(mkrop(ch));}}word=null;}else{/*We don't have a meta here*/ if(from_heredoc &&(ch=="(" || ch==")" || ch==" ")){if(word)ret.push(mkword(word.join("")));if(ch=="(" || ch==")")ret.push(mkcop(ch));else if(ret.length>0 &&(typeof ret[ret.length-1]=="string")&&(ret[ret.length-1].match(/^\x20+$/)))ret[ret.length-1]+=" ";else ret.push(ch);word=null;}else if(!word){/*A word array isn't in effect*/ if(ch=="{" || ch=="}" || ch==",")ret.push(mkword(ch));else if(ch=="\n" ||(from_double && ch=="\x60"))ret.push(ch);else if(ch=="$")ret.push(mkds());else if(typeof(ch)=="string")word=[ch];else if(typeof(ch)=="object")ret.push(ch);}else if(ch=="$"){ret.push(mkword(word.join("")));word=null;ret.push(mkds());}else{if(ch=="{" || ch=="}" || ch==","){ret.push(mkword(word.join("")));ret.push(mkword(ch));word=null;}else if(ch=="\n" ||(from_double && ch=="\x60")){ret.push(mkword(word.join("")));ret.push(ch);word=null;}else if(ch.t=="esc"){if(ch.esc=="{" || ch.esc=="}" || ch.esc==","){ret.push(mkword(word.join("")));ret.push(ch);word=null;}else{ret.push(mkword(word.join("")));ret.push(ch);word=null;}}else if(typeof(ch)=="string" &&(!from_heredoc ||(ch !=" " && ch !="(" && ch !=")"))){if(from_double && ch=="\\" && ch1=="\n"){arr.splice(j,2);j--;}else word.push(ch);}else{ret.push(mkword(word.join("")));ret.push(ch);word=null;}}}}if(word){let useword=word.join("");let pushnl=true;if(useword.match(/\\$/)){useword=useword.replace(/\\$/,"");pushnl=null;}if(useword)ret.push(mkword(useword));if(pushnl)ret.push(mknl());}else{ret.push(mknl());lnnum++;}word=null;}return ret;};this.tokify = tokify;
-const groupify = (toks, opts) => {
-	let is_quote;
-	let from_math;
-	let global_com_name;
-	let main_com_str_arg;
-	if (opts) {
-		is_quote = opts.QUOTE;
-		from_math = opts.MATH;
-		global_com_name = opts.NAME;
-		main_com_str_arg = opts.COM;
-	}
-	let db = (str) => {
-		if (is_quote) log(str);
-	};
-	let cur_line = 0;
-	let make_math_group = (grp, if_ds, pos1, pos2, which) => {
-		if (if_ds) toks[pos1] = {
-			't': 'sub',
-			'sub_t': "math",
-			'sub': grp,
-			ln: cur_line
-		};
-		else toks[pos1] = {
-			't': 'group',
-			'group_t': "math",
-			'math': true,
-			'group': grp,
-			ln: cur_line
-		};
-		toks.splice(pos1 + 1, pos2 - pos1 + 1);
-	};
-	let cur_error_message = null;
-	if (toks == null) return null;
-	let quote_str = null;
-	let quote_start = null;
-	let quote_num = 0;
-	let have_comment = null;
-	let have_prev_c_op;
-//	let heredoc_word = null;
-	for (let i = 0; i < toks.length; i++) {
-		let tok = toks[i];
-		let ch = tok.c_op;
-		let tok1 = toks[i + 1];
-		let ds = null;
-		if (i > 0 && toks[i - 1].t == "ds") {
-			ds = true;
-		}
-		let tok2 = toks[i + 2];
-
-/*
-		if (heredoc_word && tok.word == heredoc_word) {
-			heredoc_word = null;
-			continue;
-		}
-		else if (!heredoc_word && tok.r_op == "<<") {
-			let next = find_not_blank(toks, i + 1);
-			if (next && next.t == "word") {
-				i = next.pos;
-				heredoc_word = next.tok.word;
-				continue;
-			}
-		}
-		else if (heredoc_word) {
-if (ds){
-log("DS", tok);
-}
-			continue;
-		}
-*/
-		if (tok.ln && tok.ln > cur_line) {
-			have_comment = null;
-			cur_line = tok.ln;
-		}
-		if (!ds && tok.t == "word" && tok.word.match(/#/) && !is_quote) have_comment = true;
-		if (have_comment) continue;
-		let ch1 = null;
-		if (tok1) ch1 = tok1.c_op;
-		if (!ch) {
-			let prev = toks[i - 1];
-			let next = tok1;
-			if (tok.word == "{") {
-				if (ds) ch = "{";
-				else {
-					if ((prev && prev.word) || (next && next.word)) continue;
-					else ch = "{"
-				}
-			} else if (tok.word === "}") {
-				if ((prev && prev.word) || (next && next.word)) continue;
-			}
-		}
-		if (ch == "{" || ch == "(") {
-			have_prev_c_op = false;
-			if (!ds && i > 0) {
-				let prev = find_not_blank_rev(toks, i - 1);
-				if (!prev || prev.t === "c_op") have_prev_c_op = true;
-				if (!have_prev_c_op && prev && prev.t === "word") {
-					prev = find_not_blank_rev(toks, prev.pos - 1);
-					if (!prev || prev.t == "c_op") have_prev_c_op = true;
-				}
-				if (!have_prev_c_op && prev && ch == "{") {
-					if (prev && (prev.t === "word" || prev.t === "quote")) {} else have_prev_c_op = !!prev.c_op;
-				}
-			} else {
-				if (ds && tok1 && tok1.word && tok1.word.match(/^[a-zA-Z]/) && tok2 && tok2.word == "}") {
-					toks[i] = {
-						't': 'sub',
-						'sub_t': 'var',
-						'sub': tok1.word,
-						ln: tok.ln
-					};
-					toks.splice(i - 1, 1);
-					toks.splice(i, 2);
-				} else have_prev_c_op = true;
-			}
-		}
-		if (ds && !ch) {
-			if (tok.word) {
-				let word = tok.word;
-				let marr;
-				if ((marr = word.match(/^([*@#?0-9])(.*)$/)) || (marr = word.match(/^([_a-zA-Z][_a-zA-Z0-9]*)(.*)$/))) {
-					toks[i] = {
-						't': 'sub',
-						'sub_t': 'var',
-						'sub': marr[1],
-						ln: tok.ln
-					};
-					if (marr[2]) toks.splice(i + 1, 0, {
-						't': "word",
-						"word": marr[2],
-						ln: cur_line
-					});
-					toks.splice(i - 1, 1);
-				}
-			}
-			else if (toks[i].quote_t == "'") {
-				tok['ds'] = true;
-				toks.splice(i - 1, 1);
-			}
-		} else if (((ch == "(" && (have_prev_c_op)) || (ch == "{" && have_prev_c_op) || ch == "((")) {
-			if (is_quote) {
-				if (!ds) continue;
-			}
-			if (ds) {
-				toks.splice(i - 1, 1);
-				i--;
-			}
-			let group = [];
-			let type = "cmd";
-			let stack = [];
-			let depth = 0;
-			if (ch == "((") {
-				type = "math";
-				depth = 1;
-				if (from_math && !ds) {
-					ch = "(";
-					type = "cmd";
-					toks.splice(i + 1, 0, {
-						"t": 'c_op',
-						'c_op': "(",
-						ln: cur_line
-					});
-				}
-			}
-			for (let j = i + 1; toks[j]; j++) {
-				let tokj = toks[j];
-				let tokj1 = toks[j + 1];
-				if (tokj.ln && tokj.ln > cur_line) {
-					have_comment = null;
-					cur_line = tokj.ln;
-				}
-				if (tokj.t == "word" && tokj.word.match(/#/)) {
-					if (j > 0 && toks[j - 1].t == "ds") {} else if (j > 0 && ds && tokj.word.match(/^#/) && toks[j - 1].word == "{") {} else have_comment = true;
-				}
-				if (have_comment) continue;
-				if (depth == 0) {
-					if (ch == "{" && tokj.word == "}" && !(toks[j - 1].word || (toks[j + 1] && toks[j + 1].word))) {
-						if (ds) {
-							toks[i] = {
-								't': 'sub',
-								'sub_t': "param",
-								'sub': group,
-								ln: cur_line
-							};
-							toks.splice(i + 1, j - i);
-							i = i + 1;
-							break;
-						} else {
-							let isgood = null;
-							for (let k = j - 1; k > 0; k--) {
-								let tokk = toks[k];
-								if (tokk == " ") {
-									continue;
-								}
-								let op = tokk[tokk.t];
-								if (op == ";" || op == "&" || op == "nl") {
-									/*Need to make sure this is NOT empty braces*/
-									let grpstr = toks_to_string(group, true);
-									if (grpstr.match(/^[ \n]*$/)) return unexp_tok("}", tokj);
-									let nexttok = find_not_blank(toks, j + 1, false);
-									if (nexttok && nexttok.tok.c_op) {} else if (tokj1 === " ") toks[j + 1] = {
-										't': 'c_op',
-										'c_op': ";",
-										ln: cur_line
-									};
-									toks[i] = {
-										't': 'group',
-										'group_t': 'shell',
-										'shell': true,
-										'group': grpstr,
-										ln: cur_line
-									};
-									toks.splice(i + 1, j - i);
-									i = i + 1;
-									isgood = true;
-									break;
-								} else {
-									if (tokk.word && k === j - 1) continue;
-									sh_error("Could not find a valid statement terminator(';','&',or newline)for the shell group!");
-									return;
-								}
-							}
-							if (isgood) break;
-							else return unexp_tok("}", tokj);
-						}
-					} else if (ch == "(" && tokj.c_op == ")") {
-						if (type == "cmd") {
-							if (ds) toks[i] = {
-								't': 'sub',
-								'sub_t': "com",
-								'sub': group,
-								ln: cur_line
-							};
-							else {
-								if (from_math) {
-									group.unshift("(");
-									group.push(")");
-									toks[i] = {
-										't': 'word',
-										'word': group,
-										ln: cur_line
-									};
-								} else {
-									let grpstr = toks_to_string(group, true);
-									if (grpstr.match(/^[ \n]*$/)) {
-										return unexp_tok(")", tokj);
-									}
-									let nexttok = find_not_blank(toks, j + 1, false);
-									if (nexttok && nexttok.tok.c_op) {} else if (tokj1 === " ") toks[j + 1] = {
-										't': 'c_op',
-										'c_op': ";",
-										ln: cur_line
-									};
-									toks[i] = {
-										't': 'group',
-										'group_t': "subshell",
-										'subshell': true,
-										'group': grpstr,
-										ln: cur_line
-									};
-								}
-							}
-							toks.splice(i + 1, j - i);
-							i = i + 1;
-							break;
-						} else if (type == "math" && tokj1 && tokj1.c_op == ")") {
-							make_math_group(group, ds, i, j, 2);
-							break;
-						}
-					}
-				}
-				if (tokj.c_op == "(") {
-					depth++;
-					stack.push("(");
-				} else if (tokj.word == "{") {
-					depth++;
-					stack.push("{");
-				} else if (tokj.word == "}" && !(toks[j - 1].word || (toks[j + 1] && toks[j + 1].word))) {
-					depth--;
-					if (stack.pop() !== "{") {
-						return unexp_tok("}", tokj);
-					}
-				} else if (tokj.c_op == ")") {
-					depth--;
-					if (depth == 0 && type == "math" && tokj1 && tokj1.c_op == ")") {
-						make_math_group(group, ds, i, j, 1);
-						break;
-					} else if (stack.pop() !== "(") return unexp_tok(")", tokj);
-				} else if (tokj.c_op == "((") {
-					depth = depth + 2;
-					stack.push("(", "(");
-				}
-				if (tokj.t == "eof") {
-					if (!global_com_name) {
-						return ({
-							'CONT': (main_com_str_arg || main_com_str)
-						});
-					}
-					sh_error("end of file reached");
-					return null;
-				}
-				group.push(tokj);
-			}
-		} else if (ch === "(" && !have_prev_c_op) return unexp_tok("(", tok);
-		else if (ch === ")") {
-			if (is_quote) continue;
-			return unexp_tok(")", tok);
-		}
-	}
-	return toks;
-};
-this.groupify = groupify;
+const groupify=(toks,opts)=>{let is_quote;let from_math;let global_com_name;let main_com_str_arg;if(opts){is_quote=opts.QUOTE;from_math=opts.MATH;global_com_name=opts.NAME;main_com_str_arg=opts.COM;}let db=(str)=>{if(is_quote)log(str);};let cur_line=0;let make_math_group=(grp,if_ds,pos1,pos2,which)=>{if(if_ds)toks[pos1]={'t':'sub','sub_t':"math",'sub':grp,ln:cur_line};else toks[pos1]={'t':'group','group_t':"math",'math':true,'group':grp,ln:cur_line};toks.splice(pos1+1,pos2-pos1+1);};let cur_error_message=null;if(toks==null)return null;let quote_str=null;let quote_start=null;let quote_num=0;let have_comment=null;let have_prev_c_op;for(let i=0;i<toks.length;i++){let tok=toks[i];let ch=tok.c_op;let tok1=toks[i+1];let ds=null;if(i>0 && toks[i-1].t=="ds"){ds=true;}let tok2=toks[i+2];if(tok.ln && tok.ln>cur_line){have_comment=null;cur_line=tok.ln;}if(!ds && tok.t=="word" && tok.word.match(/#/)&& !is_quote)have_comment=true;if(have_comment)continue;let ch1=null;if(tok1)ch1=tok1.c_op;if(!ch){let prev=toks[i-1];let next=tok1;if(tok.word=="{"){if(ds)ch="{";else{if((prev && prev.word)||(next && next.word))continue;else ch="{"}}else if(tok.word==="}"){if((prev && prev.word)||(next && next.word))continue;}}if(ch=="{" || ch=="("){have_prev_c_op=false;if(!ds && i>0){let prev=find_not_blank_rev(toks,i-1);if(!prev || prev.t==="c_op")have_prev_c_op=true;if(!have_prev_c_op && prev && prev.t==="word"){prev=find_not_blank_rev(toks,prev.pos-1);if(!prev || prev.t=="c_op")have_prev_c_op=true;}if(!have_prev_c_op && prev && ch=="{"){if(prev &&(prev.t==="word" || prev.t==="quote")){}else have_prev_c_op=!!prev.c_op;}}else{if(ds && tok1 && tok1.word && tok2 && tok2.word=="}"){if(tok1.word.match(/^[a-zA-Z]/)|| tok1.word.match(/^[0-9]+$/)){toks[i]={'t':'sub','sub_t':'var','sub':tok1.word,ln:tok.ln};toks.splice(i-1,1);toks.splice(i,2);}else{return sh_error(`$\x7b${tok1.word}\x7d:\x20bad substitution`);}}else have_prev_c_op=true;}}if(ds && !ch){if(tok.word){let word=tok.word;let marr;if((marr=word.match(/^([*@#?0-9])(.*)$/))||(marr=word.match(/^([_a-zA-Z][_a-zA-Z0-9]*)(.*)$/))){toks[i]={'t':'sub','sub_t':'var','sub':marr[1],ln:tok.ln};if(marr[2])toks.splice(i+1,0,{'t':"word","word":marr[2],ln:cur_line});toks.splice(i-1,1);}}else if(toks[i].quote_t=="'"){tok['ds']=true;toks.splice(i-1,1);}}else if(((ch=="(" &&(have_prev_c_op))||(ch=="{" && have_prev_c_op)|| ch=="((")){if(is_quote){if(!ds)continue;}if(ds){toks.splice(i-1,1);i--;}let group=[];let type="cmd";let stack=[];let depth=0;if(ch=="(("){type="math";depth=1;if(from_math && !ds){ch="(";type="cmd";toks.splice(i+1,0,{"t":'c_op','c_op':"(",ln:cur_line});}}for(let j=i+1;toks[j];j++){let tokj=toks[j];let tokj1=toks[j+1];if(tokj.ln && tokj.ln>cur_line){have_comment=null;cur_line=tokj.ln;}if(tokj.t=="word" && tokj.word.match(/#/)){if(j>0 && toks[j-1].t=="ds"){}else if(j>0 && ds && tokj.word.match(/^#/)&& toks[j-1].word=="{"){}else have_comment=true;}if(have_comment)continue;if(depth==0){if(ch=="{" && tokj.word=="}" && !(toks[j-1].word ||(toks[j+1] && toks[j+1].word))){if(ds){/*WYHBDNFHJ*/ toks[i]={'t':'sub','sub_t':"param",'sub':group,ln:cur_line};toks.splice(i+1,j-i);i=i+1;break;}let isgood=null;for(let k=j-1;k>0;k--){let tokk=toks[k];if(tokk==" "){continue;}let op=tokk[tokk.t];if(op==";" || op=="&" || op=="nl"){/*Need to make sure this is NOT empty braces*/ let grpstr=toks_to_string(group,true);if(grpstr.match(/^[ \n]*$/))return unexp_tok("}",tokj);let nexttok=find_not_blank(toks,j+1,false);if(nexttok && nexttok.tok.c_op){}else if(tokj1===" ")toks[j+1]={'t':'c_op','c_op':";",ln:cur_line};toks[i]={'t':'group','group_t':'shell','shell':true,'group':grpstr,ln:cur_line};toks.splice(i+1,j-i);i=i+1;isgood=true;break;}else{if(tokk.word && k===j-1)continue;sh_error("Could not find a valid statement terminator(';',\x20'&',\x20or newline)\x20for the shell group!");return;}}if(isgood)break;else return unexp_tok("}",tokj);}else if(!(ch=="(" && tokj.c_op==")"))continue;if(type=="cmd"){if(ds)toks[i]={'t':'sub','sub_t':"com",'sub':group,ln:cur_line};else{if(from_math){group.unshift("(");group.push(")");toks[i]={'t':'word','word':group,ln:cur_line};}else{let grpstr=toks_to_string(group,true);if(grpstr.match(/^[ \n]*$/)){return unexp_tok(")",tokj);}let nexttok=find_not_blank(toks,j+1,false);if(nexttok && nexttok.tok.c_op){}else if(tokj1===" ")toks[j+1]={'t':'c_op','c_op':";",ln:cur_line};toks[i]={'t':'group','group_t':"subshell",'subshell':true,'group':grpstr,ln:cur_line};}}toks.splice(i+1,j-i);i=i+1;break;}else if(type=="math" && tokj1 && tokj1.c_op==")"){make_math_group(group,ds,i,j,2);break;}}if(tokj.c_op=="("){depth++;stack.push("(");}else if(tokj.word=="{"){depth++;stack.push("{");}else if(tokj.word=="}" && !(toks[j-1].word ||(toks[j+1] && toks[j+1].word))){depth--;if(stack.pop()!=="{"){return unexp_tok("}",tokj);}}else if(tokj.c_op==")"){depth--;if(depth==0 && type=="math" && tokj1 && tokj1.c_op==")"){make_math_group(group,ds,i,j,1);break;}else if(stack.pop()!=="(")return unexp_tok(")",tokj);}else if(tokj.c_op=="(("){depth=depth+2;stack.push("(","(");}if(tokj.t=="eof"){if(!global_com_name){return({'CONT':(main_com_str_arg || main_com_str)});}sh_error("end of file reached");return null;}group.push(tokj);}}else if(ch==="(" && !have_prev_c_op)return unexp_tok("(",tok);else if(ch===")"){if(is_quote)continue;return unexp_tok(")",tok);}}return toks;};this.groupify=groupify;
 
 const strip_comments=toks=>{if(toks==null)return null;let ret=[];for(let i=0;i<toks.length;i++){let tok=toks[i];if(tok.word && tok.word.match(/^#/)){let j=i+1;while(toks[j].c_op !="nl")j++;i=j-1;}else{if(tok==" ")ret.push({'t':"blank",'blank':" "});else ret.push(tok);}}return ret;}
-const redirectify = toks => {//«
-//jlog(toks);
-	if (!toks) return null;
-	let ret = [];
-	let ok_reds = ["word", "sub", "quote"];
-	for (let i = 0; i < toks.length; i++) {
-		let is_heredoc = false;
-		let esc_ch = "";
-		let tok0 = toks[i];
-		let tok1 = toks[i + 1];
-		let tok2 = toks[i + 2];
-		if (tok0.t == "r_op") {
-			if (tok1 && tok1.t == "blank") {
-				toks.splice(i + 1, 1);
-				tok1 = toks[i + 1];
-				tok2 = toks[i + 2];
-			}
-			if (tok0.r_op == "<<") {
-				if (tok1.t == "esc") {
-					esc_ch = tok1.esc;
-					toks.splice(i + 1, 1);
-					tok1 = toks[i + 1];
-					tok2 = toks[i + 2];
-				}
-				if (tok1.t != "word") {
-					sh_error("Need a simple word\x20(optionally escaped)\x20as a 'heredoc' delimiter");
-					return null;
-				}
-				let word = esc_ch + tok1.word;
-				toks.splice(i + 1, 1);
-				let j = i + 1;
-				let tokj = toks[j];
-				while (tokj && !tokj.nl && !tokj.eof) {
-					j++;
-					tokj = toks[j];
-				}
-				let got_delimiter = false;
-				let here_doc = [];
-				let on_nl = true;
-				for (let k = j + 1; k < toks.length; k++) {
-					let tok = toks[k];
-					if (on_nl && tok.t == "word" && tok.word == word && (toks[k + 1].nl || toks[k + 1].eof)) {
-						toks.splice(k, 1);
-						got_delimiter = true;
-						break;
-					} else {
-						toks.splice(k, 1);
-						k--;
-						if (tok.nl === true) {
-							here_doc.push("\n");
-						}
-						else here_doc.push(tok);
-					}
-					if (tok.nl) on_nl = true;
-					else on_nl = false;
-				}
-				if (!got_delimiter) {
-					/* * We can put a "heredoc" type of continuation here,so * the next quote strings('"\x60)are not treated special. They are * word tokens like any other */
-					return {
-						'CONT': main_com_str,
-						'TYPE': "heredoc"
-					};
-				}
-				if (esc_ch) {
-					let arr = toks_to_string(here_doc,true).split("\n");
-					if (!arr[0]) arr.shift();
-					if (!arr[arr.length - 1]) arr.pop();
-					for (let i = 0; i < arr.length; i += 2) {
-						if (i == 1000000) {
-							throw new Error("If you really wanted 1000000 iterations here,\x20then please by all means remove this infinite loop protector!");
-						}
-						arr[i] = arr[i].replace(/\x20$/, "");
-						arr.splice(i + 1, 0, nlobj);
-					}
-					here_doc = arr;
-				}
-				if (here_doc.length&&here_doc[here_doc.length-1]==="\n") here_doc.pop();
-				tok0.here_doc = here_doc;
-				ret.push(tok0);
-			} else if (tok1 && ok_reds.includes(tok1.t)) {
-				let gottok;
-				let redir = [];
-				let j = i + 2;
-				for (j = i + 1; j < toks.length; j++) {
-					let typ = toks[j].t;
-					if (typ == "word" || typ == "sub" || typ == "quote") redir.push(toks[j]);
-					else break;
-				}
-				tok0.redir_arg = redir;
-				toks.splice(i + 1, j - i - 1);
-				ret.push(tok0);
-			} else {
-				if (tok1.c_op) return unexp_tok(tok1, tok1);
-				sh_error("Could not find a good redirection argument");
-				return null;
-			}
-		} else ret.push(tok0);
-	}
-	return ret;
-}//»
+const redirectify=toks=>{if(!toks)return null;let ret=[];let ok_reds=["word","sub","quote"];for(let i=0;i<toks.length;i++){let is_heredoc=false;let esc_ch="";let tok0=toks[i];let tok1=toks[i+1];let tok2=toks[i+2];if(tok0.t=="r_op"){if(tok1 && tok1.t=="blank"){toks.splice(i+1,1);tok1=toks[i+1];tok2=toks[i+2];}if(tok0.r_op=="<<"){if(tok1.t=="esc"){esc_ch=tok1.esc;toks.splice(i+1,1);tok1=toks[i+1];tok2=toks[i+2];}if(tok1.t !="word"){sh_error("Need a simple word\x20(optionally escaped)\x20as a 'heredoc' delimiter");return null;}let word=esc_ch+tok1.word;toks.splice(i+1,1);let j=i+1;let tokj=toks[j];while(tokj && !tokj.nl && !tokj.eof){j++;tokj=toks[j];}let got_delimiter=false;let here_doc=[];let on_nl=true;for(let k=j+1;k<toks.length;k++){let tok=toks[k];if(on_nl && tok.t=="word" && tok.word==word &&(toks[k+1].nl || toks[k+1].eof)){toks.splice(k,1);got_delimiter=true;break;}else{toks.splice(k,1);k--;if(tok.nl===true){here_doc.push("\n");}else here_doc.push(tok);}if(tok.nl)on_nl=true;else on_nl=false;}if(!got_delimiter){/* * We can put a "heredoc" type of continuation here,so * the next quote strings('"\x60)are not treated special. They are * word tokens like any other */ return{'CONT':main_com_str,'TYPE':"heredoc"};}if(esc_ch){let arr=toks_to_string(here_doc,true).split("\n");if(!arr[0])arr.shift();if(!arr[arr.length-1])arr.pop();for(let i=0;i<arr.length;i+=2){if(i==1000000){throw new Error("If you really wanted 1000000 iterations here,\x20then please by all means remove this infinite loop protector!");}arr[i]=arr[i].replace(/\x20$/,"");arr.splice(i+1,0,nlobj);}here_doc=arr;}if(here_doc.length&&here_doc[here_doc.length-1]==="\n")here_doc.pop();tok0.here_doc=here_doc;ret.push(tok0);}else if(tok1 && ok_reds.includes(tok1.t)){let gottok;let redir=[];let j=i+2;for(j=i+1;j<toks.length;j++){let typ=toks[j].t;if(typ=="word" || typ=="sub" || typ=="quote")redir.push(toks[j]);else break;}tok0.redir_arg=redir;toks.splice(i+1,j-i-1);ret.push(tok0);}else{if(tok1.c_op)return unexp_tok(tok1,tok1);sh_error("Could not find a good redirection argument");return null;}}else ret.push(tok0);}return ret;}
 
 const simples=(toks,from_other)=>{if(!toks)return null;let command=null;let ret=[];let tok_num=0;let assigns=[];let redirects=[];let cap;let redirect_fd;for(let i=0;i<toks.length;i++){let tok=toks[i];let tp=tok.t;redirect_fd=null;if(tp=="word" && tok.word.match(/^[0-9]+$/)&& toks[i+1] && toks[i+1].r_op){redirect_fd=tok.word;toks.splice(i,1);tok=toks[i];tp=tok.t;}if(tp=="r_op"){if(redirect_fd)tok.fd=redirect_fd;redirects.push(tok);}else if(!command){if(tp=="blank")continue;else if(tp=="esc" || tp=="quote" || tp=="sub" || tp=="group" || tp=="word"){if(tp=="word" &&(cap=tok.word.match(/^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=/))){let all_toks=[];for(let j=i+1;;){if(toks[j].t=="word" || toks[j].t=="sub" || toks[j].t=="quote"){all_toks.push(toks[j]);toks.splice(j,1);}else break;}tok["all_toks"]=all_toks;assigns.push(tok);}else if(tok.word || tok.esc){let comstr=tok.word || tok.esc;for(let j=i+1;j<toks.length;j++){if(toks[j].word || toks[j].esc){comstr=comstr+(toks[j].word || toks[j].esc);toks.splice(j,1);j--;}else break;}delete tok.esc;tok.t="word";tok.word=comstr;command=[tok];}tok["tok_num"]=tok_num;tok_num++;}/*No command,but a c_op. If we have assigns,this means that they will take affect*/ else if(tp=="c_op"){if(assigns.length || redirects.length)ret.push({'t':"com",'com':[],'assigns':assigns,'redirects':redirects});assigns=[];redirects=[];ret.push(tok);}else if(tp!="eof"){console.error("SHOULD NOT BE HERE!",tp);}}else{/*We have command*/ if(tok.t=="c_op" || tok.eof){/*Here,the command can be a shell group... does this mean that it needs its redirects to be given to it internally?  Or keep it on the com?*/ if(command.length || assigns.length || redirects.length){if(command[0].t=="group"){if(command[0].subshell || command[0].shell){command[0].redirects=redirects;command[0].assigns=assigns;assigns=[];redirects=[];}}ret.push({'t':"com",'com':command,'assigns':assigns,'redirects':redirects});}ret.push(tok);command=null;assigns=[];redirects=[];}else{tok['tok_num']=tok_num;tok_num++;let prev=command[command.length-1];let cop;/*If prev is a group,we are looking for a r_op or ||,&&,|,or |&*/ if(prev.group){/*If this is a shell/subshell,we need to put all redirects onto it*/ cop=tok.c_op;if(tok.r_op || cop=="||" || cop=="&&" || cop=="|&" || cop=="|")command.push(tok);else if(tok.t=="blank"){}else return unexp_tok(tok,tok);}else if(tok.group){cop=prev.c_op;if(cop=="||" || cop=="&&" || cop=="|&" || cop=="|")command.push(tok);else return unexp_tok(tok,tok);}else{command.push(tok);}}}}return ret;}
 
@@ -920,7 +502,6 @@ const str_to_compound = (str) => {
 	arr = quote_strings(arr);
 	if (!arr) return;
 	else if (arr.length == undefined) return arr;
-//jlog(arr);
 	arr = tokify(arr);
 	if (arr) {
 		let line = 1;
@@ -1110,7 +691,7 @@ let PipeObj=function(){//«
 }//»
 
 const softbr=if_cur=>{var nocur=true;if(if_cur)nocur=false;respbr(nocur,true);}
-const respbr = (if_nocur, if_soft_break) => {
+const respbr = (if_nocur, if_soft_break) => {//«
 	if (in_background_script) return;
 	if (file_done) return;
 	response({
@@ -1122,15 +703,32 @@ const respbr = (if_nocur, if_soft_break) => {
 		SOFTBREAK: if_soft_break
 	});
 	refresh();
-}
+}//»
 const get_redir=(arr,which,pipenum)=>{let redir=arr[which];let type=typeof(redir);if(global_redir && global_redir[which]){if(which===0 && isnum(pipenum)&& pipenum>0){}else return global_redir[which];}if(isobj(redir)){let objtype=redir.t;let rop=redir.r_op;if(rop=="<<"||rop=="<<<"){return redir;}else{cerr("get_redir():WHAT KIND OF REDIR IS THIS???? "+objtype);}}else if(type=="boolean" || type=="string" || type=="number")return redir;return null;}
 const ret_true=()=>{return make_ret(0);}
 const ret_false=(valarg)=>{return{'SUCC':false,'VAL':valarg||1};}
 const make_ret=(num,mess)=>{if(num==0)return{'SUCC':true,'VAL':0};return{'ERR':true,'VAL':num,'MESS':mess}}
 const bq_abort=(cb,which)=>{sh_error("backquote not implemented yet,abort("+which+")",true);cb(ret_false());}
-const sys_error=(str,if_abort,redir_arg)=>{if(if_abort)sys_abort=true;sys_write({ARG0:str,ARG1:2,ARG3:redir_arg});return make_ret(1,"System error");}
-const sh_error=(str,if_abort,redir_arg,use_retval,namearg)=>{if(if_abort)sys_abort=true;sys_write({ARG0:(namearg ? namearg:sh_name())+":\x20"+str,ARG1:2,ARG3:redir_arg});refresh();return make_ret(use_retval || 1,"System error");}
-const sys_read = (arg, if_get_val, if_force_term) => {
+const sys_error = (str, if_abort, redir_arg) => {
+	if (if_abort) sys_abort = true;
+	sys_write({
+		ARG0: str,
+		ARG1: 2,
+		ARG3: redir_arg
+	});
+	return make_ret(1, "System error");
+}
+const sh_error = (str, if_abort, redir_arg, use_retval, namearg) => {
+	if (if_abort) sys_abort = true;
+	sys_write({
+		ARG0: (namearg ? namearg : sh_name()) + ":\x20" + str,
+		ARG1: 2,
+		ARG3: redir_arg
+	});
+	refresh();
+	return make_ret(use_retval || 1, "System error");
+}
+const sys_read = (arg, if_get_val, if_force_term) => {//«
 	let which = arg.ARG0,
 		pipe_arr = arg.ARG1,
 		redir = arg.ARG2,
@@ -1281,8 +879,8 @@ else{
 		};
 		do_read_line();
 	} else return reader;
-}
-const sys_write = arg => {
+}//»
+const sys_write = arg => {//«
 	let str = arg.ARG0,
 		which = arg.ARG1,
 		pipe_arr = arg.ARG2,
@@ -1458,172 +1056,169 @@ const sys_write = arg => {
 		log(writer);
 	}
 	return make_ret(1, "Write error 2");
-}
-
-const do_red = async (com, redir_arr, cbarg, background_id) => {
-	function check_fd_num(str) {
-		var num = parseInt(str);
+}//»
+const do_red = async (com, redir_arr, cbarg, background_id) => {//«
+	const check_fd_num=(str)=>{//«
+		let num = parseInt(str);
 		if (num >= 0 && num <= 2047) return num;
 		return null;
-	}
+	};//»
+	const getfobj = () => {//«
+		let use_termobj = termobj;
+		if (background_id) {
+			let job = check_job_id(background_id);
+			if (!job) {
+				let mess = "No job:" + background_id;
+				com.error_message = mess;
+				cbarg(null, mess);
+				return;
+			}
+			use_termobj = job._;
+		}
+		fs.get_term_fobj(use_termobj, cur_dir, fname, {
+			read: rflag,
+			write: wflag,
+			append: aflag
+		}, ret => {
+			if (!ret){
+				com.error_message = `${fname}: no such file or directory`;
+				cbarg();
+				return;
+			}
+			if (typeof(ret) == "string") {
+				com.error_message = ret;
+				cbarg(null, ret);
+				return;
+			} 
+			if (ret == true) redir_arr[fdnum] = true;
+			else {
+				termobj.file_objects[ret.UKEY] = ret.FOBJ;
+				redir_arr[fdnum] = ret.UKEY;
+			}
+			do_red(com, redir_arr, cbarg);
+		}, is_root);
+	};//»
 	if (!com.redir) {
 		if (com.length) cbarg(com[0]);
 		return;
 	}
 	let optok = com.redir.shift();
-	if (optok) {
-		let have_and = null;
-		let rop = optok.r_op;
-		if (rop == "<<" || rop == "<<<") {
-			redir_arr[0] = optok;
-			do_red(com, redir_arr, cbarg);
-			return;
-		}
-		let ftok = optok.redir_arg;
-		let edit_lines = optok.edit_lines;
-		if (rop[rop.length - 1] == "&") {
-			rop = rop.slice(0, rop.length - 1);
-			have_and = true;
-		}
-		let fdstr = optok.fd;
-		let fdnum;
-		let rederr = str => {
-			com.error_message = str;
-			do_red(com, redir_arr, cbarg);
-		};
-		if (fdstr) {
-			fdnum = check_fd_num(fdstr);
-			if (fdnum == null) return rederr(fdnum + ":Bad file descriptor");
-		}
-		let fname = "";
-		let doit = () => {//«
-			if (rop == "<" || rop == ">" || rop == ">>" || rop == "<>") {
-				let rflag, aflag, wflag, usefd;
-				if (rop == "<") {
-					rflag = true;
-					if (!fdstr) fdnum = 0
-				} else if (rop.match(/>/)) {
-					wflag = true;
-					if (rop == ">>") aflag = true;
-					if (!fdstr) fdnum = 1;
-				}
-//				if (wflag && fname.match(/\.__LINK__$/)){
-				if (wflag && globals.LINK_RE.test(fname)){
-					com.error_message = `${fname}:\x20Cannot write to '${globals.LINK_EXT}' extension`;
-					do_red(com, redir_arr, cbarg);
-					return;
-				}
-				if (have_and) {
-					let fdnum2;
-					if (fname.match(/^[0-9]+$/)) {
-						let fdnum2 = parseInt(fname);
-						if (fdnum2 >= 0 && FILES[fdnum2]) {
-							if (redir_arr[fdnum2] != undefined) redir_arr[fdnum] = redir_arr[fdnum2];
-							else redir_arr[fdnum] = fdnum2;
-							do_red(com, redir_arr, cbarg);
-							return;
-						}
-						else {
-							com.error_message = fname + ":Bad file descriptor";
-							do_red(com, redir_arr, cbarg);
-							return;
-						}
-					}
-				} else {
-					let getfobj = () => {
-						let use_termobj = termobj;
-						if (background_id) {
-							let job = check_job_id(background_id);
-							if (!job) {
-								let mess = "No job:" + background_id;
-								com.error_message = mess;
-								cbarg(null, mess);
-								return;
-							}
-							use_termobj = job._;
-						}
-						fs.get_term_fobj(use_termobj, cur_dir, fname, {
-							read: rflag,
-							write: wflag,
-							append: aflag
-						}, ret => {
-							if (ret) {
-								if (typeof(ret) == "string") {
-									com.error_message = ret;
-									cbarg(null, ret);
-									return;
-								} else {
-									if (ret == true) redir_arr[fdnum] = true;
-									else {
-										termobj.file_objects[ret.UKEY] = ret.FOBJ;
-										redir_arr[fdnum] = ret.UKEY;
-									}
-									do_red(com, redir_arr, cbarg);
-								}
-								return;
-							} else {
-								com.error_message = fname + ":\x20No such file or directory";
-								cbarg();
-							}
-						}, is_root, {
-							getvar: get_var_str
-						});
-					};
-					ptw(fname, ret => {
-						if (!ret) {
-							getfobj();
-							return;
-						}
-						let ukey = filekey(ret);
-						if (termobj.file_objects[ukey]) {
-							let fobj = termobj.file_objects[ukey];
-							if (rop == ">") {
-								if (fobj.set_buffer) fobj.set_buffer([], edit_lines);
-								if (fobj.seek) fobj.seek.start();
-							}
-							redir_arr[fdnum] = ukey;
-							do_red(com, redir_arr, cbarg);
-							return;
-						}
-						else getfobj();
-						
-					});
-				}
-			} else cwarn("What redir?", rop);
-		};//»
-//		all_expansions(ftok, ret => {
-		let ret = await all_expansions(ftok);
-		if (!ret) {
-			com.error_message = "Could not expand the redirection argument";
-			do_red(com, redir_arr, cbarg);
-			return;
-		}
-		let bad = false;
-		for (let tok of ret) {
-			if (isstr(tok)) fname += tok;
-			else if (isobj(tok)) {
-				if (tok.t == "word") fname += tok.word;
-				else bad = true;
-			}
-			else bad = true;
-		}
-		if (!bad) return doit();
-		com.error_message = "There was a problem with expanding the redirection argument";
-		do_red(com, redir_arr, cbarg);
-//		});
-	} else {
+	if (!optok){
 		com.redir = redir_arr;
 		cbarg();
 		return;
 	}
-}
+	let have_and = null;
+	let rop = optok.r_op;
+	if (rop == "<<" || rop == "<<<") {
+		redir_arr[0] = optok;
+		do_red(com, redir_arr, cbarg);
+		return;
+	}
+	let ftok = optok.redir_arg;
+	let edit_lines = optok.edit_lines;
+	if (rop[rop.length - 1] == "&") {
+		rop = rop.slice(0, rop.length - 1);
+		have_and = true;
+	}
+	let fdstr = optok.fd;
+	let fdnum;
+	let rederr = str => {
+		com.error_message = str;
+		do_red(com, redir_arr, cbarg);
+	};
+	if (fdstr) {
+		fdnum = check_fd_num(fdstr);
+		if (fdnum == null) return rederr(fdnum + ":Bad file descriptor");
+	}
+	let fname = "";
+	let ret = await all_expansions(ftok);
+	if (!ret) {
+		com.error_message = "Could not expand the redirection argument";
+		do_red(com, redir_arr, cbarg);
+		return;
+	}
+	let bad = false;
+	for (let tok of ret) {
+		if (isstr(tok)) fname += tok;
+		else if (isobj(tok)) {
+			if (tok.t == "word") fname += tok.word;
+			else bad = true;
+		}
+		else bad = true;
+	}
+
+	if (bad){
+		com.error_message = "There was a problem with expanding the redirection argument";
+		do_red(com, redir_arr, cbarg);
+		return;
+	}
+
+	if (!(rop == "<" || rop == ">" || rop == ">>" || rop == "<>")) {
+cwarn("What redir?", rop);
+		return;
+	}
+	let rflag, aflag, wflag, usefd;
+	if (rop == "<") {
+		rflag = true;
+		if (!fdstr) fdnum = 0
+	} else if (rop.match(/>/)) {
+		wflag = true;
+		if (rop == ">>") aflag = true;
+		if (!fdstr) fdnum = 1;
+	}
+	if (wflag && globals.LINK_RE.test(fname)){
+		com.error_message = `${fname}:\x20Cannot write to '${globals.LINK_EXT}' extension`;
+		do_red(com, redir_arr, cbarg);
+		return;
+	}
+
+	if (have_and) {//«
+		let fdnum2;
+		if (fname.match(/^[0-9]+$/)) {
+			let fdnum2 = parseInt(fname);
+			if (fdnum2 >= 0 && FILES[fdnum2]) {
+				if (redir_arr[fdnum2] != undefined) redir_arr[fdnum] = redir_arr[fdnum2];
+				else redir_arr[fdnum] = fdnum2;
+				do_red(com, redir_arr, cbarg);
+				return;
+			}
+			else {
+				com.error_message = fname + ":Bad file descriptor";
+				do_red(com, redir_arr, cbarg);
+				return;
+			}
+		}
+		return;
+	}//»
+
+
+	ret = await pathToNode(fname);
+	if (!ret) return getfobj();
+	let ukey;
+	if (ret.fullpath) ukey = ret.fullpath;
+	else ukey = fs.path_from_node(ret);
+	let fobj = termobj.file_objects[ukey];
+	if (!fobj) return getfobj();
+	if (rop == ">") {
+		if (fobj.set_buffer) fobj.set_buffer([], edit_lines);
+		if (fobj.seek) fobj.seek.start();
+	}
+	redir_arr[fdnum] = ukey;
+	do_red(com, redir_arr, cbarg);
+}//»
 
 //»
 
 //Execute Helpers: Expansions/Subs/Vars«
 
 //WPMJURVHYD
-const fileglob = (arr, cb) => {
+const fileglob=arr=>{
+	return new Promise((Y,N)=>{
+		_fileglob(arr, Y);
+	});
+};
+const _fileglob = (arr, cb) => {
 	const get_file_and_dir_from_str = str => {
 		let arr, fname;
 		arr = str.split("\/");
@@ -1641,7 +1236,7 @@ const fileglob = (arr, cb) => {
 	let dircache = {};
 	let ret = [];
 	let i = -1;
-	const doglob = () => {
+	const doglob = async() => {
 		let gotdir = null;
 		let realdir;
 		let fstr, dirstr;
@@ -1692,36 +1287,33 @@ const fileglob = (arr, cb) => {
 				return;
 			}
 			let farr = get_file_and_dir_from_str(tryword);
-//cwarn(str);
 			dirstr = farr[0];
 			fstr = farr[1];
 			realdir = farr[2];
 			if (dircache[dirstr]) {
 				gotdir = dircache[dirstr];
 				dodir();
-			} else {
-				path_to_obj(dirstr, dirret => {
-					if (dirret && dirret.KIDS) {
-						if (!dirret.done) {
-							fs.popdir(dirret, kids => {
-								if (kids) {
-									gotdir = getkeys(kids).sort();
-									dircache[dirstr] = gotdir;
-									dodir();
-								} else dodir();
-							});
-						} else {
-							gotdir = getkeys(dirret.KIDS).sort();
-							dircache[dirstr] = gotdir;
-							dodir();
-						}
-					} 
-					else {
-						ret.push(tryword);
-//cwarn("YIBIBIB", tryword);
+			} 
+			else {
+				let dirret = await pathToNode(dirstr);
+
+				if (dirret && dirret.KIDS) {
+					if (!dirret.done) {
+						let kids = await fsapi.popDir(dirret);
+						if (!kids) return dodir();
+						gotdir = getkeys(kids).sort();
+						dircache[dirstr] = gotdir;
+						dodir();
+					} else {
+						gotdir = getkeys(dirret.KIDS).sort();
+						dircache[dirstr] = gotdir;
 						dodir();
 					}
-				});
+				} 
+				else {
+					ret.push(tryword);
+					dodir();
+				}
 			}
 		} else if (typeof arr[i] == "string" || arr[i].quote_string) {
 			ret.push(arr[i]);
@@ -1782,52 +1374,16 @@ return new Promise((_cb, N)=>{
 }
 const set_arr_val=(name,sub,val,if_tmp)=>{var use_env=var_env;if(if_tmp)use_env=tmp_env;use_env[name]=[];use_env[name][sub]=val;}
 const set_obj_val=(name,sub,val,if_tmp)=>{let use_env=var_env;if(if_tmp)use_env=tmp_env;let obj=use_env[name];if(typeof obj=="object" && obj.length==undefined){}else use_env[name]={};use_env[name][sub]=val;}
-const set_var_str = (str, val, if_sys, if_tmp) => {
-	let use_env = var_env;
-	if (if_tmp) use_env = tmp_env;
-	if (!if_sys && constant_vars[str]) {
-		sys_abort = true;
-		sh_error("attempted to assign to the constant:" + str);
-		return "";
-	}
-	use_env[str] = val;
-}
+const set_var_str=(str,val,if_sys,if_tmp)=>{let use_env=var_env;if(if_tmp)use_env=tmp_env;if(!if_sys && constant_vars[str]){sys_abort=true;sh_error(`attempted to assign to the constant:\x20${str}`);return "";}use_env[str]=val;}
 const get_arr_val=(name,sub)=>{if(typeof(tmp_env[name])=="object" && tmp_env[name].length !=undefined){var gotval=tmp_env[name][sub];if(!gotval)return "";return gotval;}else if(typeof(var_env[name])=="object" && var_env[name].length !=undefined){var gotval=var_env[name][sub];if(!gotval)return "";return gotval;}return "";}
 const get_obj_val=(name,sub)=>{if(typeof(tmp_env[name])=="object" && tmp_env[name].length==undefined){let gotval=tmp_env[name][sub];if(!gotval)return "";return gotval;}else if(typeof(var_env[name])=="object" && var_env[name].length==undefined){let gotval=var_env[name][sub];if(!gotval)return "";return gotval;}return "";}
-const get_var_str = val => {
-	if (typeof(tmp_env[val]) == "string") {
-		return tmp_env[val];
-	} else if (typeof(var_env[val]) == "string") {
-		return var_env[val];
-	}
-	return "";
-}
+const get_var_str=val=>{if(typeof(tmp_env[val])=="string"){return tmp_env[val];}else if(typeof(var_env[val])=="string"){return var_env[val];}return "";}
 const check_fd_num=str=>{let num=parseInt(str);if(num>=0 && num<=2047)return num;return null;}
-const math_calc = (math_arr, math_resolve_cb) => {
-	const domath = () => {
-		let use_env = var_env;
-		if (par_env) use_env = par_env;
-		mathmod.parse_shell_math(use_env, get_var_str, math_arr, math_resolve_cb);
-	};
-	if (!mathmod) {
-		Core.load_mod("util.math", ret => {
-			if (!ret) {
-				math_resolve_cb(null, "Could not load the math module");
-				return
-			}
-			mathmod = new NS.mods["util.math"](Core);
-			globals.math = mathmod;
-			domath();
-			if (typeof ret === "string") Core.do_update(`mods.util.math`, ret);
-		});
-	} else domath();
-}
+const math_calc=(math_arr,math_resolve_cb)=>{const domath=()=>{let use_env=var_env;if(par_env)use_env=par_env;mathmod.parse_shell_math(use_env,get_var_str,math_arr,math_resolve_cb);};if(!mathmod){Core.load_mod("sys.math",ret=>{if(!ret){math_resolve_cb(null,"Could not load the math module");return}mathmod=new NS.mods["sys.math"](Core);globals.math=mathmod;domath();});}else domath();}
 
 const tilde_replace=str=>{if(str=="~")return "/home/"+termobj.ENV.USER;else if(str.match(/^~\x2f/))return str.replace(/^~/,"/home/"+termobj.ENV.USER);return str;}
 const tilde_expansion=tok=>{if(!tok.t=="word")return;tok.word=tilde_replace(tok.word);}
-
-//const all_expansions = (main_arr_arg, exp_cb, opts) => {
-const all_expansions = (main_arr_arg, opts) => {
+const all_expansions = (main_arr_arg, opts) => {//«
 return new Promise((exp_cb,N)=>{
 
 	if (!opts) opts = {};
@@ -1842,7 +1398,7 @@ return new Promise((exp_cb,N)=>{
 	let arr_arg;
 	if (if_no_brace_exp) arr_arg = main_arr_arg;
 	else arr_arg = brace_expansion_init(main_arr_arg);
-	const next = if_no_set => {
+	const next = async if_no_set => {
 		if (!if_no_set) last_num = this_num;
 		if (arr_arg.length) handle_expansion(arr_arg.shift());
 		else {
@@ -1859,72 +1415,64 @@ return new Promise((exp_cb,N)=>{
 					cerr("Infinite loop!");
 					break;
 				}
-/*
-				if (isstr(ret[i]) && isstr(ret[i + 1])) {
-					ret[i] += ret[i + 1];
-					ret.splice(i + 1, 1);
-					i--;
-				}
-*/
 			}
 			if (if_heredoc || if_herestr) {
 				return (exp_cb(ret));
 			}
-			fileglob(ret, globs => {
-				if (!globs[0]) exp_cb(globs);
-				else {
-					let gotret = [];
-					for (let i = 0; i < globs.length; i++) {
-//						if (globs[i].t == "blank" || globs[i] == " ") {} else {
-						if (globs[i].t == "blank" || globs[i].toString() == " ") {} else {
-							let tok = globs[i];
-							let str = "";
-							let tokj;
-							if (typeof tok == "string") str = tok;
-							else if (typeof tok == "object" && tok.t == "quote_string") {
-								str = new String(tok.quote_string);
+
+			let globs = await fileglob(ret);
+			if (!globs[0]) return exp_cb(globs);
+			let gotret = [];
+			for (let i = 0; i < globs.length; i++) {
+				if (globs[i].t == "blank" || globs[i].toString() == " ") continue;
+				let tok = globs[i];
+				let str = "";
+				let tokj;
+				if (typeof tok == "string") str = tok;
+				else if (typeof tok == "object" && tok.t == "quote_string") {
+					str = new String(tok.quote_string);
+					str.is_quote = true;
+				}
+				let nexttok = globs[i + 1];
+				if (str && (typeof nexttok == "string" || (typeof nexttok == "object" && nexttok.t == "quote_string"))) {
+					let j = i + 1;
+					for (; tokj = globs[j]; j++) {
+						if (tokj && (tokj == " " || tokj.t == "blank")) {
+							if (str) gotret.push(str);
+							str = "";
+							i = j;
+							break;
+						} 
+						else {
+							if (typeof tokj == "string") str += tokj;
+							else if (typeof tokj == "object" && tokj.t == "quote_string") {
+								str += tokj.quote_string;
+								str = new String(str);
 								str.is_quote = true;
-							}
-							let nexttok = globs[i + 1];
-							if (str && (typeof nexttok == "string" || (typeof nexttok == "object" && nexttok.t == "quote_string"))) {
-								let j = i + 1;
-								for (; tokj = globs[j]; j++) {
-									if (tokj && (tokj == " " || tokj.t == "blank")) {
-										if (str) gotret.push(str);
-										str = "";
-										i = j;
-										break;
-									} else {
-										if (typeof tokj == "string") str += tokj;
-										else if (typeof tokj == "object" && tokj.t == "quote_string") {
-											str += tokj.quote_string;
-											str = new String(str);
-											str.is_quote = true;
-										} else {
-											if (str) gotret.push(str);
-											str = "";
-											gotret.push(tokj);
-											i = j + 1;
-											break;
-										}
-									}
-								}
-								if (str) {
-									gotret.push(str);
-									i = j + 1;
-								}
-							} else {
+							} 
+							else {
 								if (str) gotret.push(str);
-								else gotret.push(tok);
+								str = "";
+								gotret.push(tokj);
+								i = j + 1;
+								break;
 							}
 						}
 					}
-					exp_cb(gotret);
+					if (str) {
+						gotret.push(str);
+						i = j + 1;
+					}
+				} 
+				else {
+					if (str) gotret.push(str);
+					else gotret.push(tok);
 				}
-			});
+			}
+			exp_cb(gotret);
 		}
 	};
-	const handle_expansion = tok => {
+	const handle_expansion = async tok => {
 		if (isstr(tok)) tok = {
 			t: "word",
 			word: tok
@@ -1962,40 +1510,32 @@ return new Promise((exp_cb,N)=>{
 				let gotval = var_subs(tok.sub, if_array_sub, tok.ln);
 				if (gotval != null) {
 					if (if_array_sub || (typeof gotval == "object" && gotval.length != undefined && (!(gotval instanceof String)))) {
-//						if (gotval instanceof String) ret.push(gotval);
-//						else ret.push({'t': "group_ret",'group_ret': gotval});
 						ret.push({'t': "group_ret",'group_ret': gotval});
 					}
 					else {
 						if (typeof gotval === 'string') gotval = gotval.split("\n").join(" ");
 						else if (gotval instanceof String) {
-//log(gotval.valueOf());
 
 						}
-//						if (isstr(gotval)) gotval = gotval.split("\n").join(" ");
 						else {
 							cerr("gotval from var_subs !==string");
 							log(gotval);
 						}
-//log("GOT",gotval);
-//						if (if_heredoc) ret.push({t:"word",word:gotval});
-//						else ret.push(gotval);
-//log("HI",gotval);
 						ret.push(gotval);
 					}
 				}
 				next();
 			} else if (subt == "param") {
-				param_subs(tok.sub, param_ret => {
-					if (param_ret != null) ret.push(param_ret);
-					next();
-				});
+				let param_ret = await param_subs(tok.sub);
+				if (param_ret != null) ret.push(param_ret);
+				next();
 			}
 		} else if (if_heredoc) {
 			ret.push(tok);
 			next();
 			return;
 		}
+
 		if (type == "blank") {
 			ret.push(tok);
 			next();
@@ -2016,25 +1556,25 @@ ret[ret.length-1]+=" ";
 			ret.push(tok);
 			next();
 		} else if (type == "quote") {
-			resolve_quote(tok, (func_ret, bq_ret) => {
-				if (bq_ret) {
-					if (isarr(bq_ret)) {
-						bq_ret = chomp_eof(bq_ret);
-						if (bq_ret.length) {
-							for (let rt of bq_ret) ret.push(rt, " ");
-							ret.pop();
-						}
-					} else if (isnum(bq_ret)) cwarn("bq_ret returned:" + bq_ret);
-					else {
-						cwarn("All_expansions():GOT bq_ret of type:" + (typeof bq_ret));
-						log(bq_ret);
+			let [func_ret, bq_ret] = await resolve_quote(tok);
+			if (bq_ret) {
+				if (isarr(bq_ret)) {
+					bq_ret = chomp_eof(bq_ret);
+					if (bq_ret.length) {
+						for (let rt of bq_ret) ret.push(rt, " ");
+						ret.pop();
 					}
-				} else {
-					if (!iseof(func_ret)) ret.push(func_ret);
+				} else if (isnum(bq_ret)) cwarn("bq_ret returned:" + bq_ret);
+				else {
+					cwarn("All_expansions():GOT bq_ret of type:" + (typeof bq_ret));
+					log(bq_ret);
 				}
-				next();
-			});
-		} else if (tok.nl) next();
+			} else {
+				if (!iseof(func_ret)) ret.push(func_ret);
+			}
+			next();
+		} 
+		else if (tok.nl) next();
 		else if (type == "group") {
 			let groupt = tok.group_t;
 			if (groupt == "math") {
@@ -2062,19 +1602,20 @@ ret[ret.length-1]+=" ";
 				});
 				next();
 			}
-		} else if (type != "sub") {
+		} 
+		else if (type != "sub") {
 			cerr("All_expansions():WHAT TOK TYPE");
 			log(tok);
 		}
 	};
 	next();
 });
-}
-
+};//»
 const reescape=arr=>{for(let i=0;i<arr.length;i++){let tok=arr[i];if(tok.esc)arr[i]=tok.esc;}for(let i=0;i<arr.length;i++){if(arr[i]=="\\"){if(arr[i+1]){let obj={"t":"esc","esc":arr[i+1]};arr[i]=obj;arr.splice(i+1,1);i--;}} }for(let i=0;i<arr.length;i++){let tok=arr[i];if(tok.esc)arr[i]=tok.esc;}return arr;};
 const flatten_chars=arrarg=>{for(let i=0;i<arrarg.length;i++){let arri=arrarg[i];let word="";let newarr=[];for(let j=0;j<arri.length;j++){if(typeof(arri[j])=="string" && arri[j]!=" ")word+=arri[j];else{if(word){newarr.push(word);word="";}newarr.push(arri[j]);}if(j+1==arri.length && word){if(word)newarr.push(word);arrarg[i]=newarr;}} }return arrarg;};
 const renumber=(arr,leave_spaces,start_num)=>{let num=0;if(start_num)num=start_num;let ret=[];let obj;for(let i=0;i<arr.length;i++){let tok=arr[i];if(tok==" "){if(leave_spaces)ret.push(" ");}else{if(typeof(tok)=="string")tok={'t':"word","word":tok};else if(typeof(tok)=="object")tok=JSON.parse(JSON.stringify(tok));tok['tok_num']=num;ret.push(tok);}num++;}return ret;}
-const resolve_quote = (tok, cb) => {
+const resolve_quote=tok=>{return new Promise((Y,N)=>{_resolve_quote(tok,Y);});};
+const _resolve_quote = (tok, cb) => {//«
 	const ascii_escapes_ = arr => {
 		const next_chars = (pos, limit, type) => {
 			let str = "";
@@ -2152,17 +1693,17 @@ const resolve_quote = (tok, cb) => {
 	let type = tok.quote_t;
 	let quote = tok.quote;
 	if (type == "'") {
-		if (tok['$']) cb({
+		if (tok['$']) cb([{
 			't': "quote_string",
 			'quote_string': ascii_escapes_(quote)
-		});
-		else cb({
+		}]);
+		else cb([{
 			't': "quote_string",
 			'quote_string': quote.join("")
-		});
+		}]);
 	} else if (type == '"') {
 		resolve_double_quote(quote, ret => {
-			cb(ret);
+			cb([ret]);
 		});
 	} else if (type == "\x60") {
 		let did_return = false;
@@ -2172,10 +1713,10 @@ const resolve_quote = (tok, cb) => {
 			if (retarr) {
 				if (retarr.length) {
 					if (retarr.length == 1) {
-						if (is_eof(retarr[0])) cb(EOF);
-						else cb(null, retarr[0].split(/\x20+/));
-					} else cb(null, retarr);
-				} else cb(null, retarr);
+						if (is_eof(retarr[0])) cb([EOF]);
+						else cb([null, retarr[0].split(/\x20+/)]);
+					} else cb([null, retarr]);
+				} else cb([null, retarr]);
 			} else {
 				cwarn("WHAT IN THE BQ RET:");
 				jlog(retarr);
@@ -2185,51 +1726,12 @@ const resolve_quote = (tok, cb) => {
 		});
 		return;
 	} else cerr("WHAT KINDA QUOTE HERE:" + tok);
-}
+}//»
 const coalesce=arr=>{for(let i=0;arr[i];i++){let tok=arr[i];if(tok==" "){arr.splice(i,1);i--;continue;}let t=tok.t;if(t=="word"){let word=tok.word;let last_num=tok.tok_num;while(arr[i+1] && arr[i+1].word &&(arr[i+1].tok_num==last_num+1)){last_num=arr[i+1].tok_num;word=word+arr[i+1].word;arr.splice(i+1,1);}arr[i].word=word;}}return arr;}
 const brace_expansion=(toks,if_check_arg)=>{const expand=(preamble,postscript,arr,is_inner)=>{let elems=[[]];let elem_num=0;let word_arr;let cur_word="";let new_elems=[];let new_arr;for(let i=0;i<arr.length;i++){if(arr[i].t=="word"){if(arr[i].word.length>1){word_arr=arr[i].word.split("");for(let j=0;j<word_arr.length;j++)elems[elem_num].push(word_arr[j]);}else{if(arr[i].word==","){elem_num++;elems.push([]);}else elems[elem_num].push(arr[i].word);}}else elems[elem_num].push(arr[i]);}for(let i=0;i<elems.length;i++){let elem=elems[i];let cur_word="";new_elems[i]=[];for(let j=0;j<elem.length;j++){if(typeof(elem[j])=="string")cur_word=cur_word+elem[j];else{if(cur_word)new_elems[i].push({'t':"word",'word':cur_word});cur_word="";new_elems[i].push(elem[j]);}if((j+1==elem.length)&& cur_word)new_elems[i].push({'t':"word",'word':cur_word});}}if(is_inner)new_arr=[];else new_arr=[{'t':"blank",'blank':" "}];for(let i=0;i<new_elems.length;i++){for(let j=0;j<preamble.length;j++)new_arr.push(preamble[j]);for(let j=0;j<new_elems[i].length;j++)new_arr.push(new_elems[i][j]);for(let j=0;j<postscript.length;j++)new_arr.push(postscript[j]);if(is_inner)new_arr.push({'t':"word",'word':','});else new_arr.push({'t':"blank",'blank':" "});}if(is_inner)new_arr.pop();return new_arr;};const good_type=tok=>{if(tok.t=="word" || tok.t=="quote" || tok.t=="sub")return true;return false;};let have_open=null,prev_open=null,have_comma=null,depth,last_num,exp_arr,ret=[],start,start_num,check_arg_hold=null,marr;for(let i=0;i<toks.length;i++){let tok=toks[i];let type=tok.t;if(if_check_arg){if(!tok.start_here)continue;else{check_arg_hold=true;if_check_arg=null;}}if(tok.word=="{"){if(have_open)prev_open=have_open;have_open=tok;have_comma=null;exp_arr=[tok];depth=0;start=i;start_num=tok.tok_num;}else if(have_open){if(tok.word=="}"){let good_prev=null;let check_start_tok=null;if(tok.tok_num !=(last_num+1)){for(let j=0;j<exp_arr.length;j++)ret.push(exp_arr[j]);have_open=null;continue;}last_num=tok.tok_num;if(have_comma){if(prev_open){for(let j=i+1;toks[j];j++){if(toks[j].tok_num !=(last_num+1))break;let word=toks[j].word;if(word=="}"){good_prev=true;break;}else if(good_type(toks[j])){}else{if(toks[j+1])toks[j+1].start_here=true;check_start_tok=true;break;}last_num=toks[j].tok_num;}}exp_arr.shift();last_num=start_num;let preamble=[];let preamble_start=start;for(let j=start-1;toks[j];j--){if(good_type(toks[j])&&(toks[j].tok_num==last_num-1)){if(good_prev &&(toks[j].word=="," || toks[j].word=="{"))break;preamble.unshift(toks[j]);last_num=toks[j].tok_num;preamble_start=j;}else break;}let first_tok_num=last_num;last_num=tok.tok_num;let postscript=[];let postscript_end=i;for(let j=i+1;toks[j];j++){if(good_type(toks[j])&&(toks[j].tok_num==last_num+1)){if(good_prev &&(toks[j].word=="," || toks[j].word=="}"))break;postscript.push(toks[j]);last_num=toks[j].tok_num;postscript_end=j;}else break;}let diff=postscript_end-preamble_start;let new_arr=expand(preamble,postscript,exp_arr,good_prev);toks.splicein(new_arr,preamble_start,diff+1);toks=renumber(toks);if(check_arg_hold)check_start_tok=true;return{'ARR':toks,'IF_EXPAND':true,'CHECK_START':check_start_tok};}else{for(let j=0;j<exp_arr.length;j++)ret.push(exp_arr[j]);have_open=null;exp_arr=null;}}else if(good_type(tok)){if(tok.tok_num==last_num+1){if(type=="word" && tok.word.match(/,/)){have_comma=true;exp_arr.push(tok);}else if(type=="word" &&(marr=tok.word.match(/^(-?[0-9]+)\.\.(-?[0-9]+)(\.\.([0-9]+))?$/))){have_comma=true;let fromnum=parseInt(marr[1]);let tonum=parseInt(marr[2]);let incr=1;if(marr[4])incr=parseInt(marr[4]);if(tonum>=fromnum){for(let j=fromnum;j<=tonum;j+=incr){exp_arr.push(j+"");exp_arr.push({'t':"word",'word':","});}}else {for(let j=fromnum;j>=tonum;j-=incr){exp_arr.push(j+"");exp_arr.push({'t':"word",'word':","});}}exp_arr.pop();}else exp_arr.push(tok);}else{for(let j=0;j<exp_arr.length;j++)ret.push(exp_arr[j]);have_open=null;exp_arr=null;}} }else ret.push(tok);last_num=tok.tok_num;}return{'ARR':toks};}
 
 const brace_expansion_init=arr=>{let ret;let did_expand=null;let check_start=false;while(true){ret=brace_expansion(arr,check_start);if(!ret['IF_EXPAND'])break;did_expand=true;arr=ret['ARR'];check_start=ret['CHECK_START'];}if(did_expand)arr=coalesce(arr);return arr;}
-
-const all_sub_subs = async(tok, cb) => {
-	let type = tok.sub_t;
-	let sub = tok.sub;
-	if (type == "param") {
-		param_subs(sub, ret => {
-			cb({
-				'RET': true,
-				'VAL': ret
-			});
-		});
-	} else if (type == "math") {
-		math_subs(sub, ret => {
-			cb({
-				'RET': true,
-				'VAL': ret
-			});
-		});
-	} else if (type == "com") {
-//		all_expansions([tok], ret => {
-		let ret = await all_expansions([tok]);
-		if (isarr(ret) && ret.length == 1 && iseof(ret[0])) cb({});
-		else cb({
-			'RET': true,
-			'VAL': ret
-		});
-//		});
-	} else if (type == "var") {
-		let gotval = var_subs(sub, null, tok.ln);
-		if (gotval != null) cb({
-			'RET': true,
-			'VAL': gotval
-		});
-		else cb({
-			'RET': false
-		});
-	} else cerr("ALL SUBS TYPE????" + type);
-}
-
-const resolve_double_quote = (arr, cb, if_from_bq) => {
+const resolve_double_quote = (arr, cb, if_from_bq) => {//«
 	const next = () => {
 		if (is_done) return;
 		if (toks.length) handle_tok(toks.shift());
@@ -2336,8 +1838,8 @@ const resolve_double_quote = (arr, cb, if_from_bq) => {
 		}
 	};
 	next();
-}
-const math_subs = (math_arr_arg, math_cb) => {
+}//»
+const math_subs = (math_arr_arg, math_cb) => {//«
 	const handle_math_expansion = async math_tok => {
 		/*SHELLNOTES:6*/
 		let mtype = math_tok.t || typeof(math_tok);
@@ -2357,11 +1859,9 @@ const math_subs = (math_arr_arg, math_cb) => {
 					math_next();
 				});
 			} else if (msubt == "com") {
-//				all_expansions(math_tok.sub, funcret => {
 				let funcret = await all_expansions(math_tok.sub);
 				math_ret.push(funcret);
 				math_next();
-//				});
 			} else if (msubt == "var") {
 				math_ret.push(get_var_str(math_tok.sub));
 				math_next();
@@ -2403,10 +1903,63 @@ const math_subs = (math_arr_arg, math_cb) => {
 	if (!arr) return math_cb();
 	let grouparr = renumber(arr, 3);
 	math_next();
-};
-const param_subs=(arr,cb)=>{if(arr.length==1){let obj=arr[0];if(obj['t']=="word"){let word=obj['word'];let marr;if(marr=word.match(/^#?([_a-zA-Z][_a-zA-Z0-9]*)(\[([_a-zA-Z0-9]+)\])?$/)){let say_length=false;if(word.match(/^#/))say_length=true;let main=marr[1];let sub=marr[3];if(!sub){let val=var_subs(main,null,word.ln);if(say_length)val=val.length+"";cb(val);}else{if(sub.match(/^[0-9]/)){if(!sub.match(/^[0-9]+$/)){sys_abort=true;sh_error("invalid subscript:"+sub);cb("");return;}else cb(get_arr_val(marr[1],parseInt(sub)));}else cb(get_obj_val(main,sub));}}else{sys_abort=true;sh_error("Not currently handling substitution pattern:\x20'"+word+"'");cb();}}else if(obj.nl===true){sys_abort=true;sh_error("${\n}"+":\x20bad substitution");cb();}else{sys_abort=true;sh_error("There was an error. Please check the console!");cerr("param_subs:What kind of obj is this?(not word or newline)");jlog(obj);cb();}}else{sys_abort=true;let str="${";for(let obj of arr){if(obj.nl)str+="\n";else if(obj[obj.t])str+=obj[obj.t];}str+="}";sh_error(str+":bad substitution");cb();}}
+};//»
+const param_subs=()=>{return new Promise((Y,N)=>{_param_subs(arr,Y);});};
+const _param_subs = (arr, cb) => {//«
+	if (arr.length == 1) {
+		let obj = arr[0];
+		if (obj['t'] == "word") {
+			let word = obj['word'];
+			let marr;
+			if (marr = word.match(/^#?([_a-zA-Z][_a-zA-Z0-9]*)(\[([_a-zA-Z0-9]+)\])?$/)) {
+				let say_length = false;
+				if (word.match(/^#/)) say_length = true;
+				let main = marr[1];
+				let sub = marr[3];
+				if (!sub) {
+					let val = var_subs(main, null, word.ln);
+					if (say_length) val = val.length + "";
+					cb(val);
+				} else {
+					if (sub.match(/^[0-9]/)) {
+						if (!sub.match(/^[0-9]+$/)) {
+							sys_abort = true;
+							sh_error("invalid subscript:" + sub);
+							cb("");
+							return;
+						} else cb(get_arr_val(marr[1], parseInt(sub)));
+					} else cb(get_obj_val(main, sub));
+				}
+			} else {
+				sys_abort = true;
+				sh_error("Not currently handling substitution pattern:\x20'" + word + "'");
+				cb();
+			}
+		} else if (obj.nl === true) {
+			sys_abort = true;
+			sh_error("${\n}" + ":\x20bad substitution");
+			cb();
+		} else {
+			sys_abort = true;
+			sh_error("There was an error. Please check the console!");
+cerr("param_subs:\x20What kind of obj is this?\x20(not word or newline)");
+jlog(obj);
+			cb();
+		}
+	} else {
+		sys_abort = true;
+		let str = "${";
+		for (let obj of arr) {
+			if (obj.nl) str += "\n";
+			else if (obj[obj.t]) str += obj[obj.t];
+		}
+		str += "}";
+		sh_error(str + ": bad substitution");
+		cb();
+	}
+}//»
 
-const var_subs = (str, if_array_sub, linenum) => {
+const var_subs = (str, if_array_sub, linenum) => {//«
 	if (str.match(/^[0-9]+$/)) {
 		let num = parseInt(str);
 		if (global_args) {
@@ -2466,24 +2019,27 @@ const var_subs = (str, if_array_sub, linenum) => {
 		}
 	}
 	return "";
-}
+}//»
 const get_env_path=()=>{let path_str=get_var_str("PATH");if(!path_str)return [];return path_str.split(":");};
-const get_math_val=(arr,cb)=>{let str=toks_to_string(arr,true);if(str===""||str===" ")return cb("0");math_subs(arr,(math_ret,errmess)=>{if(math_ret && math_ret['t']=="number")cb(math_ret['number']+"");else{sys_abort=true;if(errmess)sh_error(str+":\x20"+errmess,true);else sh_error(str+':\x20syntax error in expression',true);cb();}});};
-const expand_tok = async(tok, cb, if_no_brace) => {
+const get_math_val = (arr, cb) => {//«
+	let str = toks_to_string(arr, true);
+	if (str === "" || str === " ") return cb("0");
+	math_subs(arr, (math_ret, errmess) => {
+		if (math_ret && math_ret['t'] == "number") cb(math_ret['number'] + "");
+		else {
+			sys_abort = true;
+			if (errmess) sh_error(str + ":\x20" + errmess, true);
+			else sh_error(str + ':\x20syntax error in expression', true);
+			cb();
+		}
+	});
+};//»
+const expand_tok = async(tok, cb, if_no_brace) => {//«
 	let ret = await all_expansions([tok], {NOBRACE: if_no_brace});
 	if (ret && ret[0]) cb(ret[0]);
 	else cb();
-
-/*
-	all_expansions([tok], ret => {
-		if (ret && ret[0]) cb(ret[0]);
-		else cb();
-	}, {
-		NOBRACE: if_no_brace
-	});
-*/
-};
-const handle_com_tok = (tok, cb, if_quoted) => {
+};//»
+const handle_com_tok = (tok, cb, if_quoted) => {//«
 	let com_str = toks_to_string(tok.sub, true);
 	let ret = [];
 	let did_return = false;
@@ -2506,7 +2062,7 @@ const handle_com_tok = (tok, cb, if_quoted) => {
 	}, {
 		COMSUB: true
 	});
-};
+};//»
 
 //»
 
@@ -2540,14 +2096,12 @@ const execute_end = (retval, if_sys_abort, which, bg_id) => {//«
 
 const handle_op=async(obj, arg_vals_arg, next_arg_cb, in_background, if_need_or)=>{//«
 
-//jlog(obj);
 let opcode = obj.t;
 let do_exe_end = null;
 if (obj.is_shell_func) do_exe_end = true;
 let args = obj[opcode];
 let arg_vals = [];
 
-//const resolve_arg = (arg, cb, in_background, if_need_or) => {
 const resolve_arg = (arg, in_background, if_need_or, prom_cb) => {//«
 	if (cancelled || sys_abort) {
 		if (use_return_val != null) execute_end(use_return_val, true, 1, in_background);
@@ -2565,7 +2119,6 @@ const resolve_arg = (arg, in_background, if_need_or, prom_cb) => {//«
 		};
 		if (!arg) {
 			cb(arg_vals);
-//			Y(arg_vals);
 			return;
 		}
 		handle_op(arg, arg_vals, next_arg, in_background, if_need_or);
@@ -2964,8 +2517,6 @@ else if (opcode == "list") {//«
 //	});
 	return;
 }//»
-
-//else if(opcode=="word"){arg_vals_arg.push(args);if(next_arg_cb)next_arg_cb();return;}
 
 if (!args) {
 	if (typeof(obj) == "string") {
@@ -3519,9 +3070,8 @@ const read_file_args_or_stdin = (args, cb, opts={}) => { /*SHELLNOTES:8*/
 			}
 		};
 		opts.exports = shell_exports;
-//log(ENV.USER);
 		opts.user = ENV.USER;
-		fs.read_file(fname, read_cb, opts);
+		fs._read_file(fname, read_cb, opts);
 	};
 	dofile();
 }
@@ -3573,6 +3123,7 @@ const com_cat = (args, opts) => {
 			else if (isnum(ret)) ret = ret+"";
 		}
 		if (isstr(ret)) {
+			if (ret==="\n") ret="";
 			if (opts.NUMBERLINES) ret = (++iter) + " " + ret;
 			wout(ret, {
 				FORCELINE: 1,
@@ -3709,7 +3260,7 @@ const run_bin = async(obj)=>{
 	com(arr, Core, shell_exports);
 };
 
-const run_command = path => {
+const run_command = async path => {
 	const notfound = () => {
 		sh_error(comword + ":\x20command not found", null, get_redir(redir, 2), 127);
 		wout(EOF);
@@ -3735,20 +3286,20 @@ const run_command = path => {
 			cb(sh_error(err, null, get_redir(redir, 2)));
 		}
 	};
-	ptw(normpath(path), obj => {
-		if (!obj) return notfound();
-		let type = obj.root.TYPE;
-		if (type == "fs") {
-			gettextfile(path, ret => {
-				if (isstr(ret)) {
-					strarg = ret;
-					detect_type();
-				} else notfound();
-			});
-		}
-		else if (type=="bin") run_bin(obj);
-		else notfound();
-	});
+	let obj = await pathToNode(path);
+	if (!obj) return notfound();
+	let type = obj.root.TYPE;
+	if (type == "fs") {
+		gettextfile(path, ret => {
+			if (isstr(ret)) {
+				strarg = ret;
+				detect_type();
+			} else notfound();
+		});
+	}
+	else if (type=="bin") run_bin(obj);
+	else cberr(`${comword}:\x20not\x20(yet) executing from mount type: ${type}`);
+//	else notfound();
 };
 shell_obj.run_command=run_command;
 
@@ -3769,10 +3320,10 @@ return;
 		let typ = obj.root.TYPE;
 		if (typ=="bin") run_bin(obj);
 		else if (typ == "fs") {
-			let rv = await fsapi.readHtml5File(path);
+			let rv = await fsapi.readFsFile(path);
 			run_something(comword, rv, arr, JSON.parse(JSON.stringify(tmp_env)), {}, path);
 		} else {
-			cberr(path + ":\x20not\x20(yet)\x20running type: "+typ);
+			cberr(`${path}:\x20not\x20(yet) executing from mount type: ${typ}`);
 		}
 	};
 	let path_arr = get_env_path();
@@ -3792,7 +3343,6 @@ return;
 const com_ls=(args, cbarg)=>{//«
 	let outarr=null;
 	if (cbarg) outarr=[];
-//	const _wout = wout;
 	const _wout = (arg, obj)=>{
 		if (!arg) return;
 		if (!outarr)  return wout(arg, obj);
@@ -3803,7 +3353,7 @@ const com_ls=(args, cbarg)=>{//«
 	let usew = termobj.w - 1;
 	if (if_com_sub) usew = null;
 	let dir_str;
-	let sws = failopts(args, {
+	let sws = failopts(args, {//«
 		SHORT: {
 			d: 1,
 			h: 1,
@@ -3824,7 +3374,7 @@ const com_ls=(args, cbarg)=>{//«
 			"add-slash-to-dir": 1,
 			json: 1
 		}
-	});
+	});//»
 	if (!sws) return;
 	let silent = sws.silent || sws.s;
 	let islong = null;
@@ -3848,7 +3398,7 @@ const com_ls=(args, cbarg)=>{//«
 	let isjson = sws.json;
 	let json_ret;
 	if (isjson) json_ret = [];
-	const dodirs = dirargs => {
+	const dodirs = dirargs => {//«
 		let getlink;
 		let is_multiple = false;
 		let iter = -1;
@@ -3862,7 +3412,7 @@ const com_ls=(args, cbarg)=>{//«
 		nextdirs = null;
 		if (islong) getlink = true;
 		if (len == 0) getlink = false;
-		const doend = () => {
+		const doend = () => {//«
 			if (silent) return usecbok();
 			if (isjson) {
 				if (nextdirs) return dodirs(nextdirs);
@@ -3909,39 +3459,19 @@ const com_ls=(args, cbarg)=>{//«
 			}
 			if (outarr) return usecbok(outarr);
 			usecbok();
-		};
-		const getlist = (kidsarg, patharg, cb) => {
+		};//»
+		const getlist = async(kidsarg, patharg, cb) => {//«
 			if (recurse) {
 				for (let k of getkeys(kidsarg)) {
 					if (k == "." || k == "..") continue;
 					let kid = kidsarg[k];
 					if (kid.APP == FOLDER_APP) {
 						if (!nextdirs) nextdirs = [];
-						nextdirs.push(objpath(kid));
+						nextdirs.push(kid.fullpath);
 					}
 				}
 			}
-			fs.get_obj_listing(kidsarg, usew, (ret, err, colret) => {
-				if (isjson) {
-					json_ret.push([patharg, ret]);
-					cb();
-					return;
-				}
-				if (err) errout.push(err);
-				else {
-					if (patharg) {
-						patharg += ":";
-						dirnamesout.push(patharg);
-						dirlinesout.push(ret);
-						dircolsout.push(colret);
-					} else {
-						dirnamesout.unshift(patharg);
-						dirlinesout.unshift(ret);
-						dircolsout.unshift(colret);
-					}
-				}
-				cb();
-			}, {
+			let [ret, err, colret] = await fs.get_listing(kidsarg, usew, {
 				ifhash: if_hash,
 				isjson: isjson,
 				isroot: is_root,
@@ -3952,8 +3482,42 @@ const com_ls=(args, cbarg)=>{//«
 				forceget: forceget,
 				newlinemode: newlinemode
 			});
-		};
-		const dopath = () => {
+			if (isjson) {
+				json_ret.push([patharg, ret]);
+				cb();
+				return;
+			}
+			if (err) {
+				errout.push(err);
+				cb();
+				return;
+			}
+			if (patharg) {
+				patharg += ":";
+				dirnamesout.push(patharg);
+				dirlinesout.push(ret);
+				dircolsout.push(colret);
+			} else {
+				dirnamesout.unshift(patharg);
+				dirlinesout.unshift(ret);
+				dircolsout.unshift(colret);
+			}
+			cb();
+		};//»
+		const dopath = async() => {//«
+			const fileout = () => {
+				filekids[path] = ret;
+				dopath();
+			};
+			const kidsout = kids => {
+				let keys = getkeys(kids).sort();
+				let newkids = {};
+				for (let k of keys) {
+					if (!get_all && k.match(/^\./)) continue;
+					if (kids[k].rootonly && !is_root) {} else newkids[k] = kids[k];
+				}
+				getlist(newkids, saypath, dopath);
+			};
 			iter++;
 			let path = dirargs[iter];
 			if (!path && iter > 0) {
@@ -3965,85 +3529,39 @@ const com_ls=(args, cbarg)=>{//«
 			if (!path) {
 				path = cur_dir;
 				saypath = "";
-			} else if (len == 1) saypath = "";
+			}
+			else if (len == 1) saypath = "";
 			else saypath = path;
 			if (recurse) saypath = path;
-			path_to_obj(path, ret => {
-				if (!ret) {
-					errout.push("ls:\x20cannot access " + path + ":\x20No such file or directory");
-					dopath();
-					return;
+			let ret = await pathToNode(path, getlink);
+			if (!ret) {
+				errout.push(`ls: cannot access '${path}': No such file or directory`);
+				dopath();
+				return;
+			}
+			if (forceget) delete ret.done;
+			let type = ret.root.TYPE;
+			if (ret.APP !== FOLDER_APP) {
+				if (islong) {
+					let dir = ret.par;
+					if (forceget || !dir.longdone) {
+						let kidret = await fsapi.popDir(dir, {LONG: true});
+						let tmp = kidret[ret.NAME];
+						ret = tmp;
+						fileout();
+					} 
+					else fileout();
 				}
-				if (forceget) delete ret.done;
-				let app;
-				const fileout = () => {
-					filekids[path] = ret;
-					dopath();
-				};
-				app = ret.APP || "File";
-				let type = ret.root.TYPE;
-				if (app == FOLDER_APP) {
-					const kidsout = kids => {
-						let keys = getkeys(kids).sort();
-						let newkids = {};
-						for (let k of keys) {
-							if (!get_all && k.match(/^\./)) continue;
-							if (kids[k].rootonly && !is_root) {} else newkids[k] = kids[k];
-						}
-						getlist(newkids, saypath, dopath);
-					};
-					if (!ret.done) {
-						fs.populate_dirobj(ret, (kidret, errret) => {
-							let never_done = ["service", "iface"];
-							if (errret) {
-								errout.push("ls:\x20" + errret);
-								dopath();
-								return;
-							}
-							if (!never_done.includes(type)) {
-								ret.done = true;
-								ret.longdone = true;
-							}
-							if (!kidret) kidret = {};
-							kidsout(kidret);
-						}, {
-							LONG: true,
-							HASH: if_hash,
-							DBVIEW: dbview
-						});
-					} else kidsout(ret.KIDS);
-				} else {
-					if (islong) {
-						let dir = ret.par;
-						if (forceget || !dir.longdone) {
-							fs.populate_dirobj(dir, (kidret, errret) => {
-								if (errret) {
-									errout.push("ls:" + errret);
-									dopath();
-									return;
-								}
-								if (!kidret) {
-									kidret = {};
-									cwarn("ls:\x20populate_fs_dirobj_by_path():\x20no kidret from:\x20" + cur_dir);
-								}
-								let tmp = kidret[ret.NAME];
-								ret = tmp;
-								if (type != "service") {
-									ret.done = true;
-									ret.longdone = true;
-								}
-								fileout();
-							}, {
-								LONG: true,
-								HASH: if_hash
-							});
-						} else fileout();
-					} else fileout();
-				}
-			}, getlink);
-		};
+				else fileout();
+				return;
+			}
+			if (ret.done) return kidsout(ret.KIDS);
+			let kidret = await fsapi.popDir(ret);
+			if (!kidret) kidret = {};
+			kidsout(kidret);
+		};//»
 		dopath();
-	};
+	};//»
 	dodirs(args);
 };//»
 
@@ -4056,175 +3574,6 @@ const do_ls = (args)=>{
 //XXXXXXXXXXXX
 
 builtins = {//«
-
-logout:async()=>{//«
-	document.cookie="id=0;max-age=0";
-	if (globals.socket) globals.socket.kill();
-	cbok();
-},//»
-login:async(args)=>{//«
-
-	let interval;
-	const clint = ()=>{
-		if (interval) {
-			clearInterval(interval);
-			interval = null;
-		}
-	};
-	let opts = failopts(args,{s:{f:1}});
-	if (!opts) return;
-	let url = '/_login';
-	if (opts.f) url=`${url}?force=1`;
-	let rv = await fetch(url);
-	if (!rv.ok) return cberr("Fail");
-	let w = window.open(await rv.text(), "Login", "height=600,width=500");
-	w.onbeforeunload=()=>{
-		cbok();
-		clint();
-	};
-	let iter=0;
-	interval = setInterval(()=>{
-		if (w && w.close) {
-			let txt;
-			try{txt = w.document.body.innerText;}catch(e){return;}
-			if (!txt) return;
-			if (txt.match(/^You/)) {
-				w.close();
-				cbok();
-				clint();
-			}
-		}
-		iter++;
-		if (iter > 1000) clint();
-	},100);
-},//»
-whoami:async()=>{//«
-	let rv = await fetch("/_getname");
-	werr(await rv.text());
-	if (!rv.ok) cberr();
-	else cbok();
-},//»
-sockup:async()=>{//«
-
-const LOTWSocket = function (){//«
-
-let wait_id = 1;
-let waiters = {};
-let sock = new window.io();
-sock.on('error',msg=>{
-	console.error("Socket error> ", msg);
-});
-sock.on('ping_error',arg=>{
-let gotcb = waiters[arg.id];
-if (!gotcb) {
-cwarn("No callback for", arg.id);
-return;
-}
-arg.error = true;
-gotcb(arg);
-
-waiters[arg.id] = undefined;
-delete waiters[arg.id];
-
-});
-sock.on('connect',()=>{
-	log("CONNECTED");
-	globals.socket = this;
-	cbok();
-});
-sock.on('disconnect',()=>{
-log("DISCONNECTED");
-	globals.socket = null;
-	delete globals.socket;
-});
-sock.on("ping_ask",arg=>{
-//	cwarn("PING ASK", from);
-	sock.emit("ping_rep", arg);
-});
-sock.on("ping_rep",arg=>{
-//	cwarn("PING ASK", from);
-//	sock.emit("ping_rep", from);
-let gotcb = waiters[arg.id];
-if (!gotcb) {
-cwarn("No callback for", arg.id);
-return;
-}
-	gotcb({msg: `OK: ${arg.to}`});
-
-	waiters[arg.id] = undefined;
-	delete waiters[arg.id];
-
-});
-
-this.ping = to=>{
-return new Promise((Y,N)=>{
-	let s = ""+wait_id;
-	waiters[s] = Y;
-	sock.emit("ping", {to: to, id: s});
-	wait_id++;
-});
-};
-this.kill=()=>{
-cwarn("Socket killed");
-	sock.disconnect();
-	globals.socket = undefined;
-};
-
-};//»
-
-if (!window.io){
-	try{
-		if (!await capi.initIO()) return cberr("Could not load socket.io!");
-	}catch(e){
-		return cberr("Could not load socket.io!");
-	}
-	if (!window.io) return cberr("Loaded socket.io but found no 'io' object!?!?!");
-}
-
-if (!document.cookie.match(/id=/)) return cberr("You are not logged in!");
-if (globals.socket) return cbok("The socket is already up");
-new LOTWSocket();
-
-},//»
-sockdown:()=>{//«
-if (!globals.socket) return cbok("There is no active socket");
-globals.socket.kill();
-cbok();
-},//»
-ping:async(args)=>{//«
-
-	let to = args.shift();
-	if (!to) return cberr("No 'to' arg!");
-	let sock = globals.socket;
-	if (!sock) return cbok("No socket!");
-	let start = performance.now();
-	let rv = await sock.ping(to.toLowerCase());
-	if (!rv) return cberr("PINGWUT?!?!?!?");
-	if (rv.error) {
-		werr(rv.msg);
-		cberr();
-	}
-	else {
-		let diff = Math.round(performance.now() - start);
-		werr(`${rv.msg} (${diff} ms)`);
-		cbok();
-	}
-
-},//»
-setname:async(args)=>{//«
-	let name = args.shift();
-	if (!name) return cberr("No name given!");
-	let rv = await fetch(`/_setname?name=${name}`);
-	werr(await rv.text());
-	if (!rv.ok) return cberr();
-	cbok();
-},//»
-delname:async()=>{//«
-	let rv = await fetch("/_delname");
-	werr(await rv.text());
-	if (!rv.ok) cberr();
-	else cbok();
-},//»
 
 'get':async(args)=>{//«
 
@@ -4409,7 +3758,35 @@ cerr("Dropping", ret);
 	capi.mkAudio();
 	cbok();
 },//»
-'exists':async(args)=>{let opts=failopts(args,{SHORT:{a:1,o:1},LONG:{all:1,one:1}});if(!opts)return;let if_one=opts.one || opts.o;let if_all=opts.all || opts.a;if(if_one && if_all)return cberr("Cannot simultaneously specify both 'one' and 'all' options");if(!if_one)if_all=true;if(!args.length){if(if_one)return cberr();else return cbok();}let gotone=false;for(let path of args){if(!await pathToNode(path)){if(if_all)return cberr(normpath(path)+":\x20not found");}else gotone=true;}if(if_one && !gotone)return cberr("option 'one' specified,\x20but none found");cbok();},
+'exists': async (args) => {
+	let opts = failopts(args, {
+		SHORT: {
+			a: 1,
+			o: 1
+		},
+		LONG: {
+			all: 1,
+			one: 1
+		}
+	});
+	if (!opts) return;
+	let if_one = opts.one || opts.o;
+	let if_all = opts.all || opts.a;
+	if (if_one && if_all) return cberr("Cannot simultaneously specify both 'one' and 'all' options");
+	if (!if_one) if_all = true;
+	if (!args.length) {
+		if (if_one) return cberr();
+		else return cbok();
+	}
+	let gotone = false;
+	for (let path of args) {
+		if (!await pathToNode(path)) {
+			if (if_all) return cberr(normpath(path) + ":\x20not found");
+		} else gotone = true;
+	}
+	if (if_one && !gotone) return cberr("option 'one' specified,\x20but none found");
+	cbok();
+},
 'mkappicon': args => {//«
 	let appargs = getopts(args,{ALL:true})[0];
 	if (appargs.app) return cberr("App argument given (that is the main arg!)");
@@ -4452,7 +3829,7 @@ cerr("Dropping", ret);
 	let obj = await pathToNode(path);
 	if (!obj) return cberr(path + ":\x20not found");
 	if (obj.APP !== FOLDER_APP) return cberr(path + ":\x20not a directory");
-	path = objpath(obj);
+	path = obj.fullpath;
 	if (!await Desk.set_desk_path(path)) return cberr("Could not set desktop path");
 	cbok("OK");
 },//»
@@ -4473,7 +3850,7 @@ cerr("Dropping", ret);
 	}
 	let iter = -1;
 	let have_error = false;
-	const domake = () => {
+	const domake = async() => {
 		iter++;
 		if (iter == args.length) {
 			if (have_error) cberr();
@@ -4484,23 +3861,22 @@ cerr("Dropping", ret);
 			return;
 		}
 		let fullpath = normpath(args[iter]);
-		let fparts = path_to_par_and_name(fullpath, true);
+		let fparts = fs.path_to_par_and_name(fullpath);
 		let parpath = fparts[0];
 		let fname = fparts[1];
-		fs.mk_fs_dir(parpath, fname, null, (ret, err) => {
-			if (err) {
-				werr(err);
-				refresh();
-				have_error = true;
-			}
-			domake();
-		}, null, is_root, opts);
+		let ret = await fsapi.mkFsDir(parpath, fname, is_root);
+		if (!ret) {
+			werr(`${parpath}/${fname}: could not make the directory`);
+			refresh();
+			have_error = true;
+		}
+		domake();
 	};
 	domake();
 },//»
 'cp': args=>{fs.com_mv(shell_exports, args, true);},
 'mv': args=>{fs.com_mv(shell_exports, args);},
-'rm': args => {//«
+'rm': async args => {//«
 	let do_full_dirs = false;
 	let opts = failopts(args, {
 		SHORT: {
@@ -4513,19 +3889,21 @@ cerr("Dropping", ret);
 		serr("missing operand");
 		return;
 	}
-	fs.do_fs_rm(args, errmess => {
-		werr("rm:\x20" + errmess);
-		refresh();
-	}, ret => {
-		if (ret) {
-			if (Desk) Desk.update_folder_statuses();
-			cbok();
-		} else cberr();
-	}, {
-		CWD: cur_dir,
-		ROOT: is_root,
-		FULLDIRS: do_full_dirs
-	});
+//	await fsapi.doFsRm();
+	let rv = await fsapi.doFsRm(
+		args,
+		errmess => {
+			werr(`rm: ${errmess}`);
+		}, {
+			CWD: cur_dir,
+			ROOT: is_root,
+			FULLDIRS: do_full_dirs
+		}
+	);
+	if (rv) cbok();
+	else cberr();
+	if (Desk) Desk.update_folder_statuses();
+
 },//»
 'kill': args => {//«
 	if (args.length != 1) return cberr("Expected exactly one arg");
@@ -4534,13 +3912,12 @@ cerr("Dropping", ret);
 	Core.kill_job(num);
 	cbok();
 },//»
-//'jobs':args=>{if(args.length)return cberr("Expected 0 arguments");woutarr(Core.get_job_list());cbok();},
 'ls': com_ls,
 'eof':()=>{wout(EOF);cbok();},
-'cd': args => {//«
+'cd': async args => {//«
 	let res;
 	let got_dir, dir_str, dirobj;
-	const cd_end = () => {
+	const cd_end = async() => {
 		if (!got_dir.match(/^\x2f/)) got_dir = "/" + got_dir;
 		cur_dir = got_dir;
 		response({
@@ -4549,9 +3926,6 @@ cerr("Dropping", ret);
 			NOEND: true
 		});
 		cbok();
-		fs.populate_dirobj_by_path(got_dir, (rv, err) => {
-			if (err) return cerr(err);
-		});
 	};
 	if (!args.length) {
 		got_dir = termobj.get_homedir();
@@ -4560,12 +3934,11 @@ cerr("Dropping", ret);
 	}
 	let saypath = args[0];
 	let regpath = normpath(saypath);
-	path_to_obj(regpath, ret => {
-		if (!ret) return cberr(saypath + ":\x20No such file or directory");
-		if (ret.APP != FOLDER_APP) return cberr(saypath + ":\x20Not a directory");
-		got_dir = regpath;
-		cd_end();
-	});
+	let ret = await pathToNode(regpath);
+	if (!ret) return cberr(saypath + ":\x20No such file or directory");
+	if (ret.APP != FOLDER_APP) return cberr(saypath + ":\x20Not a directory");
+	got_dir = regpath;
+	cd_end();
 },//»
 'cat': args => {//«
 	let sws = failopts(args, {
@@ -4628,7 +4001,7 @@ cerr("Dropping", ret);
 		let deskdir = `${homedir}/Desktop`;
 		globals.desk_path = deskdir;
 		cur_dir = homedir;
-		await fsapi.popHtml5Dir(homedir);
+		await fsapi.popFsDir(homedir);
 		ENV.USER = who;
 		response({
 			CD: homedir
@@ -4854,11 +4227,60 @@ return;
 	}
 	let rv = await capi.loadLib(which);
 	if (!rv) return cberr("No such module:\x20" + which);
-	if (typeof rv === "string") Core.do_update(`libs.${which}`, rv);
 	add_imports();
 },//»
 
-'hist':args=>{let sws=failopts(args,{SHORT:{n:3,r:1,a:1}});if(!sws)return;let num=null;let do_rep=sws.r;let do_add=sws.a;let is_mod=do_rep||do_add;if(do_rep&&do_add)return cberr("Conflicting flags given:\x20-r(replace)and-a(append)");if(sws.n){num=strnum(sws.n);if(!(isint(num)&&num>=0))return cberr("Expected a non-negative integer number");}if(is_mod){let file=args.shift();if(!file)return cberr("No file given");gettextfile(file,ret=>{if(!ret)return cberr(file+":\x20No contents");let arr=ret.split("\n");let outarr=[];for(let ln of arr){let str=ln.trim();if(!str)continue;outarr.push(str);}if(!outarr.length)return cberr(file+":\x20No usable contents");if(do_rep)termobj.replace_command_history(outarr);else termobj.append_command_history(outarr);cbok();});}else{let which="shell";if(args.length)which=args.shift();if(!isid(which))return cberr("Bad history arg:\x20"+which);Core.get_history(which,ret=>{if(!ret)return cberr(which+":\x20No history found");if(num===null)woutarr(ret);else{let str=ret[num];if(!str)return cberr("No value at line:\x20"+num);wout(str);}cbok(EOF);},true);}},
+'hist': args => {
+	let sws = failopts(args, {
+		SHORT: {
+			n: 3,
+			r: 1,
+			a: 1
+		}
+	});
+	if (!sws) return;
+	let num = null;
+	let do_rep = sws.r;
+	let do_add = sws.a;
+	let is_mod = do_rep || do_add;
+	if (do_rep && do_add) return cberr("Conflicting flags given:\x20-r(replace)and-a(append)");
+	if (sws.n) {
+		num = strnum(sws.n);
+		if (!(isint(num) && num >= 0)) return cberr("Expected a non-negative integer number");
+	}
+	if (is_mod) {
+		let file = args.shift();
+		if (!file) return cberr("No file given");
+		gettextfile(file, ret => {
+			if (!ret) return cberr(file + ":\x20No contents");
+			let arr = ret.split("\n");
+			let outarr = [];
+			for (let ln of arr) {
+				let str = ln.trim();
+				if (!str) continue;
+				outarr.push(str);
+			}
+			if (!outarr.length) return cberr(file + ":\x20No usable contents");
+			if (do_rep) termobj.replace_command_history(outarr);
+			else termobj.append_command_history(outarr);
+			cbok();
+		});
+	} else {
+		let which = "shell";
+		if (args.length) which = args.shift();
+		if (!isid(which)) return cberr("Bad history arg:\x20" + which);
+		Core.get_history(which, ret => {
+			if (!ret) return cberr(which + ":\x20No history found");
+			if (num === null) woutarr(ret);
+			else {
+				let str = ret[num];
+				if (!str) return cberr("No value at line:\x20" + num);
+				wout(str);
+			}
+			cbok(EOF);
+		}, true);
+	}
+},
 'getch':args=>{let opts=failopts(args,{SHORT:{p:3}});if(!opts)return;let reader=get_reader();if(!reader.is_terminal)return cberr("Read from terminal only");if(opts.p){termobj.set_prompt(opts.p,{NOPUSH:1,NOSCROLL:1});refresh();}termobj.getch(cbok);},
 'wc': args => {//«
 	let _ = shell_exports;
@@ -5239,9 +4661,9 @@ sys_builtins = {//«
 	users[name]=await Core.api.sha1(rv1);
 	let homedir = `/home/${name}`;
 	let deskdir = `${homedir}/Desktop`;
-	await fsapi.touchHtml5Dir(homedir);
+	await fsapi._mkFsDir(homedir);
 //	await fsapi.popHtml5Dir(homedir);
-	await fsapi.touchHtml5Dir(deskdir);
+	await fsapi._mkFsDir(deskdir);
 	Core.set_users(users);
 	cbok();
 }
@@ -5279,6 +4701,10 @@ else if (arr.length) {//«
 	else comword = comtok.word;
 
 	if (comword) {//«
+		if (CONTROL_WORDS.includes(comword)){
+			sherr(`${comword}: Control structures are not supported in this version`);
+			return;
+		}
 		cur_com_name = comword;
 		shell_exports = {
 			getLineInput:getLineInput,
@@ -5288,7 +4714,6 @@ else if (arr.length) {//«
 			fmt: fmt,
 			cbeof: cbeof,
 			sherr: sherr,
-			get_path_of_object: get_path_of_object,
 			get_options: get_options,
 			termobj: termobj,
 			cur_com_name: cur_com_name,
@@ -5296,8 +4721,6 @@ else if (arr.length) {//«
 			read_stdin: read_stdin,
 			cur_dir: cur_dir,
 			constant_vars: constant_vars,
-			path_to_par_and_name: path_to_par_and_name,
-			path_to_obj: path_to_obj,
 			if_com_sub: if_com_sub,
 			check_pipe_writer: check_pipe_writer,
 			tmp_env: tmp_env,
@@ -5327,9 +4750,7 @@ else if (arr.length) {//«
 			get_var_str: get_var_str,
 			set_var_str: set_var_str,
 			set_obj_val: set_obj_val,
-			ptw: ptw,
 			term_prompt: term_prompt,
-			do_red: do_red,
 			Desk: Desk,
 			is_root: is_root,
 			ENODESK: ENODESK,
@@ -5442,43 +4863,43 @@ if (arr.length != undefined) {
 }//»
 
 this.cancel=if_noresp=>{cancelled=true;clear_timeouts();}
-//this.execute = (runcom, dir_arg, exe_cb_arg, if_init, if_root) => {
 
 this.execute = (runcom, dir_arg, opts={}) => {//«
 
-//let if_init = opts.init;
-//let if_root = opts.root;
 opts.PARSHELL=true;
 return new Promise((Y,N)=>{
+
 
 exe_cb=Y;
 cur_dir = dir_arg;
 cancelled = null;
 is_root = opts.root;
+
 run_script(runcom, retval => {
-	let respdone = () => {
-		response({
-			"SUCC": [""]
-		}, {
-			NOEND: true,
-			NEXTCB: () => {
-				if (cancelled) return;
-				response({CD:cur_dir});
-			}
-		});
-	};
-	if (opts.init) {
-		respdone();
-		exe_cb(retval);
-	} else {
-		if (retval && retval['CONT']) response(retval);
-		else {
-			ENV["?"] = retval;
-			respdone();
-			exe_cb(retval);
+
+let done = () => {
+	response({
+		"SUCC": [""]
+	}, {
+		NOEND: true,
+		NEXTCB: () => {
+			if (cancelled) return;
+			response({CD:cur_dir});
 		}
-	}
+	});
+};
+if (opts.init) {
+	done();
+	exe_cb(retval);
+	return;
+} 
+if (retval && retval['CONT']) return response(retval);
+ENV["?"] = retval;
+done();
+exe_cb(retval);
+
 }, opts);
+
 
 });
 
@@ -5487,370 +4908,4 @@ run_script(runcom, retval => {
 
 }
 
-//Old«
-
-/*«
-'addremuser':async(args)=>{
-
-//Set file
-//let rv = await fetch(`/_1001?q=${btoa("username p@$$w0rd Filename.js")}`,{method: "POST", body:bytes.buffer});
-
-	let user = args.shift();
-	let pass = args.shift();
-	if (!(user&&pass)) return cberr("Need username and password!");
-	let q = btoa(`${user} ${pass}`);
-	let rv = await fetch(`/_aru?q=${q}`);
-	if (!rv.ok) return cberr("Error");
-	cbok("OK");
-
-},
-'setremapp':async(args)=>{
-
-	let user = args.shift();
-	let pass = args.shift();
-	let fname = args.shift();
-	if (!fname) return cberr("No arg!");
-	let bytes = await readFile(fname, {binary: true});
-	if (!bytes) return cberr(`${fname}: not found`);
-	let usename = fname.split("/").pop();
-	log(usename);
-	let q = btoa(`${user} ${pass} ${usename}`);
-	let rv = await fetch(`/_sra?q=${q}`,{method: "POST", body:bytes.buffer});
-	if (!rv.ok) return cberr("Error");
-	cbok();
-},
-»*/
-//Synth stuff«
-
-//Midi file«
-/*How to convert from ticks to seconds:«
-
-Question:
-I want to know how to convert MIDI ticks to actual playback seconds.
-
-For example, if the MIDI PPQ (Pulses per quarter note) is 1120, how would I
-convert it into real world playback seconds?
-
-Answer:
-The formula is 60000 / (BPM * PPQ) (milliseconds).
-
-Where BPM is the tempo of the track (Beats Per Minute).
-
-(i.e. a 120 BPM track would have a MIDI time of (60000 / (120 * 192)) or 2.604 ms for 1 tick.
-
-If you don't know the BPM then you'll have to determine that first. MIDI times
-are entirely dependent on the track tempo.
-
-»*/
-/*JSON Object«
-
-
-
-{
-  // the transport and timing data
-  header: {
-    name: String,                     // the name of the first empty track, 
-                                      // which is usually the song name
-    tempos: TempoEvent[],             // the tempo, e.g. 120
-    timeSignatures: TimeSignatureEvent[],  // the time signature, e.g. [4, 4],
-
-    PPQ: Number                       // the Pulses Per Quarter of the midi file
-                                      // this is read only
-  },
-
-  duration: Number,                   // the time until the last note finishes
-
-  // an array of midi tracks
-  tracks: [
-    {
-      name: String,                   // the track name if one was given
-
-      channel: Number,                // channel
-                                      // the ID for this channel; 9 and 10 are
-                                      // reserved for percussion
-      notes: [
-        {
-          midi: Number,               // midi number, e.g. 60
-          time: Number,               // time in seconds
-          ticks: Number,              // time in ticks
-          name: String,               // note name, e.g. "C4",
-          pitch: String,              // the pitch class, e.g. "C",
-          octave : Number,            // the octave, e.g. 4
-          velocity: Number,           // normalized 0-1 velocity
-          duration: Number,           // duration in seconds between noteOn and noteOff
-        }
-      ],
-
-      // midi control changes
-      controlChanges: {
-        // if there are control changes in the midi file
-        '91': [
-          {
-            number: Number,           // the cc number
-            ticks: Number,            // time in ticks
-            time: Number,             // time in seconds
-            value: Number,            // normalized 0-1
-          }
-        ],
-      },
-
-      instrument: {                   // and object representing the program change events
-        number : Number,              // the instrument number 0-127
-        family: String,               // the family of instruments, read only.
-        name : String,                // the name of the instrument
-        percussion: Boolean,          // if the instrument is a percussion instrument
-      },          
-    }
-  ]
-}
-//»*/
-/*
-'midi':async(args)=>{//«
-
-//Midi note to freq
-//Midi note 50 is the frequency at freqs[50]
-let freqs = [];
-for (let i=0; i <= 127; i++) freqs[i]= 13.75*(2**((i-9)/12));
-
-if (!await capi.loadMod("av.miditojson")) return cberr("Midi could not be loaded!");
-
-let mod = NS.mods["av.miditojson"].Midi;
-let path = args.shift();
-if (!path) return cberr("No path given!");
-let node = await pathToNode(path);
-if (!node) return cberr(`${path}: not found`);
-let t = node.root.TYPE;
-
-let rv = await readFile(node.fullpath);
-if (!(rv instanceof Blob)) return cberr("Did not get a blob!");
-let midi = new mod(await capi.toBuf(rv));
-let head = midi.header;
-let tracks = midi.tracks;
-let ppq = head.ppq;
-wout(`PPQ: ${ppq}`);
-wout(`Tracks: ${tracks.length}`);
-let temps = head.tempos;
-wout("Tempos (ms per tick):");
-for (let i=0; i < temps.length; i++){
-	//The formula is 60000 / (BPM * PPQ) (milliseconds).
-	let tmp = temps[i];
-	//log(tmp);
-	let ms_per_tick = 60000/(tmp.bpm*ppq);
-	wout(`${i}) ${ms_per_tick}`);
-}
-log(head);
-log(tracks);
-
-//}
-//else return cberr(`'${t}: not yet implemented'`);
-
-cbok();
-
-},//»
-*/
-//»
-
-/*
-'midiup':async()=>{
-	if (await capi.initMidi()) return cbok();
-	return cberr("Midi could not be enabled!");
-},
-'synth':()=>{
-//	termobj.ENV['?']=0;
-	termobj.init_app_mode("synth", 
-		ret=>{//«
-//			if (servobj.killed) {
-//				termobj.app_line_out("Killed");
-//				return termobj.end_app_mode();
-//			}
-			let gotcom = ret.trim();
-			if (gotcom) wout(`OK: ${gotcom}`);
-			termobj.response_end();
-		},//» 
-		cbok
-	)
-},
-
-»*/
-/*//«'hncomments':async()=>{
-const kid = (elem, ...arr)=>{
-let cur = elem;
-for (let num of arr){
-cur = cur.children[num];
-}
-return cur;
-
-};
-let str = await fsapi.readFile("/home/me/Desktop/snayderr.html");
-if (!str) return cberr("Got nada");
-
-let parser = new DOMParser();
-let doc = parser.parseFromString(str, "text/html");
-let coms = doc.getElementsByClassName("comment-tree")[0].children[0].childNodes;
-for (let com of coms){
-let got = kid(com,0,0,0,0,2);
-//log(got);
-//let got = com.children[0].children[0].children[0].children[0].children[2];
-let user = kid(got, 0, 0, 0);
-log(user.innerText);
-//log(got);
-}
-//log(coms);
-cbok();
-},
-»*/
-
-/*«
-'swon': async () => {
-	if (await capi.initSW()) return cbok("The service worker has been registered");
-	cberr("There was a problem registering the service worker");
-},
-'swoff':async()=>{if(await capi.initSW(true))return cbok("The service worker has been unregistered");cberr("There was a problem unregistering the service worker");},
-
-'comstr':(args)=>{//«
-	let opts = failopts(args,{LONG:{nowrap:1},SHORT:{}});
-	if (!opts) return;
-	let com = args.shift();
-	if (!com) return cberr("No arg given!");
-	let func = builtins[com];
-	if (!func) {
-		let got = shell_lib[com];
-		if (got) func = got._func();
-		if (!func) return cberr(`${com}:\x20function not found`);
-	}
-	let arr = func.toString().split("\n");
-	for (let ln of arr){
-		if (opts.nowrap) wout(ln);
-		else wout(wrap_line(ln));
-	}
-	cbok();
-},//»
-//Help«
-
-const builtins_help={
-ls:`List out the contents of one or more directories`,
-cd:`Change into a new directory`,
-swon: 'Enable service workers for the current url for offline usage',
-swoff: 'Disable the active service worker',
-swurl:'Print out the url for which the active service worker is registered',
-help:'Show a short message about system usage (no args) or an individual command',
-libs:'List out the available command libraries',
-lib:'List out the commands in a given command library',
-mkdir:'Make a directory',
-login:`Login to the system via the standard google app engine login procedure. No permissions are asked for.`,
-logout:`Logout of the system`,
-import:`Import a command library into the current shell execution context`,
-pwd:`Print out the current working directory`,
-setname:`Set your public facing username to something other than the username used for your gmail address`,
-lockname:`Lock your username so that setname -u doesn't work`,
-unlockname:`Allows you to change your username via setname -u`,
-cp:`Copy files`,
-mv:`Move or rename files or folders`,
-cat:`Print out the contents of files`,
-echo:`Print out the command arguments`,
-open:`Open an application window in the Desktop environment`,
-close:`Close an application window given its id`,
-hist:`Print out the command line history`
-};
-
-
-//»
-
-'help': async args => {
-
-	let which = args.shift();
-
-	let str = null;
-	if (!which) {
-		str = help_str;
-		which = "overview";
-	}
-	else if (builtins[which]) str = builtins_help[which];
-	else if (shell_lib[which]) str = shell_lib[which]._help();
-	else return cberr(`help:\x20${which}:\x20command not found`);
-	if (!str) {
-		werr(`help:\x20${which}:\x20nothing was returned`);
-		cbok();
-		return;
-	}
-	let mod = NS.mods["util.pager"];
-	if (!mod){
-		wout(fmt_lines(str));
-		cbok();
-		return;
-	}
-	let pager = new mod(Core, shell_exports);
-	pager.init(fmt_lines(str).split("\n"),`help(${which})`,cbok);
-},
-'libs': async() => {
-	let arr=[];
-	let rv;
-	let hashes = "#".rep(Math.ceil((termobj.w-11)/2));
-	arr=arr.concat(fmt("Here are the directory listings of the locally cached and server-side command libaries that are available for importing into the shell's runtime environment. To refer to a library, remove its file path up to '/libs/', replace subdirectories with a '.', and remove the '.js' extension, for example:"));
-	arr.push("$ import fs");
-	arr.push("$ import math.stats");
-	arr.push(" ");
-	arr.push(`${hashes}\xa0\xa0Cached\xa0\xa0${hashes}`);
-	arr.push(" ");
-	arr=arr.concat(...(await do_ls(["-pfR", "/code/libs"])));
-	arr.push(" ");
-	arr.push(`${hashes}\xa0\xa0Server\xa0\xa0${hashes}`);
-	arr.push(" ");
-	arr=arr.concat(...(await do_ls(["-pfR", "/site/root/code/libs"])));
-	let str = arr.join("\n");
-	let mod = NS.mods["util.pager"];
-	if (!mod){
-		wout(str);
-		cbok();
-		return;
-	}
-	let pager = new mod(Core, shell_exports);
-	pager.init(str.split("\n"),`libs`,cbok);
-},
-'swon':async()=>{if(await capi.initSW())return cbok("The service worker has been registered");cberr("There was a problem registering the service worker");},
-'swoff':async()=>{if(await capi.initSW(true))return cbok("The service worker has been unregistered");cberr("There was a problem unregistering the service worker");},
-'swurl':()=>{try{cbok(window.location.origin+(decodeURIComponent(navigator.serviceWorker.controller.scriptURL.split("?")[1]).replace(/^path=\./,"")));}catch(e){cberr("ServiceWorker not activated!");}},
-
-jseval:(args)=>{//«
-const runit = s=>{
-	if (!s.length){
-		cbok();
-		return;
-	}
-//log(s);
-	run_js_script(s, "eval", [], "eval");
-};
-let didrun=false;
-if (!args.length||args[0]=="-"){
-	let s = '';
-	read_stdin(ret => {
-		if (isobj(ret) && ret.EOF) {
-			if (didrun) return;
-			runit(s);
-			return;
-		}
-		if (isarr(ret)) {
-			if (!isstr(ret[0])) return cberr("Bad input");
-			didrun=true;
-			runit(ret.join("\n"));
-		}
-		else if (isstr(ret)){
-			s+=ret+"\n";
-		}
-		else{
-cwarn(ret);
-		}
-	}, {
-		SENDEOF: true
-	});
-}
-else{
-	let s = '';
-	for (let arg of args) s+= " " + arg;
-	runit(s);
-}
-},//»
-//»*/
-
-//»
 

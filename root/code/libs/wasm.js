@@ -850,60 +850,30 @@ log(exp);
 });//»
 
 },//»
-'walt':function(){//«
+'walt':async function(){//«
 	var fname = args.shift();
 	let mod;
 	if (!fname) return cberr("Need filename!");
-	fs.getmod('util.walt',ret=>{
-		if (!ret&&ret.Walt) return cberr("No walt module!");
-
-mod = ret.Walt
-//cbok();
-//return;
-//		let mod = ret.getmod();
-		arg2con(fname,ret=>{
-			if (!ret) return cberr(fname+": not found");
-			let out;
-try {
-	out = mod.compile(ret);
-}
-catch(e){
+	let ret = await fsapi.getMod('util.wasm.walt');
+	if (!(ret&&ret.Walt)) return cberr("No walt module!");
+	mod = ret.Walt
+	ret = await fsapi.readFile(normpath(fname));
+	if (!ret) return cberr(fname+": not found");
+	let out;
+	try {
+		out = mod.compile(ret.join("\n"));
+	}
+	catch(e){
 log(e);
-cberr(e.message);
-return;
-}
-			if (!out) return cberr("No compiler output!");
-			let blob = new Blob([out.buffer()],{type:"application/wasm"});
-			woutobj(blob);
-			cbok();
-		});
-	});
+		cberr(e.message);
+		return;
+	}
+	if (!out) return cberr("No compiler output!");
+	let blob = new Blob([out.buffer()],{type:"application/wasm"});
+	woutobj(blob);
+	cbok();
 },//»
-'wast2wasm':function(){//«
-	var fname = args.shift();
-	if (!fname) return cberr("Need filename!");
-	fs.getmod('util.libwabt',ret=>{
-		if (!ret) return cberr("NOLIBWABT");
-		var mod = ret.getmod();
-		arg2con(fname,ret=>{
-			if (!ret) return cberr(fname+": not found");
-			var script, blob;
-			try {
-				script = mod.wasm.parseWast('filename.wast', ret);
-				script.resolveNames();
-				script.validate();
-				blob = new Blob([script.toBinary({log: true}).buffer],{type:"application/wasm"});
-			}
-			catch(e){
-				cberr(e.message);
-				return;
-			}
-			woutobj(blob);
-			cbok();
-		});
-	});
-},//»
-'runwasm':function(){//«
+'runwasm':async function(){//«
 	var fname = args.shift();
 	if (!fname) return cberr("Need filename");
 	var funcname = args.shift();
@@ -911,39 +881,38 @@ return;
 	var badarg = ()=>{
 		cberr("Expected JSON parseable boolean, int, float, or null  arguments!");
 	}
-	fs.get_fs_data(normpath(fname),ret=>{
-		if (!ret) return cberr(fname+": not found");
-		WebAssembly.instantiate(ret).then(binmod=> { 
-			var exports = binmod.instance.exports
-			var func = exports[funcname];
-			if (!func) return cberr(funcname+": not a wasm function");
-			var outargs=[];
-			var ret;
-			for (let str of args) {
-				let arg;
-				try {
-					arg = JSON.parse(str);
-				}
-				catch(e){
-					return badarg();
-				}
-				if (!(isbool(arg)||isnum(arg)||isnull(arg))) return badarg();
-				outargs.push(arg);
-			}
+	let ret = await fsapi.readFile(normpath(fname),{BINARY: true});
+	if (!ret) return cberr(fname+": not found");
+	WebAssembly.instantiate(ret.buffer).then(binmod=> { 
+		var exports = binmod.instance.exports
+		var func = exports[funcname];
+		if (!func) return cberr(funcname+": not a wasm function");
+		var outargs=[];
+		var ret;
+		for (let str of args) {
+			let arg;
 			try {
-				ret = func.apply(null, args)
+				arg = JSON.parse(str);
 			}
-			catch(e) {
-				cberr(e.message);
-				return;
+			catch(e){
+				return badarg();
 			}
-
-			if (!isnull(ret)) ret+="";
-			cbok(ret);
-		}).catch(e=>{
+			if (!(isbool(arg)||isnum(arg)||isnull(arg))) return badarg();
+			outargs.push(arg);
+		}
+		try {
+			ret = func.apply(null, args)
+		}
+		catch(e) {
 			cberr(e.message);
-		})
-	});
+			return;
+		}
+
+		if (!isnull(ret)) ret+="";
+		cbok(ret);
+	}).catch(e=>{
+		cberr(e.message);
+	})
 },//»
 
 /*
@@ -1135,81 +1104,14 @@ cbok();
 });//»
 
 },//»
-'wasmio':function(){//«
-
-	var _=this.exports;
-
-	var which = args.shift();
-	if (!which) return _.cberr("Nothing");
-
-	let wasmname = which; //brum==stdin, sloom==example.txt
-	let cur_out_str="";
-	let cur_err_str="";
-	let Module, FS;
-
-	let file_name = "example.txt";
-	let file_str = "Hello\necho all\n\n\nthese lines\n\nback at me???\nHAR.\n";
-	var intarr = util.text_to_bytes(file_str, true);
-	let stdin_iter=0;
-	let lastch;
-	let io = {//«
-		putchout:code=>{
-			if (code==10){
-				if (lastch === 10) _.respbr();
-				else _.wout(cur_out_str);
-				cur_out_str="";
-			}
-			else cur_out_str+=String.fromCharCode(code);
-			lastch = code;
-		},
-		putcherr:code=>{
-			if (code==10){
-				_.werr(cur_err_str);
-				cur_err_str="";
-			}
-			cur_err_str+=String.fromCharCode(code);
-		},
-		getchin:()=>{
-			if (stdin_iter==file_str.length) return null;
-			let ch = file_str[stdin_iter++];
-			return ch.charCodeAt();
-		}
-	}//»
-	function set_file(){//«
-		var node = FS.createFile(FS.root, file_name, {isDevice: false}, true, true);
-		node.contents = intarr;
-		node.usedBytes = file_str.length;
-	}//»
-	fs.getmod("wasmio",(wasmmod)=>{//«
-		if (!wasmmod) return _.cberr("No wasm module!");
-		Core.get_wasm(wasmname,(wasmret)=>{
-			//log(wasmret);
-			if (!wasmret) return _.cberr("No "+wasmname+".wasm!");
-			wasmmod.WASMIO({wasmBinary:wasmret}, null, 
-			{
-				LOAD: (ret, errmess)=>{
-					if (!ret) return _.cberr(errmess);
-					Module = ret;
-				},
-				EXIT:retval=>{
-					if (retval===0) _.cbok();
-					else _.cberr();
-				},
-				PRERUN:fs=>{
-					FS = fs;
-					set_file();
-				}
-			} , {IO:io, TABLESIZE: 505, STATICBUMP: 23936});
-		});
-	});//»
-
-},//»
 */
 
 }//»
 if (!comarg) return Object.keys(COMS);
 
 //Imports«
+const NS = window[__OS_NS__];
+const fsapi = NS.api.fs;
 
 var Desk = Core.Desk;
 var log = Core.log;
@@ -2635,3 +2537,100 @@ COMS[comarg](args);
 
 }
 
+
+
+/*
+'wasmio':function(){//«
+
+	var _=this.exports;
+
+	var which = args.shift();
+	if (!which) return _.cberr("Nothing");
+
+	let wasmname = which; //brum==stdin, sloom==example.txt
+	let cur_out_str="";
+	let cur_err_str="";
+	let Module, FS;
+
+	let file_name = "example.txt";
+	let file_str = "Hello\necho all\n\n\nthese lines\n\nback at me???\nHAR.\n";
+	var intarr = util.text_to_bytes(file_str, true);
+	let stdin_iter=0;
+	let lastch;
+	let io = {//«
+		putchout:code=>{
+			if (code==10){
+				if (lastch === 10) _.respbr();
+				else _.wout(cur_out_str);
+				cur_out_str="";
+			}
+			else cur_out_str+=String.fromCharCode(code);
+			lastch = code;
+		},
+		putcherr:code=>{
+			if (code==10){
+				_.werr(cur_err_str);
+				cur_err_str="";
+			}
+			cur_err_str+=String.fromCharCode(code);
+		},
+		getchin:()=>{
+			if (stdin_iter==file_str.length) return null;
+			let ch = file_str[stdin_iter++];
+			return ch.charCodeAt();
+		}
+	}//»
+	function set_file(){//«
+		var node = FS.createFile(FS.root, file_name, {isDevice: false}, true, true);
+		node.contents = intarr;
+		node.usedBytes = file_str.length;
+	}//»
+	fs.getmod("wasmio",(wasmmod)=>{//«!!!!! IN BLOCK COMMENT !!!!!
+		if (!wasmmod) return _.cberr("No wasm module!");
+		Core.get_wasm(wasmname,(wasmret)=>{
+			//log(wasmret);
+			if (!wasmret) return _.cberr("No "+wasmname+".wasm!");
+			wasmmod.WASMIO({wasmBinary:wasmret}, null, 
+			{
+				LOAD: (ret, errmess)=>{
+					if (!ret) return _.cberr(errmess);
+					Module = ret;
+				},
+				EXIT:retval=>{
+					if (retval===0) _.cbok();
+					else _.cberr();
+				},
+				PRERUN:fs=>{
+					FS = fs;
+					set_file();
+				}
+			} , {IO:io, TABLESIZE: 505, STATICBUMP: 23936});
+		});
+	});//»
+
+},//»
+'wast2wasm':function(){//«
+	var fname = args.shift();
+	if (!fname) return cberr("Need filename!");
+	fs.getmod('util.libwabt',ret=>{//!!!!!IN BLOCK COMMENT!!!!!
+		if (!ret) return cberr("NOLIBWABT");
+		var mod = ret.getmod();
+		arg2con(fname,ret=>{
+			if (!ret) return cberr(fname+": not found");
+			var script, blob;
+			try {
+				script = mod.wasm.parseWast('filename.wast', ret);
+				script.resolveNames();
+				script.validate();
+				blob = new Blob([script.toBinary({log: true}).buffer],{type:"application/wasm"});
+			}
+			catch(e){
+				cberr(e.message);
+				return;
+			}
+			woutobj(blob);
+			cbok();
+		});
+	});
+},//»
+*/

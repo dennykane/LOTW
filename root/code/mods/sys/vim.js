@@ -248,6 +248,7 @@ let jlog=obj=>{log(JSON.stringify(obj, null, "  "));};
 const fsapi = NS.api.fs;
 //»
 //Var«
+let file_node;
 
 let last_action;
 let last_action_hold;
@@ -474,7 +475,6 @@ let edit_sel_start, seltop, selbot;
 let edit_sel_mark, selleft, selright;
 let edit_fname;
 let edit_fobj;
-let edit_temp_fent;
 let edit_fullpath;
 let edit_syspath;
 let edit_ftype;
@@ -598,6 +598,19 @@ this.set_ask_close_cb=_=>{
 	stat_cb = ch=>{
 		stat_cb = null;
 		if (ch=="y"||ch=="Y") {
+			if (edit_fobj) {
+				edit_fobj.unlock_file();
+/*
+				delete edit_fobj.write_locked;
+				let par = edit_fobj.par;
+				while (par){
+					if (par.is_root) break;
+					par.rm_move_lock(MOVE_LOCK);
+					par = par.par;
+				}
+*/
+
+			}
 			if (app_cb) app_cb();
 			topwin.force_kill();
 		}
@@ -930,6 +943,27 @@ const init_splice_mode=()=>{//«
 
 }//»
 
+/*
+const unlock_file=()=>{//«
+	delete edit_fobj.write_locked;
+	let par = edit_fobj.par;
+	while (par){
+		if (par.is_root) break;
+		par.rm_move_lock(MOVE_LOCK);
+		par = par.par;
+	}
+};//»
+const lock_file=()=>{//«
+	edit_fobj.write_locked = true;
+	let par = edit_fobj.par;
+	while (par){
+		if (par.is_root) break;
+		par.MOVE_LOCKS.push(MOVE_LOCK);
+		par = par.par;
+	}
+};//»
+*/
+
 const set_completer_words=(linesarg)=>{
 	if (!linesarg) {
 linesarg = get_edit_save_arr()[0].split("\n");
@@ -992,6 +1026,9 @@ const quit=()=>{
 	termobj.is_dirty = false;
 	termobj.onescape = onescape;
 	termobj.overrides = hold_overrides;
+	if (edit_fobj) {
+		edit_fobj.unlock_file();
+	}
 	modequit();
 };
 const dopretty=()=>{//«
@@ -4373,35 +4410,6 @@ return;
 }//»
 const download=(str,which)=>{stat_render("Fold error detected,downloading core...");Core.api.download(str,"VIMDUMP.json");};
 
-const get_version_path=()=>{//«
-	return new Promise(async(y,n)=>{
-		let arr = edit_fullpath.split("/");
-		let fname = arr.pop();
-		let path = arr.join("/")+"/.versions/"+fname+"/";
-		let curpath=path+"/CURRENT";
-		if (!await fsapi.mkHtml5Dir(path)){
-			stat_render("Could not get a version path!");
-			y();
-			return;
-		}
-		if (!await fsapi.touchHtml5File(curpath)){
-			stat_render("Could not access current version!");
-			y();
-			return;
-		}
-		let num;
-		let curval = await fsapi.readHtml5File(curpath);
-		if (curval&&curval.match(/^[0-9]+$/)) num = parseInt(curval);
-		else num = 0;
-		let nextname = (""+(num+1)).padStart(5,"0");
-		if (!await fsapi.writeHtml5File(curpath,(""+(num+1)).padStart(5,"0"))){
-			stat_render("Could not write the next version number");
-			y();
-			return;
-		}
-		y((path+((""+num).padStart(5,"0"))));
-	});
-};//»
 const detect_fold_error=arrarg=>{//«
 	let arr;
 	if (!arrarg) arr = get_edit_save_arr();
@@ -4438,12 +4446,8 @@ const editsave=async(if_nostat)=>{//«
 	let val = arr[0];
 	let numlines = arr[1];
 	let opts={};
-	if (edit_ftype=="fs") {
-		func = fs.savefile;
-		opts.ROOT = is_root;
-	}
-//	else if (edit_ftype=="remote") func = fs.save_remote;
-	else {
+
+	if (edit_ftype!=="fs") {
 		stat_message = "Unknown file system type: " + edit_ftype;
 		render();
 		return;
@@ -4453,15 +4457,6 @@ if (splice_mode){
 opts.spliceStart = splice_start;
 opts.spliceEnd = splice_end;
 }
-/*
-	if (if_version){
-		usepath = await get_version_path();
-		let bytes = await Core.api.gzip(val);
-		if (!bytes) return;
-		val = bytes;
-		if (!usepath) return;
-	}
-*/
 //if (splice_mode){
 //cwarn("SPLICE SAVE", splice_start, splice_end);
 //log(opts);
@@ -4469,20 +4464,16 @@ opts.spliceEnd = splice_end;
 //}
 
 	clear_save_state_to_db_timeout();
-	func(usepath, val, (ret,err_or_pos, reallenret)=>{
+	fs.save_fs_by_path(usepath, val, async(ret, err_or_pos, reallenret)=>{
 		if (ret) {
-			if (_Desk && _Desk.make_icon_if_new(ret)) _Desk.update_folder_statuses();
+			if (!edit_fobj){
+				edit_fobj = ret;
+				edit_fobj.lock_file();
+			}
+			if (_Desk) _Desk.make_icon_if_new(ret);
 			let numstr="";
-//			if (if_version) {
-//				numstr = ;
-//				let num = (usepath.split("/")).pop();
-//				stat_message = `${edit_fname} v${parseInt(num)} ${err_or_pos} gzipped bytes written`;
-//			}
-//			else {
 			if (splice_mode) splice_end = splice_start + reallenret;
 			if (!if_nostat) stat_message = `${edit_fname} ${numlines}L, ${err_or_pos}C written`;
-//else log("SAVED...");
-//			}
 			dirty_flag = false;
 			termobj.is_dirty = false;
 			delete_state_from_db();
@@ -4533,7 +4524,7 @@ const handle_edit_input_tab = (if_ctrl)=>{//«
 			if (a[1]=="Folder") f = f+"/";
 			dump = dump + f +"  ";
 		}
-console.log("Completes:\n"+dump);
+//console.log("Completes:\n"+dump);
 		let which = rv[num_completion_tabs%rv.length];
 		let str = which[0].slice(cur_completion_name.length);
 		if (which[1]=="Folder") str=str+"/";
@@ -4544,7 +4535,7 @@ console.log("Completes:\n"+dump);
 	num_completion_tabs++;
 	return;
 };//»
-const handle_edit_input_enter = ()=> {//«
+const handle_edit_input_enter = async()=> {//«
 let mode = stat_input_mode;
 let com = stat_com_arr.join("").trim();
 
@@ -4557,9 +4548,9 @@ let err=s=>{
 };
 let name = com;
 if (!name.match(/^[-/a-z0-9_~.]+$/i)) {
-stat_message = "Invalid characters in the name (want /^[-/a-z0-9_~.]$/i)";
-render();
-return;
+	stat_message = "Invalid characters in the name (want /^[-/a-z0-9_~.]$/i)";
+	render();
+	return;
 }
 
 name = name.replace(/^~\//, globals.home_path+"/");
@@ -4570,43 +4561,42 @@ let pardir = arr.join("/");
 if (!pardir) pardir = "/";
 if (!fname) return err("No file name given");
 
-fs.path_to_obj(pardir,parobj=>{
-	if (!parobj) return err(pardir+": directory not found");
-	let rtype;
-	let rootobj;
-	let checkok=_=>{
-		rtype = rootobj.TYPE;
-		if (rtype!="fs") return "Cannot create file type: " + rootobj.TYPE;
-		if (!fs.check_fs_dir_perm(parobj,is_root)) return "Permission denied: " + fname;
-		return true;
-	};  
-	let ok=ifnew=>{
-		edit_fullpath = path;
-		edit_fname = fname;
-		edit_ftype = rtype;
-		editsave();
-		if (do_saveloop && edit_fullpath && edit_ftype=="fs") do_edit_saveloop();
-	};
-	rootobj = parobj.root;
-	let rv = checkok();
-	if (isstr(rv)) return err(rv);
-	else if (rv!==true) return err("WHATRET???");
-	stop_stat_input();
-	x=vim.hold_x;
-	if (parobj.KIDS[name]){
-		stat_message = fname+": file exists! Overwrite? [y/N]";
-		stat_cb = ch=>{
-			stat_cb = null;
-			if (ch=="y"||ch=="Y") ok();
-			else {
-				stat_message = "Cancelled!";
-				render();
-			}
+let parobj = await fsapi.pathToNode(pardir);
+if (!parobj) return err(pardir+": directory not found");
+let rtype;
+let rootobj;
+let checkok=_=>{
+	rtype = rootobj.TYPE;
+	if (rtype!="fs") return "Cannot create file type: " + rootobj.TYPE;
+	if (!fs.check_fs_dir_perm(parobj,is_root)) return "Permission denied: " + fname;
+	return true;
+};  
+let ok=ifnew=>{
+	edit_fullpath = path;
+	edit_fname = fname;
+	edit_ftype = rtype;
+	editsave();
+	if (do_saveloop && edit_fullpath && edit_ftype=="fs") do_edit_saveloop();
+};
+rootobj = parobj.root;
+let rv = checkok();
+if (isstr(rv)) return err(rv);
+else if (rv!==true) return err("WHATRET???");
+stop_stat_input();
+x=vim.hold_x;
+if (parobj.KIDS[name]){
+	stat_message = fname+": file exists! Overwrite? [y/N]";
+	stat_cb = ch=>{
+		stat_cb = null;
+		if (ch=="y"||ch=="Y") ok();
+		else {
+			stat_message = "Cancelled!";
+			render();
 		}
-		render();
 	}
-	else ok(true);
-}, is_root);
+	render();
+}
+else ok(true);
 
 }//»
 else if (mode=="Comment: "){
@@ -4708,24 +4698,6 @@ else{
 }
 
 
-};//»
-const save_temp_file = () => {//«
-	if (!edit_temp_fent) {
-		stat_message = "No temporary file entry exists!";
-		render();
-		return;
-	}
-	let arr = get_edit_save_arr();
-	let val = arr[0];
-	let numlines = arr[1];
-	fs.write_fs_file(edit_temp_fent, new Blob([val], {
-		type: "blob"
-	}), (rv,obj) => {
-		let mess = " to temporary:" + edit_temp_fent.fullPath+" ("+obj.position+" bytes)";
-		if (!rv) stat_message = "Failed saving" + mess;
-		else stat_message = "Saved" + mess;
-		render();
-	});
 };//»
 
 //»
@@ -5031,6 +5003,7 @@ last_action = null;
 					set_stat_warn("At the newest state");
 				}
 				else{
+					if (!states[state_iter+1]) return;
 					state_iter++;
 					load_state();
 					stat_which_state();
@@ -5313,11 +5286,10 @@ else {
 				return;
 			}
 			stat("Loading the pretty module...");
-			fs.getmod("util.pretty",modret=>{
-				if (!modret) return stat_render("No pretty module");
-				pretty = modret.getmod().js;
-				dopretty();
-			},{STATIC:true});
+			let modret = await fsapi.getMod("util.pretty");
+			if (!modret) return stat_render("No pretty module");
+			pretty = modret.getmod().js;
+			dopretty();
 		}
 		else dopretty();
 	}//»
@@ -5426,7 +5398,6 @@ stat_warn("To stop window popups, do: 'set no_ctrl_n=true'!");
 	else if (sym=="RIGHT_") right();
 	else if (sym=="RIGHT_C") right(true);
 	else if (sym=="x_C") maybequit();
-	else if (sym=="s_CA") save_temp_file();
 	else if (sym=="m_CA"){//«
 		show_marks=!show_marks;
 		stat_render("Showing marks: " + show_marks);
@@ -5566,18 +5537,18 @@ cb(`linesarg.length (${linesarg.length}) >= REAL_LINES_SZ (${REAL_LINES_SZ})`);
 	}
 
 	let typearg = opts.TYPE;
-	let temp_fent = opts.TEMPFENT;
 	convert_markers = opts.CONVMARKS;
 	real_lines = new Uint32Array(REAL_LINES_SZ);
 	edit_stdin_func = opts.STDINFUNC;
 	vimstore = opts.VIMSTORE;
 	if (edit_stdin_func) edit_stdin_func(null, new_stdin_func_cb);
 	edit_fobj = opts.FOBJ;
-//log("LAST1", edit_fobj.file.lastModified);
+
+	if (edit_fobj) edit_fobj.lock_file();
+	
 	termobj.is_editing = true;
 	edit_fullpath = patharg;
 	edit_syspath = opts.SYSPATH;
-	edit_temp_fent = temp_fent;
 	edit_ftype = typearg;
 	edit_insert = false;
 	dirty_flag = false;

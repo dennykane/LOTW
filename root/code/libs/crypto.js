@@ -94,7 +94,7 @@ if (!comarg) return Object.keys(COMS);
 const{NS,xgetobj,globals,log,cwarn,cerr}=Core;
 const{fs,util,widgets,dev_env,dev_mode}=globals;
 const{strnum,isarr,isobj,isstr,mkdv}=util;
-const{fmt,read_stdin, woutobj,get_path_of_object,pathToNode,read_file_args_or_stdin,serr,normpath,cur_dir,respbr,set_var_str,get_var_str,refresh,failopts,cbok,cberr,wout,werr,termobj,wrap_line,kill_register,EOF,ENV}=Shell;
+const{fmt,read_stdin, woutobj,pathToNode,read_file_args_or_stdin,serr,normpath,cur_dir,respbr,set_var_str,get_var_str,refresh,failopts,cbok,cberr,wout,werr,termobj,wrap_line,kill_register,EOF,ENV}=Shell;
 const fsapi=NS.api.fs;
 const capi = Core.api;
 

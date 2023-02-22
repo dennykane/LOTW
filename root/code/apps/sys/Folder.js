@@ -1,3 +1,19 @@
+/*
+If we are in the process of saving a file via the Filesaver mechanism...
+*/
+/* !!! LOGIC BUG @EJMNCYLKIFB !!!
+
+If we cancel the saving operation during the period between the icon being created as New_File_1 (or whatever)
+and the "real name" we want for it
+
+
+*/
+/*
+
+If you close this window when it is in the "Save As" mode (for e.g. TextEdit), it is still treated as
+the child_window...
+
+*/
 export const app = function(arg) {
 
  
@@ -82,13 +98,13 @@ let observer;
 
 //Funcs«
 
-const reload = (newpath)=>{//«
+const reload = async(newpath)=>{//«
 	if (is_loading) return;
 	if (newpath) path = newpath;
 	is_loading = true;
 	Main.scrollTop=0;
 	icondv.innerHTML="";
-	init();
+	await init(true);
 	stat(`${dir.KIDS._keys.length-2} entries`);
 	if (topwin.CURSOR) topwin.CURSOR.set();
 };//»
@@ -138,12 +154,23 @@ for (let kid of icondv.children) {
 
 	kid.show = ()=>{
 		let got = kids[kid.dataset.name];
+/*
+
+If this 'got' should be "owned" by a FileSaver that is writing to it, then we want to
+be able to call a callback with 'got' and get an updating overdiv put on it.
+
+Right now, FileSaver creates the kid node upon end_blob_stream, but we should do
+it upon start_blob_stream.
+
+*/
 if (!got){
 cwarn("Not found in kids: "+ kid.dataset.name);
 kid.del();
 return;
 }
 		let icn = makeIcon(got, kid, observer);
+if (got.filesaver_cb) got.filesaver_cb(icn);
+icn.pos="relative";
 		icn.parwin = topwin;
 		kid.showing = true;
 	};
@@ -161,8 +188,9 @@ const stat_num=()=>{//«
 	else if (num_entries==1) stat("1 entry");
 	else stat(`${num_entries} entries`);
 };//»
-const init=async()=>{//«
+const init=(if_reinit)=>{//«
 
+return new Promise(async(Y,N)=>{
 	if (topwin._savecb) {
 		picker_mode = true;
 		topwin.title = `Save\xa0Location\xa0:\xa0'${topwin.title}'`;
@@ -175,6 +203,8 @@ if (path) poperr(`Directory not found: ${path}`);
 else cwarn("Opening in 'app mode'");
 		return;
 	}
+//HDKMHHNDUH
+//	if (if_reinit || !dir.done){
 	if (!dir.done){
 		stat("Getting entries...");
 		let cb=(ents)=>{
@@ -192,6 +222,10 @@ else cwarn("Opening in 'app mode'");
 		num_entries = Object.keys(dir.KIDS).length-2;
 		stat_num();
 	}
+
+	Y();
+});
+
 }//»
 
 //»
@@ -217,21 +251,35 @@ arr.pop();
 let opts = {WINARGS: {X: topwin.x, Y:topwin.y, WID: Main.w, HGT: Main.h}};
 if (topwin._savecb) {
 	opts.SAVE_CB = topwin._savecb;
-opts.SAVE_FOLDER_CB = topwin._savefoldercb;
+	opts.SAVE_FOLDER_CB = topwin._savefoldercb;
 }
+topwin.easy_kill();
 Desk.open_file_by_path(arr.join("/"), null, opts);
-topwin.force_kill();
 
 }
 else if (s=="s_"||s=="s_C"){
 
+//EJMNCYLKIFB
 if (topwin._savecb) {
+//log("GOT SAVECB");
 	topwin._savecb(topwin);
-	topwin._savecb = null;
+//	topwin._savecb = null;
 }
+else{
+//log("NO SAVECB");
+
+}
+
 }
 }//»
-this.onkill = function() {//«
+this.onkill = function(if_reload, if_force) {//«
+	if (if_force){
+		if (topwin._savecb) {
+//cwarn("HAVE SAVECB");
+			topwin._savecb(null, 1);
+			topwin._savecb = null;
+		}
+	}
 	icondv.del();
 }//»
 this.onresize = function() {//«

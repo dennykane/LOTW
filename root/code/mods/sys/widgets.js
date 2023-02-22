@@ -393,7 +393,10 @@ const ContextMenu=function(elem, loc, type, prevelem, noarg, if_internal) {//«
 			check_menu_width(namesp);
 		} else {
 			if (val) div.tcol = "#000";
-			else div.tcol = "gray";
+			else {
+				div.tcol = "#333";
+				div.style.fontStyle="italic";
+			}
 			let mark = null;
 			if (name.match(/\x20*__XMARK__\x20*$/)) {
 				name = name.replace(/\x20*__XMARK__\x20*$/, "");
@@ -556,7 +559,8 @@ const poperr = (str, opts = {}) => {
 		TIME: opts.time,
 		WIN: opts.win,
 		CB: opts.cb,
-		TIT: opts.title
+		TIT: opts.title,
+		WIDE: opts.wide
 	});
 }
 this.poperr = poperr;

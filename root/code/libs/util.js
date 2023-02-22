@@ -1,5 +1,8 @@
 
+
 export const lib = (comarg, args, Core, Shell)=>{
+
+const NS = window[__OS_NS__];
 
 const COMS = {//«
 
@@ -26,15 +29,6 @@ return cberr("Please port me to lib/Util.js!");
 		for (var i=0; i < args.length; i++) arr.push("   " + (i+1) + ") " + tok_to_string(args[i]));
 		cbok(arr);
 	},//»
-		'dirstr': function(args) {//«
-var _ = this.exports;
-return cberr("Please port me to lib/Util.js!");
-			var path = path_from_arg(args[0]);
-			if (!path) return cberr("Invalid path");
-			var obj = ptw(path);
-			if (!obj) return cberr("Not found: " + path);
-			cbok(util.get_json_dir(obj));
-		}//»
 	'linein': function(args) {//«
 var _ = this.exports;
 return cberr("Please port me to lib/Util.js!");
@@ -60,54 +54,45 @@ return cberr("Please port me to lib/Util.js!");
 	},//»
 */
 
-'pretty':function(){//«
+'pretty':async function(){//«
 	let str='';
-	let doit=()=>{
+	let doit=async()=>{
 		if (!str.length) return cbok("");
-		fs.getmod("util.pretty",modret=>{
-			if (!modret) return cberr("No pretty");
-			let pretty = modret.getmod().js;
-			let rv = pretty(str);
-			wout(rv);
-			cbok();
-		},{STATIC:true});
+		let modret = await fsapi.getMod("util.pretty");
+		if (!modret) return cberr("No pretty");
+		let pretty = modret.getmod().js;
+		let rv = pretty(str);
+		let lines = rv.split("\n");
+		for (let ln of lines) wout(ln);
+		cbok();
 	};
 	if (args.length){
-		fs.read_file(args[0],(rv, filearg, errarg)=>{
-			if (!rv){
-				if (filearg) return;
-				cwarn(errarg);
-				return;
-			}
-			if (isobj(rv)&&rv.EOF) return doit();;
-			if (isarr(rv)) str += rv.join("\n");
-			else {
-				cwarn("Unknown value returned from fs.read_file",rv);
-			}
-		}, {exports:Shell});
+		let rv = await NS.api.fs.readFile(args[0], {exports: Shell});
+		if (!(isarr(rv)&&isstr(rv[0]))) return cberr("unknown input");
+		str = rv.join("\n");
+		doit();
+		return;
 	}
-	else{
-		let done = false;
-		read_stdin(async(rv)=>{
-			if (rv&&isobj(rv)&&rv.EOF===true){
-				if (done) return;
-				doit();
-				return;
-			}
-			if (isstr(rv)) {
-				if (!rv) str = rv;
-				else str += "\n"+rv;
-			}
-			else if (isarr(rv)&&isstr(rv[0])) {
-				if (!rv) str = rv.join("\n");
-				else str += "\n"+rv.join("\n");
-			}
-			else {
-				done = true;
-				return cberr("Can only handle strings in stdin!");
-			}
-		},{SENDEOF:true});
-	}
+	let done = false;
+	read_stdin(async(rv)=>{
+		if (rv&&isobj(rv)&&rv.EOF===true){
+			if (done) return;
+			doit();
+			return;
+		}
+		if (isstr(rv)) {
+			if (!rv) str = rv;
+			else str += "\n"+rv;
+		}
+		else if (isarr(rv)&&isstr(rv[0])) {
+			if (!rv) str = rv.join("\n");
+			else str += "\n"+rv.join("\n");
+		}
+		else {
+			done = true;
+			return cberr("Can only handle strings in stdin!");
+		}
+	},{SENDEOF:true});
 
 },//»
 
@@ -116,7 +101,7 @@ let nb = 0;
 for (let k in localStorage) nb += (((localStorage[k].length || 0) + (k.length || 0)) * 2);
 cbok(""+nb);
 },//»
-	'fslice': function() {//«
+	'fslice': async function() {//«
 		var fname = args.shift();
 		var str1 = args.shift();
 		var str2 = args.shift();
@@ -126,19 +111,22 @@ cbok(""+nb);
 			str2 = str1;
 			str1 = "0";
 		}
-		if (!(oknum(str1)&&oknum(str2))) return cberr("NOTNUMS");
 		var p1, p2;
 		p1 = parseInt(str1);
 		p2 = parseInt(str2);
+		if (!(Number.isFinite(p1)&&Number.isFinite(p2))) return cberr("Not nums!");
 		if (p1 >= p2) return cberr("BADORDER");
-		var fullpath = get_fullpath(fname);
-		if (!fullpath) return cberr("NOFILE");
-		pathtocontents(fullpath, function(ret) {
-			if (!ret) return cberr("NORET");
-			var str = "";
-			ret.forEach(function(v) {str += (v.toString(16).uc()).lpad(2, "0") + " ";});
-			cbok(str);
-		}, true, [p1, p2]);
+		let fullpath = fs.get_fullpath(fname, cur_dir);
+		let rv = await fsapi.pathToNode(fullpath);
+		if (!rv) return cberr(`${fullpath}: does not exist`);
+		let ret = await fsapi.readFile(fullpath, {BINARY: true});
+		if (!ret) return cberr(`${fullpath}: could not get file contents`);
+		let arr = ret.slice(p1, p2);
+		let str = "";
+		arr.forEach(function(v) {str += (v.toString(16).uc()).lpad(2, "0") + " ";});
+		wout(str);
+		cbok();
+
 	},//»
 	'declare': function() {//«
 		var sws = failopts(args, {SHORT:{a:1, A:1, r:1, o:1}, LONG:{array:1, object:1}});
@@ -475,18 +463,14 @@ const{
 	wrap_line,
 	cbeof,
 	sherr,
-	get_path_of_object,
 	get_options,
 	termobj,
 	cur_com_name,
 	read_file_args_or_stdin,
-	read_file,
 	read_stdin,
 	cur_dir,
 	constant_vars,
-	path_to_par_and_name,
 	is_writable,
-	path_to_obj,
 	if_com_sub,
 	check_pipe_writer,
 	tmp_env,
@@ -525,7 +509,8 @@ const{
 }=Shell;
 //»
 
-let fullpath = function(path, cwd) {return fs.get_fullpath(path,null,cwd);}
+
+const fsapi = NS.api.fs;
 
 function digest(which){//«
 let fname = args.pop();

@@ -58,12 +58,14 @@ contdiv.add(d);
 
 
 const doents=(ents, base_path,opts={})=>{//«
+
 let logger=opts.logger;
 if (!logger) logger=()=>{}
 let cb=opts.cb;
 let is_root = opts.isRoot;
 logger("Extracting into: "+base_path);
 let iter = -1;
+
 async function doent(){//«
 	iter++;
 	if (iter==ents.length) {
@@ -83,28 +85,31 @@ async function doent(){//«
 	let savepath=fullpath+"/"+fname;
 	if (ent.directory) {
 		if (await fsapi.pathToNode(savepath)) return logger("Folder path exists: "+savepath,true);
-		fs.mk_fs_dir(fullpath, fname, null, (ret, err)=>{
-			if (!ret) return logger(err,true)
-			logger(ent.filename)
-			contdiv.scrollTop = contdiv.scrollHeight;
-			doent();
-		},null,is_root);
+
+		if (!await fsapi.pathToNode(fullpath)){
+			if (!await fsapi.checkDirPerm(cur_dir,{root: is_root})) return logger(`${cur_dir}: permission denied`, true);
+			if (!await fsapi.touchDir(fullpath)) return logger(`${fullpath}: could not make the directory`, true);
+		}
+		let ret = await fsapi.mkFsDir(fullpath, fname, is_root);
+		if (!ret) return logger(`${fullpath}/${fname}: could not make the directory`,true)
+		logger(ent.filename)
+		contdiv.scrollTop = contdiv.scrollHeight;
+		doent();
 	}
 	else {
 		if (await fsapi.pathToNode(savepath)) return logger("File path exists: "+savepath,true);
-		ent.getData(new zip.BlobWriter(), blob=>{
-			fs.savefile(savepath, blob, ret=>{
-				if (!ret) return logger("Could not save: " + ent.filename,true);
-//				if (no_prompt) logger(`${ent.filename} (${blob.size} bytes) `)
-				if (no_prompt) logger(`${ent.filename}\xa0\xa0(${bytes_to_str(blob.size)}) `)
-				else logger(ent.filename)
-				contdiv.scrollTop = contdiv.scrollHeight;
-				doent();
-			},{MKDIR:true, ROOT:is_root});
+		ent.getData(new zip.BlobWriter(), async blob=>{
+			let ret = await fsapi.saveFsByPath(savepath, blob, {MKDIR: true, ROOT: is_root});
+			if (!ret) return logger("Could not save: " + ent.filename,true);
+			if (no_prompt) logger(`${ent.filename}\xa0\xa0(${bytes_to_str(blob.size)}) `)
+			else logger(ent.filename)
+			contdiv.scrollTop = contdiv.scrollHeight;
+			doent();
 		})
 	}
 }//»
 doent();
+
 };//»
 
 let dounzip=async(buf)=>{//«

@@ -1,28 +1,25 @@
 
-/*TODO: 
-webm audio+video / m4a audio / mp4 audio+video
-*/
+/*@AHYBDHNT: Codecs«
+const codecs = ['avc1.42001E', 'vp8', 'vp09.00.10.08', 'av01.0.04M.08'];
+const accelerations = ['prefer-hardware', 'prefer-software']
 
-/*«
-
-XXX EDGE CASE ERROR XXX:
-
-ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.01 => 98067 bytes 14.68s == OK
-
-What is really going on here to screw up the algorithm?
-ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.001 => 161713 bytes 24.68 + time reported as much longer...
-ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.0001 => 161713 bytes 24.68 + time reported as much longer...
-ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.00001 => 161713 bytes 24.68 + time reported as much longer...
-
-ZBLERJ Desktop/sphinx.webm -s 1885.33 -e 1900.002 => 98067 bytes 14.68s == OK
-
-Solution: 
-//@QIURTMCSL Took out this weird/crazy idea
-//if (tm%2) tm-=1;
-
-
+const configs = [];
+for (const codec of codecs) {
+  for (const acceleration of accelerations) {
+    configs.push({
+      codec,
+      hardwareAcceleration: acceleration,
+      width: 1280,
+      height: 720,
+      bitrate: 2_000_000,
+      bitrateMode: 'constant',
+      framerate: 30,
+      not_supported_field: 123
+    });
+  }
+}
 »*/
-/*//«
+/*«The moral: 0xFF is not a valid size!!!
 
 https://matroska-org.github.io/libebml/specs.html
 
@@ -32,602 +29,504 @@ is unknown, which is a special case that we believe will be useful for live
 streaming purposes. However, avoid using this reserved word unnecessarily,
 because it makes parsing slower and more difficult to implement.
 
-//»*/
+
+
+»*/
+/*SimpleBlock«
+
+129=Video
+130=Audio
+
+Cluster
+
+Type  TmStmp  Key  Size
+130   0   0   128
+129   0   3   128  BIG ~20k-40x
+130   0   3   128
+...
+129   0  45   0    BIG ~15k-25k
+129   0  45   0
+130   0  57   128
+...
+129   0  82   0
+130   0  91   128
+...
+
+The first frame in a cluster is always a big keyframe, and the second is always
+a big non-keyframe immediately followed by a small non-keyframe at the same
+timestamp (a doublet).  There are doublets sprinkled throughout any given
+cluster, and there never seem to be consecutive doublets.
+
+»*/
 
 export const lib = (comarg, args, Core, Shell)=>{//«
-
-const MS_PER_WEBM_BLOCK = 20;
+const NOOP=()=>{};
 
 const COMS = {
 
-ZBLERJ:async()=>{//«
+PLAYMEDIA:async()=>{//«
+
+let rdr = get_reader();
+if (rdr.is_terminal){
+	let path = args.shift();
+	if (!path) return cberr('No path given!');
+	let node = await pathToNode(path);
+	if (!node) return cberr(`${path}: not found`);
+	Core.Desk.api.openApp("media.MediaPlayer", true, null, {file: node.fullpath});
+	cbok();
+	return;
+}
+//Fail on all file and heredoc redirections
+if (!rdr.is_pipe) return cberr("Expected to receive terminal args or piped input");
+
+read_stdin(rv=>{
+	if (rv.EOF===true) return cbok();
+	if (!(rv instanceof Blob && rv.type && rv.type.match(/^(audio|video)/))) return cberr("Unexpected value in pipe");
+	Core.Desk.api.openApp("media.MediaPlayer", true, null, {blob: rv});
+	cbok();
+});
+
+},//»
+
+CUTWEBM:async()=>{//«
+
+let command_start = window.performance.now();
 
 //Var«
 
-let rv;
-let MAX_ITERS=10000;
-let iter=0;
-let clean_finish = false;
-let num_clusters=0;
+const DECENT_INIT_CHUNK = 20000;
 
-let seekhead, info, cues;
-
-let seekhead_start, seekhead_end;
-let info_start, info_end;
-let cues_start;
-let tracks_start, tracks_end;
-let cluster_start;
-let timecodescale;
-let duration;
-let timemult;
+//let align_start_to_cluster = true;
+let align_start_to_cluster = false;
+let start_blocks;
+let end_blocks = [];
+let last_cluster_start;
 let start_cluster;
-let end_cluster;
-let end_cluster_plus1;
-let clusters;
-let tracks;
+//let all_clusters = [];
+let cluster_sizes = [];
+let cluster_times = [];
+let all_cluster_data;
+let c, rv;
+let start_time, end_time;
+let timemult, duration, timecodescale;
+let opts, path, node;
+let ebml_bytes, fullpath;
+let tracks_bytes;
+let new_duration;
+let init_bytes;
+let orig_cues;
+let start_diff, last_cluster_time, last_cluster, first_cluster, first_cluster_time;
+let first_cue, last_byte, end_cue, final_cue, cues_arr, second_cue, cues_start;
+//»
+//Init«
 
-let cluster_positions=[];
-//»
-//Funcs«
-const exit=code=>{cberr(`Exiting code: ${code}`);};
-//»
-//Options/Args«
-let opts = failopts(args,{s:{s:3,e:3},l:{start:3,end:3}});
+opts = failopts(args,{s:{s:3,e:3},l:{start:3,end:3}});
 if (!opts) return;
 
-let start_time = opts.start||opts.s;
-let end_time = opts.end||opts.e;
+path = args.shift();
+if (!path) return cberr('No path given!');
+
+node = await pathToNode(path);
+if (!node) return cberr(`${path}: not found`);
+
+//»
+//EBML«
+
+/*
+Get a decent chunk of the file that certainly *should* have both the SeekHead
+and Info elements in it. If they aren't fully contained in this amount of the
+file, then something strange is going on (perhaps a very large Void (0xec)
+section).
+*/
+
+fullpath = node.fullpath;
+
+init_bytes = await fs.readFile(fullpath,{binary:true, start: 0, end: DECENT_INIT_CHUNK});
+if (!(init_bytes && init_bytes.length==DECENT_INIT_CHUNK)) return cberr(`Suspiciously small file < ${DECENT_INIT_CHUNK} bytes!`);
+
+rv = ebml_sz(init_bytes, 4);
+ebml_bytes = init_bytes.slice(0, rv[0]+rv[1])
+
+
+//»
+//New times -> Duration«
+
+rv = get_timing_of_webm_file(init_bytes);
+if (isstr(rv)) return cberr(rv);
+
+timecodescale = rv.timeCodeScale;
+timemult = timecodescale/NANOSECS_PER_SEC;
+duration = rv.duration * timemult;
+
+werr(`Original duration: ${duration} secs`);
+
+start_time = opts.start||opts.s;
+end_time = opts.end||opts.e;
 
 if (!(start_time || end_time)) return cberr("Nothing to do!");
 if (start_time==="-") start_time=0;
 else{
-//SJUOPUEA
-//	start_time=parseFloat(Math.round(100*start_time)/100);
 	start_time=parseFloat(start_time);
 	if (!Number.isFinite(start_time) && start_time>=0) return cberr("Invalid start");
 }
-let path = args.shift();
-if (!path) return cberr('No path given!');
 
-let fullpath = normpath(path);
-rv = await fs.pathToNode(fullpath);//Check if the file exists
-
-if (!rv) return cberr(`${path}: no such file`);
-if (rv.root.TYPE!=="fs") return cberr(`Only currently supporting local files!`);//Check if the file is "fs" (local)
-//»
-//EBML/Segment Header«
-
-rv = await fs.readFile(fullpath, {binary: true, start:0, end:12});
-if (!rv) return exit("E01");//Couldn't get at least 12 bytes from the file!
-if (!(rv[0]==0x1a&&rv[1]==0x45&&rv[2]==0xdf&&rv[3]==0xa3)) return exit("E02");//No EBML_ID!
-rv = ebml_sz(rv, 4);
-let ebml_len = 4+rv[0]+1;
-rv = await fs.readFile(fullpath, {binary: true, start:0, end:ebml_len});
-let ebml = rv;//There are the EBML Header bytes
-rv = await fs.readFile(fullpath, {binary: true, start:ebml_len, end:ebml_len+12});
-if (!rv) return exit("E03");//Could not get 12 bytes of the Segment!
-if (!(rv[0]==0x18&&rv[1]==0x53&&rv[2]==0x80&&rv[3]==0x67)) return exit("E04");//No SEGMENT_ID!
-rv = ebml_sz(rv, 4);
-let old_segment_len = rv[0];//The length of the original segment
-let segment_body_offset = ebml_len + rv[1];//Add this to the reported Cue positions to get the actual file positions
-let cur_off = segment_body_offset;
-
-let segment_head = new Uint8Array(12);//«
-{
-	let a = segment_head;
-	a[0]=0x18;
-	a[1]=0x53;
-	a[2]=0x80;
-	a[3]=0x67;
-	a[4]=0x1;
-}//»
-
-//»
-//Find Webm element locations from SeekHead or by just searching«
-while(true){
-
-if (iter > MAX_ITERS) return exit(`E06-${iter}`);
-rv = await fs.readFile(fullpath, {binary: true, start:cur_off, end:cur_off+12});
-
-if (!rv) return exit(`E07-${iter}`);//Could not get 12 mode bytes of the Segment body!
-let idname;
-let idlen;
-
-if (rv[0]==0xec){
-	idname = "VOID";
-	idlen=1;
-}
-else {
-	try {
-		idname = TOPLEVEL_ID_MAP[to_hex_str(rv, 4)];
-	}
-	catch(e){
-log(rv);
-		return exit(`E09-${iter}`);
-	}
-		idlen = 4;
-}
-if (!idname) return exit(`E08-${iter}`);
-rv = ebml_sz(rv, idlen);
-if (idname==="CLUSTER") {//«
-	cluster_start = cur_off+rv[1];
-	break;
-}//»
-else if (idname=="SEEKHEAD"){//«
-	seekhead_start = cur_off;
-	seekhead_end = seekhead_start+rv[0]+rv[1];
-	seekhead = await fs.readFile(fullpath, {binary: true, start:seekhead_start, end:seekhead_end});
-	rv = parse_section(seekhead, SEGMENT);
-	if (rv[0]!=="SEEKHEAD:114d9b74") return exit("E24");
-	let arr = rv[1];
-	for (let i=0; i < arr.length-1; i+=2){
-		let a = arr[i+1];
-		if (!(a[0]==="SEEKID:53ab"&&a[2]==="SEEKPOSITION:53ac")) return exit(`E10`);
-		let id = to_hex_str(a[1]);
-		let pos = toint(a[3]);
-		if (id===INFO_ID) info_start = pos+segment_body_offset;
-		else if (id===CUES_ID) cues_start = pos+segment_body_offset;
-		else if (id===CLUSTER_ID) cluster_start = pos+segment_body_offset;
-		else if (id===TRACKS_ID) tracks_start = pos+segment_body_offset;
-	}
-	break;
-}//»
-else if (idname=="INFO") info_start = cur_off+rv[1];
-else if (idname=="CUES") cues_start = cur_off+rv[1];
-else if (idname=="TRACKS") tracks_start = cur_off+rv[1];
-cur_off += rv[0]+rv[1];
-if (old_segment_len == cur_off - segment_body_offset){
-	clean_finish = true;
-	break;
-}
-iter++;
-
-}
-
-if (!(info_start&&cues_start)) return exit("E11");
-
-//»
-//Extract relevant info from Info...//«
-{
-
-if (!info) {
-	rv = await fs.readFile(fullpath, {binary: true, start:info_start, end:info_start+12});
-	if (to_hex_str(rv, 4)!==INFO_ID) return exit("E12");
-	rv = ebml_sz(rv, 4);
-	info = await fs.readFile(fullpath, {binary: true, start:info_start, end:info_start+rv[1]+rv[0]});
-}
-
-rv = parse_section(info, SEGMENT);
-
-if (rv[0]!=="INFO:1549a966") return exit("E17");
-{
-	let arr = rv[1];
-	for (let i=0; i < arr.length-1; i+=2){
-		if (arr[i]==="TIMECODESCALE:2ad7b1") timecodescale = toint(arr[i+1]);
-		else if (arr[i]==="DURATION:4489") duration = (new DataView(arr[i+1].buffer)).getFloat32();
-	}
-}
-if (!(timecodescale&&duration)) return exit("E18");
-timemult = timecodescale/10**9;
-
-}
 if (end_time==="-") end_time=duration;
 else{
-//QMNUYEKS
-//	end_time=parseFloat(Math.round(100*end_time)/100);
 	end_time=parseFloat(end_time);
-	if (!(Number.isFinite(end_time) && end_time>start_time && end_time <= duration)) return cberr("Invalid end_time");
+	if (!Number.isFinite(end_time) && end_time>=0) return cberr("Invalid end");
 }
-if (start_time == 0 && end_time >= duration) return cbok("Nothing to do!");
-let end_timestamp = (end_time - start_time)/timemult;
+if (end_time <= start_time) return cberr("Invalid start/end times");
+
+if (end_time > duration) {
+	werr(`Truncating the "end time" to the duration`);
+	end_time = duration;
+}
+new_duration = end_time - start_time;
+if (new_duration === duration) return cberr("Nothing to do!");
+
+
 //»
-//Tracks«
-rv = await fs.readFile(fullpath, {binary: true, start:tracks_start, end:tracks_start+12});
-if (to_hex_str(rv, 4)!==TRACKS_ID) return exit("E24");
-rv = ebml_sz(rv, 4);
-tracks = await fs.readFile(fullpath, {binary: true, start:tracks_start, end:tracks_start+rv[1]+rv[0]});
+{//Tracks«
+
+//const TRACKS_ID = "1654ae6b";
+rv = get_section_pos_of_webm_file([0x16,0x54,0xae,0x6b], init_bytes);
+let c = rv.offset + rv.value;
+
+rv = await fs.readFile(fullpath, {binary: true, start: c+4, end: c+12});
+if (!(rv && rv.length===8)) return cberr("Could not get the size of the Tracks");
+rv = ebml_sz(rv, 0);
+let tracks_id_length = 4;
+let tracks_size_length = rv[1];
+let tracks_size = rv[0];
+tracks_bytes = await fs.readFile(fullpath, {binary: true, start: c, end: c + tracks_id_length + tracks_size_length + tracks_size});
+
+//tracks = parse_section(tracks_bytes, SEGMENT)[1];
+
+}
 //»
-//Cues«
-rv = await fs.readFile(fullpath, {binary: true, start:cues_start, end:cues_start+12});
-if (to_hex_str(rv, 4)!==CUES_ID) return exit("E13");
+{//Cues«
 
-rv = ebml_sz(rv, 4);
-cues = await fs.readFile(fullpath, {binary: true, start:cues_start, end:cues_start+rv[1]+rv[0]});
+rv = get_section_pos_of_webm_file([0x1c,0x53,0xbb,0x6b], init_bytes);
+if (!rv) return cberr("Could not get the Cues position from the file");
+if (isstr(rv)) return cberr(rv);
 
-rv = parse_section(cues, SEGMENT);
-if (rv[0]!=="CUES:1c53bb6b") return exit("E14");
-//»
-{//Get start and end cluster locations«
+let segment_start = rv.offset;
+c = segment_start + rv.value;
 
-let ents = rv[1]
-let last_pos;
-let stm = start_time/timemult;
-let etm = end_time/timemult;
-for (let i=0; i < ents.length-1; i+=2){
-	if (ents[i]!=="POINTENTRY:bb") return exit(`E15-${i}`);
-	let ent = ents[i+1];
-	if (!(ent[0]==="CUETIME:b3"&&ent[2]==="CUETRACKPOSITION:b7")) return exit(`E16-${i}`);
-	let tm = toint(ent[1]);
-//QIURTMCSL
-//	if (tm%2) tm-=1;
-	let tr = ent[3];
+let cues_start = c;
 
-	if (!(tr[0]==="CUETRACK:f7"&&tr[2]=="CUECLUSTERPOSITION:f1")) return exit("E20");
-	let pos = toint(tr[3]);
-	let tmdiff = tm - stm;
-	if (!start_cluster){
-		if (tmdiff > 0){
-			start_cluster = last_pos;
-		}
-		else if (tmdiff >= -3) {
-			start_cluster = pos;
+rv = await fs.readFile(fullpath, {binary: true, start: c+4, end: c+12});
+if (!(rv && rv.length===8)) return cberr("Could not get the size of the Cues");
+rv = ebml_sz(rv, 0);
+
+let cues_id_length = 4;
+let cues_size_length = rv[1];
+let cues_size = rv[0];
+
+let cues_bytes = await fs.readFile(fullpath, {binary: true, start: c, end: c + cues_id_length + cues_size_length + cues_size});
+let cues = parse_section(cues_bytes, SEGMENT)[1];
+
+if (!(cues[1].length == 4 && cues[1][0].match(/^CUETIME/) && cues[1][2].match(/^CUETRACKPOSITION/) && cues[1][3][0].match(/^CUETRACK/) && cues[1][3][2].match(/^CUECLUSTERPOSITION/))) return cberr("Unknown Cues format");
+
+cues_arr=[];
+{
+	let end = cues[cues.length-1];
+	final_cue = {
+		time: toint(end[1],true)*timemult,
+		pos: toint(end[3][3],true)+segment_start
+	};
+}
+let last_time, last_pos;
+let add_last;
+let tolen = cues.length-2;
+for (let i=0; i < tolen; i+=2){
+	let cue = cues[i+1];
+	let cue2 = cues[i+3];
+	let cue_time = toint(cue[1],true)*timemult;
+	let cue2_time = toint(cue2[1],true)*timemult;
+	let cue_pos = toint(cue[3][3], true)+segment_start;
+	let cue2_pos = toint(cue2[3][3], true)+segment_start;
+	if (!cues_arr.length){
+		if (start_time >= cue_time && start_time < cue2_time) cues_arr.push({time: cue_time, pos: cue_pos})
+		if (cue2_time > end_time){
+			cues_arr.push({time: cue2_time, pos: cue2_pos})
+			break;
 		}
 	}
-	if (tm >= etm){
-		end_cluster = last_pos;
+	else if (cue2_time > end_time){
+		cues_arr.push({time: cue_time, pos: cue_pos})
+		cues_arr.push({time: cue2_time, pos: cue2_pos})
 		break;
 	}
-	last_pos = pos;
+	else{
+		cues_arr.push({time: cue_time, pos: cue_pos})
+	}
+
 }
-if (!start_cluster) start_cluster = last_pos;
-if (!end_cluster) end_cluster = last_pos;
-if (!(start_cluster&&end_cluster)) {
-log(start_cluster, end_cluster, last_pos);
-	return exit("E19");
+orig_cues = JSON.parse(JSON.stringify(cues_arr));
+if (!cues_arr.length) return cberr("Could not get Cluster info from Cues");
+
+first_cue = cues_arr.shift();
+second_cue = cues_arr[0];
+end_cue  = cues_arr.pop();
+
+if (!end_cue) end_cue = second_cue;
+if (!end_cue) end_cue = first_cue;
+
+if (second_cue) {
+	last_byte = second_cue.pos;
+}
+else if (end_cue.pos < cues_start) {
+	last_byte = cues_start;
 }
 
-let from = end_cluster+segment_body_offset;
-rv = await fs.readFile(fullpath, {binary: true, start: from, end: from+12});
-if (!(rv[0]===0x1f&&rv[1]===0x43&&rv[2]===0xb6&&rv[3]===0x75)) return exit("E21");
-rv = ebml_sz(rv, 4);
 
-end_cluster_plus1 = from + rv[0] + rv[1];
+}
 
-//log(start_cluster , end_cluster, end_cluster_plus1);
+//»
+{//Init Clusters«
+//log(first_cue);
+//log(second_cue);
+//log(end_cue);
+//log(cues_arr);
+//cbok();
+//return;
+
+rv = await fs.readFile(fullpath, {binary: true, start: first_cue.pos, end: last_byte});
+
+first_cluster = parse_section(rv, SEGMENT)[1];
+first_cluster.shift();
+
+first_cluster_time = toint(first_cluster.shift())*timemult;
+
+if (align_start_to_cluster) {
+	start_time = first_cluster_time;
+	werr(`Setting start_time to first_cluster_time (${first_cluster_time})`);
+}
+
+if (start_time) werr(`New start point ${start_time} secs`);
+new_duration = end_time - start_time;
+werr(`New duration ${new_duration.toFixed(2)} secs`);
+
+last_byte = end_cue.pos;
+
+if (final_cue.pos === end_cue.pos){
+	if (final_cue.pos < cues_start) last_byte = cues_start;
+	else last_byte = undefined;
+}
+
+let pen_cue = cues_arr.pop();
+if (!pen_cue) {
+	pen_cue = end_cue;
+}
+last_cluster_start = pen_cue.pos;
+rv = await fs.readFile(fullpath, {binary: true, start: last_cluster_start, end: last_byte});
+if (rv) {
+	last_cluster = parse_section(rv, SEGMENT)[1];
+	last_cluster.shift();
+	last_cluster_time = toint(last_cluster.shift())*timemult;
+}
+start_diff = start_time - first_cluster_time;
+}
+//»
+//Re-encode first cluster if needed«
+
+if (!start_diff){//«
+	let blocks = [];
+	for (let i=0; i < first_cluster.length; i+=2){
+		if (!first_cluster[i].match(/^SIMPLEBLOCK/)) return cberr(`Found a non "Simple Block"!`);
+		let block = first_cluster[i+1];
+		let block_time = toint([block[1], block[2]])*timemult;
+		let tm =  block_time + first_cluster_time;
+		if (block[0]===129) blocks.push(block);
+		else if (block[0]===130) blocks.push(block);
+		else return cberr(`Found unknown block type: ${block[0]}`);
+	}
+	start_blocks = blocks;
+
+
+
+//get_images_from_muxed_blocks(start_blocks);
 
 }//»
-{//Update Cluster times/Zero out excess blocks and create cluster time/pos array for new Cues«
+//Re-encode
+else {//«
 
-let from = start_cluster+segment_body_offset;
-//let to = end_cluster_plus1+segment_body_offset;
-let to = end_cluster_plus1;
-clusters = await fs.readFile(fullpath, {binary: true, start: from, end: to});
-iter=0;
-cur_off = 0;
-let a = clusters;
-let first_time;
-let first_time_delta=0;
-let last_cluster_pos;
-let last_cluster_end;
-let last_cluster_tm;
-let did_slice_end;
 
-while(true){//«
-	if (iter > MAX_ITERS) return exit("E22");
-	if (!(a[cur_off]===0x1f && a[cur_off+1]===0x43 && a[cur_off+2]===0xb6 && a[cur_off+3]===0x75)) {
-		return exit(`E23-${iter}`);
-	}
-	last_cluster_pos = cur_off;
-	rv = ebml_sz(a, cur_off+4);
-	let cluster_sz_len = rv[1]-4;
-	let cluster_sz_pos = cur_off+4;
-
-//TYSHNRLKIUHJ
-	let cluster_sz = rv[0];
-	let cluster_begin = rv[1];
-	let cluster_end = cluster_sz+cluster_begin;
-	last_cluster_end = cluster_end;
-	if (a[rv[1]]===0xe7){//«
-//Get the size of the CLUSTERTIMECODE element
-		let rv2 = ebml_sz(a, rv[1]+1);
-		let tmcodestart = rv2[1];
-		let tmcodeend = tmcodestart+rv2[0];
-//Get the current time
-		let curtmarr = a.slice(tmcodestart, tmcodeend);
-		let usecurtmarrlen = curtmarr.length;
-		let curtm = toint(curtmarr);
-		if (curtm*timemult >= end_time) break;
-//Create a zero'd out new time array with the length of the current one (so cluster array stays the same)
-		let newtmarr = new Uint8Array(curtmarr.length);
-
-//If this is the first cluster, set it to first_time.
-//Also, if the start time is not aligned with the cluster timestamp,
-//remove the excess beginning blocks and resequence the rest of them
-
-		if (!Number.isFinite(first_time)) {//«
-
-let d4 = start_time/timemult - curtm;
-if (d4 >= 20){
-first_time_delta = d4;
-let excess_start_blocks = Math.floor(d4/MS_PER_WEBM_BLOCK);
-if (a[tmcodeend]!==0xa3){//Looking for clusters like: timecode + simpleblock1 + simpleblock2...
-	return exit("E26");
+let second_cluster_time;
+if (second_cue) {
+	second_cluster_time = second_cue.time;
+	if (second_cluster_time > end_time) second_cluster_time = end_time;
 }
-{//Zero out excess_start_blocks from the beginning of the first cluster (and after end if needed)«
-	let coff = tmcodeend;
-	let itr = 0;
-//Scan forward to tne end of excess blocks
-	while(itr < excess_start_blocks){
-		if (!(a[coff]===0xa3)) {
-			return exit(`E27-${itr}`);
-		}
-		let r = ebml_sz(a, coff+1);
-		coff=r[0]+r[1];
-		itr++;
+else if (end_cue.pos < cues_start) second_cluster_time = new_duration;
+let first_cluster_duration = second_cluster_time - start_time;
+werr(`Re-encoding ${first_cluster_duration.toFixed(2)} secs of the first cluster...`);
+
+let video_blocks = [];
+let audio_blocks = [];
+let gotau = false;
+for (let i=0; i < first_cluster.length; i+=2){
+	if (!first_cluster[i].match(/^SIMPLEBLOCK/)) return cberr(`Found a non "Simple Block"!`);
+	let block = first_cluster[i+1];
+	let block_time = toint([block[1], block[2]])*timemult;
+	let tm =  block_time + first_cluster_time;
+	if (tm > end_time) {
+		break;
 	}
-
-
-//Slice out the hole and create the smaller clusters array
-{
-let new_cluster_sz = cluster_sz-coff+tmcodestart;
-let cluster_remainder = a.slice(coff);
-let new_clusters = new Uint8Array(cluster_remainder.length+tmcodeend);
-clusters.set(num_to_ebml_arr(new_cluster_sz, cluster_sz_len), 4);
-new_clusters.set(clusters.slice(0, tmcodeend));
-new_clusters.set(cluster_remainder, tmcodeend);
-clusters = new_clusters;
-a = clusters;
-cluster_end-=coff-tmcodeend;
-coff = tmcodeend;
-}
-
-	itr=0;
-//This iterates through the rest of our first/current cluster to see of the end is contained within it
-//I suppose a more subtle method can be used via timestamps
-	while(true){//«
-		if (itr > 10000) return exit("!?!?!?!?");
-		if (!(a[coff]===0xa3)) {
-			if (a[coff]==0x1f&&a[coff+1]==0x43&&a[coff+2]==0xb6&&a[coff+3]==0x75) {
-
-				break;
+	let au_adjust = 0;
+	if (block[0]===129){
+		video_blocks.push(block);
+	}
+	else if (block[0]===130) {
+		if (tm >= start_time) {
+			let new_time = (block_time - start_diff) / timemult;
+			if (!gotau) {
+				au_adjust = new_time;
 			}
-			if (a[coff]===0xa0){
-				let r3 = ebml_sz(a, coff+1);
-				let d3 = a.length - (coff+r3[0]);
-				if (d3 >0 && d3 < 8){
-cwarn("We have an ending BLOCKGROUP");
-					return exit("E29");
-				}
-			}
-			return exit(`E28-${itr}`);
-		}
-		let r = ebml_sz(a, coff+1);
-		let newtm = itr*20;
-//If this block is past the end, truncate the cluster
-		if (newtm >= end_timestamp){//«
-			did_slice_end = true;
-let cluster_sz_pos = last_cluster_pos+4;
-let r = ebml_sz(a, cluster_sz_pos);
-let cluster_sz_len = r[1]-last_cluster_pos-4;
-let l = cluster_sz_len;
-let new_cluster_len = coff-cluster_sz_pos-4;
-{
-let ch = a[cluster_sz_pos+l+new_cluster_len+1];
-if (ch===0xa3||ch===0xa0){
-}
-else{
-cerr("Something's wrong! What is the hex number below");
-log("0x"+((ch).toString(16)).padStart(2,"0"));
-}
-}
-let arr = num_to_arr(new_cluster_len, l);
-if (l==8) arr[0]|=0x1;
-else if (l==7) arr[0]|=0x2;
-else if (l==6) arr[0]|=0x4;
-else if (l==5) arr[0]|=0x8;
-else if (l==4) arr[0]|=0x10;
-else if (l==3) arr[0]|=0x20;
-else if (l==2) arr[0]|=0x40;
-else if (l==1) arr[0]|=0x80;
-a.set(arr, cluster_sz_pos);
-clusters=a.slice(0, coff);
-a = clusters;
-//log(itr);
-			break;
-		}//»
-		a.set(num_to_arr(newtm, 2), r[1]+1);
-		coff=r[0]+r[1];
-		itr++;
-	}//»
-
-}//»
-}
-
-			first_time = curtm;
-		}//»
-
-		let newtime = curtm-first_time;
-		if (newtime) newtime -= first_time_delta;
-		last_cluster_tm = newtime;
-		let numarr = num_to_arr(newtime);
-		newtmarr.set(numarr, usecurtmarrlen-numarr.length);
-		a.set(newtmarr, tmcodestart);
-		cluster_positions.push(newtime, cur_off);
-	}//»
-	else return exit("E23");
-	cur_off = cluster_end;
-	let diff = a.length - cur_off;
-	if (!diff) break;
-
-else if (diff < 0){
-//cwarn(`diff (${diff}) < 0`);
-break;
-}
-iter++;
-}//»
-
-if (!did_slice_end){//«
-//The final timestamp in the final cluster will have this time.
-//Slice everthing past it...
-let itr=0;
-//LNFHTYJHO
-let usen = parseInt(tohex(a.slice(last_cluster_pos+8, last_cluster_pos+9))[1])+2;
-let cluster_sz_pos = last_cluster_pos+4;
-let r = ebml_sz(a, cluster_sz_pos);
-let cluster_sz_len = r[1]-last_cluster_pos-4;
-let cur_cluster_sz = r[0];
-let coff = r[1]+usen;
-
-while(true){
-	if (itr > 10000) return exit("#!#!#!#!#!");
-	if (!(a[coff]===0xa3)) {
-		if (coff === a.length) break;
-		if (a[coff]==0x1f&&a[coff+1]==0x43&&a[coff+2]==0xb6&&a[coff+3]==0x75) break;
-		if (a[coff]===0xa0){
-			let r3 = ebml_sz(a, coff+1);
-			let d3 = a.length - (coff+r3[0]);
-			if (d3 >0 && d3 < 8){
-cwarn("We have an ending BLOCKGROUP");
-				return exit("E30");
-			}
-		}
-log(tohex(a.slice(coff, coff+20)));
-		return exit(`E31-${itr}`);
-	}
-	let r = ebml_sz(a, coff+1);
-	let newtm = last_cluster_tm+(itr*20);
-if (newtm >= end_timestamp){//«
-let l = cluster_sz_len;
-let new_cluster_len = coff-cluster_sz_pos-4;
-{
-let ch = a[cluster_sz_pos+l+new_cluster_len+1];
-if (ch===0xa3||ch===0xa0){
-//log("Seems good!");
-}
-else{
-cerr("Something's wrong! What is the hex number below");
-log("0x"+((ch).toString(16)).padStart(2,"0"));
-}
-}
-
-let arr = num_to_arr(new_cluster_len, l);
-if (l==8) arr[0]|=0x1;
-else if (l==7) arr[0]|=0x2;
-else if (l==6) arr[0]|=0x4;
-else if (l==5) arr[0]|=0x8;
-else if (l==4) arr[0]|=0x10;
-else if (l==3) arr[0]|=0x20;
-else if (l==2) arr[0]|=0x40;
-else if (l==1) arr[0]|=0x80;
-a.set(arr, cluster_sz_pos);
-clusters=a.slice(0, coff);
-break;
-}//»
-	coff=r[0]+r[1];
-	itr++;
-
-}
-
-}//»
-
-}//»
-{//Make new Cues«
-
-//let add_len = seekhead.length+info.length+tracks.length;
-let posns = cluster_positions;
-let preknown_tot_cues_len = 12+(27*posns.length/2);
-let add_len = info.length+tracks.length+preknown_tot_cues_len;
-
-let cue_len = 0;
-let cues_arr=[];
-for (let i=0; i < posns.length; i+=2){//«
-
-let tm = num_to_arr(posns[i]);
-if (!tm.length) tm=[0];
-let tmlen = 8;
-//let tmlen = tm.length;
-//log(posns[i+1]);
-
-let pos = num_to_arr(posns[i+1]+add_len);
-if (!pos.length) pos=[0];
-//let poslen = pos.length;
-let poslen = 8;
-
-let entlen = 11+tmlen+poslen;
-
-let a = new Uint8Array(entlen);
-
-a[0]=0xbb;//POINTENTRY == 187
-a[1]=128|(entlen-2);
-
-a[2]=0xb3;//CUETIME == 179
-a[3] = 128|(tmlen);
-a.set(tm, 4+tmlen-tm.length);
-let cur = 4+tmlen;
-
-a[cur++]=0xb7;//CUETRACKPOSITION == 183
-a[cur++]=128|(5+poslen);
-
-a[cur++]=0xf7;//CUETRACK == 247 
-a[cur++]=129;// 1 ==  (audio)
-a[cur++]=1;
-
-a[cur++]=0xf1;//CUECLUSTERPOSITION == 241
-a[cur++]=128|(poslen);
-a.set(pos, cur+poslen-pos.length);
-
-cue_len+=a.length;
-cues_arr.push(a);
-
-}//»
-let cues_len_arr = num_to_arr(cue_len);
-cues = new Uint8Array(cue_len+4+8);
-cues[0]=0x1c;
-cues[1]=0x53;
-cues[2]=0xbb;
-cues[3]=0x6b;
-cues[4]=0x1;
-cues.set(cues_len_arr, 4+8-cues_len_arr.length);
-let curoff = 4+8;
-for (let cue of cues_arr){
-	cues.set(cue, curoff);
-	curoff+=cue.length;
-}
-
-}//»
-{//Set Segment size and new Info->Duration«
-let a = num_to_arr(info.length+tracks.length+clusters.length+cues.length);
-segment_head.set(a, 12-a.length);
-//log(end_timestamp);
-//log((end_time-start_time)/timemult);
-let tm = new Uint8Array((new Float32Array([(end_time-start_time)/timemult])).buffer);
-let gotdur;
-let dur_pos;
-let arr = info;
-for (let i=0; i < arr.length-2; i++){
-	if (gotdur) break;
-	if (arr[i]==0x44&&arr[i+1]==0x89) {
-		let sz = ebml_sz(arr, i+2);
-		if (sz[0]==4){
-			dur_pos = sz[1];
-			break;
-		}
-		else{
-cwarn("Skipping sz returned", sz);
+			let new_time_array = new Uint8Array((new Int16Array([new_time-au_adjust])).buffer);
+			block[1] = new_time_array[1];
+			block[2] = new_time_array[0];
+			audio_blocks.push(block);
+			gotau = true;
 		}
 	}
+	else return cberr(`Found unknown block type: ${block[0]}`);
 }
-if (!dur_pos) return exit("E25");
-info.set(tm.reverse(), dur_pos);
+
+let vid_blocks = await get_cluster_from_video_blocks(video_blocks, start_diff*1000000);
+//log(rv);
+//cbok();
+//cbok("Getting images from muxed blocks...");
+//return;
+
+//let vid_blocks = await reencode_from_video_file(fullpath, start_time, second_cluster_time, {werr: werr, wclerr: wclerr});
+let blocks;
+if (audio_blocks.length) {
+	blocks=[];
+	let hash={};
+	let tags = [];
+	for (let bl of audio_blocks){
+		let time1 = `${bl[1]}`.padStart(3, "0");
+		let time0 = `${bl[2]}`.padStart(3, "0");
+		let nm = `${time1}-${time0}-a`;
+		tags.push(nm);
+		hash[nm]=bl;
+	}
+	for (let bl of vid_blocks){
+		let time1 = `${bl[1]}`.padStart(3, "0");
+		let time0 = `${bl[2]}`.padStart(3, "0");
+		let nm = `${time1}-${time0}-v`;
+		tags.push(nm);
+		hash[nm]=bl;
+	}
+	tags = tags.sort();
+	for (let t of tags) blocks.push(hash[t]);
+}
+else blocks = vid_blocks;
+
+start_blocks = blocks;
+//log(start_blocks);
+//return;
+
 }//»
-{//Send out«
+//»
+if (last_cluster){//Trim from the back if needed«
 
-let out = new Uint8Array(ebml.length+segment_head.length+info.length+tracks.length+cues.length+clusters.length);
-let cur=0;
-out.set(ebml,cur);cur+=ebml.length;
-out.set(segment_head,cur);cur+=segment_head.length;
-out.set(info,cur);cur+=info.length;
-out.set(tracks,cur);cur+=tracks.length;
-out.set(cues,cur);cur+=cues.length;
-out.set(clusters,cur);
+let blocks = [];
+let len = last_cluster.length;
+for (let i=0; i < len; i+=2){
+	if (!last_cluster[i].match(/^SIMPLEBLOCK/)) return cberr(`Found a non "Simple Block"!`);
+	let block = last_cluster[i+1];
+	let block_time = toint([block[1], block[2]])*timemult;
+	let tm =  block_time + last_cluster_time;
+	if (tm > end_time) {
+		break;
+	}
+	let au_adjust = 0;
+	if (block[0]===129) blocks.push(block);
+	else if (block[0]===130) blocks.push(block);
+	else return cberr(`Found unknown block type: ${block[0]}`);
+}
 
-let file = new Blob([out],{type:"audio/webm"});
-woutobj(file);
+end_blocks = blocks;
+
+}//»
+{//Make new Clusters elements from blocks«
+
+werr("Generating new clusters...");
+
+let start_data = make_cluster_elem_from_blocks(0, start_blocks);
+cluster_times.push(0);
+cluster_sizes.push(start_data.length);
+
+if (!cues_arr.length) {
+	if (!end_blocks){/*Only 1 cluster*/
+		all_cluster_data = new Uint8Array(start_data.length);
+		all_cluster_data.set(start_data, 0);
+	}
+	else {/*Only 2 clusters*/
+		let last_cluster_timestamp = (last_cluster_time - start_time) / timemult;
+		let new_end_data = make_cluster_elem_from_blocks(last_cluster_timestamp, end_blocks);
+		cluster_times.push(last_cluster_timestamp);
+		cluster_sizes.push(new_end_data.length);
+		all_cluster_data = new Uint8Array(start_data.length+new_end_data.length);
+		all_cluster_data.set(start_data, 0);
+		all_cluster_data.set(new_end_data, start_data.length);
+	}
+}
+else {/*At least 3 clusters*/
+
+	let middle_data = await fs.readFile(fullpath, {binary: true, start: cues_arr[0].pos, end: last_cluster_start});
+
+	let rv = new_clusters_data(middle_data, start_time/timemult);
+	if (isstr(rv)) return cberr(rv);
+	cluster_times = cluster_times.concat(rv.times)
+	cluster_sizes = cluster_sizes.concat(rv.sizes)
+
+	let new_middle_data = rv.data;
+	let last_cluster_timestamp = (last_cluster_time - start_time) / timemult;
+
+	let new_end_data = make_cluster_elem_from_blocks(last_cluster_timestamp, end_blocks);
+	cluster_times.push(last_cluster_timestamp);
+	cluster_sizes.push(new_end_data.length);
+
+	all_cluster_data = new Uint8Array(start_data.length+new_middle_data.length+new_end_data.length);
+	all_cluster_data.set(start_data, 0);
+	all_cluster_data.set(new_middle_data, start_data.length);
+	all_cluster_data.set(new_end_data, new_middle_data.length+start_data.length);
+}
+
+
+
+}//»
+//Make webm«
+werr("Generating new webm file");
+let f = new WebmFile();
+f.duration = new_duration/timemult;
+//log(f.duration);
+f.timeCodeScale = timecodescale;
+f.muxingApp = "Zgrancheed";
+f.writingApp = "Sofflering";
+f.makeInfo();
+f.tracks = tracks_bytes;
+//f.clusterData = new_clusters;
+//f.makeClusters();
+f.clusters = all_cluster_data;
+f.makeSeekHead();
+f.clusterSizes = cluster_sizes;
+f.clusterTimes = cluster_times;
+f.makeCues();
+f.makeSegment();
+f.ebml = ebml_bytes;
+f.makeFile();
+//»
+//log(parse_section(f.file, WebmTags));
+let diff =  (window.performance.now() - command_start)/1000;
+werr(`Finished in ${diff.toFixed(2)} secs`);
+woutobj(new Blob([f.file],{type:"video/webm"}));
 cbok();
 
-}//»
-
-}//»
+},//»
 
 }
 if (!comarg) return Object.keys(COMS);
@@ -669,11 +568,12 @@ let aumod=null;
 //»
 
 const {NS}=Core;
+const {jlog}=Core.api;
 
 const fs = NS.api.fs;
 
-
 const {//«
+	pathToNode,
 	wclerr,
 	normpath,
 	arg2con,
@@ -708,536 +608,10 @@ let mkfakeobj=(type, obj, args)=>{//«
 //»
 //Var«
 
-
-let PRINT_N_HEX_LINES=3;
-
 let no_error = false;
 let debug_section = false;
 
-//»
-//Funcs«
-
-
-const add_sz_marker=(a, l)=>{//«
-	if (l==8) a[0]|=0x1;
-	else if (l==7) a[0]|=0x2;
-	else if (l==6) a[0]|=0x4;
-	else if (l==5) a[0]|=0x8;
-	else if (l==4) a[0]|=0x10;
-	else if (l==3) a[0]|=0x20;
-	else if (l==2) a[0]|=0x40;
-	else if (l==1) a[0]|=0x80;
-};//»
-const path_to_val = (bytes, qstr, fmt)=> {//«
-
-let qarr = qstr.split("\/");
-if (!qarr[0]) qarr.shift();
-
-let marr = [];
-let curobj = WEBM;
-let curid;
-let rv;
-
-let subscript;
-let getall=false;
-let getlast=false;
-let getfromend=null;
-while (qarr.length) {
-	let q1 = qarr.shift();
-//log(q1);
-	let arrnum=null;
-	let bracks = q1.match(/^(.+)\[(\d*|f(\-\d+)?)\]$/);
-//log(bracks);
-	if (bracks){
-//log(bracks);
-		q1 = bracks[1];
-		let br2 = bracks[2];
-		let br3 = bracks[3];
-		if (br3){
-//log("BR3",br3);
-			getfromend = parseInt(br3);
-			getlast = false;
-//log(getfromend);
-		}
-		else if (br2==="") getall=true;
-		else if (br2==="f") {
-			getlast = true;
-		}
-//		else 
-		arrnum = parseInt(bracks[2]);
-	}
-	try {
-	rv = parse_section_flat(bytes, curobj);
-	}
-	catch(e){
-		return "Parse error";
-	}
-	let ids=[];
-	for (let i=0; i < rv.length - 1; i+=2){
-		if ((new RegExp("^.*"+q1+".*:","i")).test(rv[i])) {
-			ids.push(rv[i]);
-			curid = rv[i].split(":").pop();
-			marr.push(rv[i+1]);
-		}
-	}
-	if (!marr.length) return `No matches!`;
-	subscript = 0;
-	if (marr.length > 1) {
-		if (arrnum===null) {
-			return `Multiple matches(${marr.length}): ${q1}`;
-		}
-
-		if (arrnum >= marr.length) return `The requested array value(${arrnum}) is out of bounds [0-${marr.length-1}]`;
-		if (getall) {
-			if (qarr.length) return "Invalid query (all==true)";
-			return marr;
-		}
-		if (getlast) subscript = marr.length - 1;
-		else if (Number.isFinite(getfromend)){
-subscript = marr.length - 1 + getfromend;
-//log("SUBSCRIPT", subscript);
-if (subscript < 0) {
-cwarn("Subscript was negative", subscript);
-	subscript = 0;
-}
-//log(s);
-		}
-		else subscript = arrnum;
-	}
-
-	if (qarr.length) {
-		if (!curobj.kids) {
-log(curobj);
-			return "The current object has no kids!";
-		}
-		curobj = curobj.kids[curid];
-		bytes = marr[subscript];
-		marr=[];
-	}
-}
-
-{
-
-let val = marr[subscript];
-//if (val.length > 8)
-if (fmt==="int") {
-	if (val.length > 8) return `Does not appear to be an 'int' (size==${val.length})`;
-	return toint(val);
-}
-if (fmt=="float") {
-	if (val.length > 8) return `Does not appear to be a 'float' (size==${val.length})`;
-try {
-	return tofloat(val);
-}
-catch(e){
-return e.message;
-}
-}
-if (fmt=="hex") return [tohex(val)];
-if (fmt=="str") return [tostr(val)];
-return val;
-
-}
-
-}//»
-const tostr=(arr)=>{
-	let s='';
-	for (let code of arr) s+=String.fromCharCode(code);
-	return s;
-};
-const tohex=(arr, line_w)=>{
-	return to_hex_lines(arr, line_w);
-};
-const tofloat = (arr) => {
-	if (arr.length <= 4) return (new DataView(arr.buffer)).getFloat32();
-	if (arr.length <= 8) return (new DataView(arr.buffer)).getFloat64();
-}
-const toint = (arr) => {
-	arr = arr.reverse();
-	let n = 0;
-	for (let i = 0; i < arr.length; i++) n |= (arr[i] << (i * 8));
-	return n;
-}
-const to_hex_str=(arr, max_len)=>{
-	let str = '';
-	let len = arr.length;
-	if (max_len) len = max_len;
-	for (let i=0; i < len; i++) str = str + arr[i].toString(16).padStart(2, "0");
-	return str;
-};
-
-const to_hex_lines=(arr, line_w)=>{
-	if (!line_w) line_w = 20;
-//	let line_w = 20;
-	let str = '';
-	for (let i=0; i < arr.length; i++) {
-		str = str + arr[i].toString(16).padStart(2, "0") + " ";
-		if (!((i+1)%line_w)) str+="\n";
-	}
-	return str;
-}
-
-const dump_hex_lines=(arr, line_w)=>{//«
-log(to_hex_lines(arr));
-}//»
-
-const num_to_arr=(num, want_size)=>{//«
-	let a = Array.from(new Uint8Array((new Uint32Array([num])).buffer).reverse());
-
-//if (want_size)
-	if (want_size && a.length === want_size) return a;
-	if (!a[0]) a.shift();
-	if (want_size && a.length === want_size) return a;
-	if (!a[0]) a.shift();
-	if (want_size && a.length === want_size) return a;
-	if (!a[0]) a.shift();
-	return a;
-//	if (want_size && a.length === want_size) return a;
-//	if (!a[0]) a.shift();
-//	return a;
-};//»
-
-const num_to_ebml_arr=(num, want_size)=>{
-	let arr = num_to_arr(num, want_size);
-	add_sz_marker(arr, want_size);
-	return arr;
-};
-
-const int_to_ebml=num=>{//«
-	let n;
-
-	if (num < 0) throw new Error(`Invalid number`);
-	if (num < 127) return [0x80 | num];
-	else if (num < 256) return [ 0x40, num];
-	if (num < 65536) n = 0x20;
-	else if (num <16777216) n = 0x10;
-	else if (num < 4294967296) n = 0x08;
-
-	if (!n) throw new Error(`Invalid number`);
-
-	let a = num_to_arr(num);
-	a.unshift(n);
-
-	return a;
-
-};//»
-
-const get_chunk=(arr, tmmult, starttm)=>{//«
-
-const set_len=()=>{
-	let a = new Uint8Array((new Uint32Array([last-12])).buffer);
-//log("LEN", a);
-	out[8] = a[3];
-	out[9] = a[2];
-	out[10] = a[1];
-	out[11] = a[0];
-};
-if (!arr.length) return;
-//log(arr);
-let out = new Uint8Array(200000);
-out[0] = 0x1f;//CLUSTER_ID
-out[1] = 0x43;//   |
-out[2] = 0xb6;//   |
-out[3] = 0x75;//   v
-out[4] = 1;// 4->11 has the cluster length
-out[12] = 0xe7;//CLUSTERTIMECODE
-out[13] = 132;//Length = 4
-//out[13]=1;//Use 8 bytes
-{
-//let a = new Uint8Array((new Uint32Array([starttm])).buffer);
-let usetime;
-if (!starttm) usetime=1;
-else usetime = starttm;
-//let a = new Uint8Array((new Uint32Array([starttm])).buffer);
-let a = new Uint8Array((new Uint32Array([usetime])).buffer);
-//log(a);
-out[14] = a[3];
-out[15] = a[2];
-out[16] = a[1];
-out[17] = a[0];
-}
-//log("Start", starttm);
-let last=18;
-//1f43b675
-//a3
-let curtm = 0;
-for (let i=0; i < 1000; i+=2) {
-	let tm = arr.shift();
-	let dat = arr.shift();
-	if (!tm) {
-//log(i, curtm);
-		set_len();
-		return [out.slice(0, last), curtm];
-	}
-	let ln = dat.length;
-	out.set([0xa3], last);
-	last++;
-	let a = int_to_ebml(ln);
-try {
-//log(a);
-	out.set(a, last);
-}
-catch(e){
-cerr("Out of bounds?", last);
-return;
-}
-	last+=a.length;
-//	let a = new Uint8Array((new Uint32Array([ln])).buffer)
-//	out.set([0xa3, 1, 0, 0, 0, a[3], a[2], a[1], a[0]], last);
-//	last+=9;
-//log(curtm);
-	let b = new Uint8Array((new Uint16Array([curtm])).buffer);
-	dat.set([b[1], b[0]], 1);
-try {
-	out.set(dat, last);
-}
-catch(e){
-cerr("Out of bounds?", last);
-return;
-}
-
-//	out.set(dat, last);
-
-	last+=ln;
-	curtm+=Math.round(tm/tmmult);
-}
-set_len();
-return [out.slice(0, last), curtm];
-
-
-};//»
-
-const parse_section=(buf, par, iter, done)=>{//«
-	if (!done) done = false;
-	if (!iter) iter=0;
-	if (done) return;
-	iter++;
-	if (iter>10000) {
-		cberr("Inifite loop?");
-		return;
-	}
-let c=0;
-let flen = buf.length;
-let rv;
-let kids = [];
-while(1){
-	if (done) return kids;
-	iter++;
-	if (iter>10000) {
-		cberr("Inifite loop?");
-		return;
-	}
-
-	let s;
-	try{
-		s=buf[c].toString(16);
-	}
-	catch(e){
-		werr(`Read error @${c} in ${par.id}`);
-		done=true;
-		return;
-	}
-	let ch = s[0];
-	let n;
-
-	if (ch=="1"){n=4;}
-	else if (ch.match(/[23]/)){n=3;}
-	else if (ch.match(/[4-7]/)){n=2;}
-	else n=1;
-	rv=gethex(buf, c, n);
-	let kid = par.kids[rv];
-
-	if (rv=="ec"){
-//log("kid", kid);
-	}
-	else if (!kid){
-		if (!no_error) cberr(`Invalid id (${rv}) in ${par.id} @${c}`);
-		return;
-	}
-	c+=n;
-	let id = rv;
-	if (!(rv = ebml_sz(buf,c))) return;
-if (!rv[0]){
-//log(c, buf.slice(c-1, c+20));
-if (!no_error) cberr(`Got 0 length payload for id=${id}`);
-return;
-}
-	let bytes = buf.slice(rv[1],rv[0]+rv[1]);
-	if (kid) {//If not "Void" (0xec)
-		kids.push(`${kid.id}:${id}`);
-		if (kid.kids) {
-			let sect = parse_section(bytes, kid, iter, done);
-			if (!sect) return;
-if (debug_section) {
-log(sect);
-}
-			kids.push(sect);
-		}
-		else {
-			kids.push(bytes);
-		}
-
-	}
-	c=rv[0]+rv[1];
-	if (c==flen) break;
-}	
-return kids;
-};//»
-
-const parse_section_flat=(buf, par, iter, done)=>{//«
-	if (!done) done = false;
-	if (!iter) iter=0;
-	if (done) return;
-	iter++;
-	if (iter>10000) {
-		cberr("Inifite loop?");
-		return;
-	}
-let c=0;
-let flen = buf.length;
-let rv;
-let kids = [];
-while(1){
-	if (done) return kids;
-	iter++;
-	if (iter>10000) {
-		cberr("Inifite loop?");
-		return;
-	}
-
-	let s;
-	try{
-		s=buf[c].toString(16);
-	}
-	catch(e){
-		werr(`Read error @${c} in ${par.id}`);
-		done=true;
-		return;
-	}
-	let ch = s[0];
-	let n;
-
-	if (ch=="1"){n=4;}
-	else if (ch.match(/[23]/)){n=3;}
-	else if (ch.match(/[4-7]/)){n=2;}
-	else n=1;
-	rv=gethex(buf, c, n);
-	let kid = par.kids[rv];
-	if (rv=="ec"){
-	}
-	else if (!kid){
-		if (!no_error) cberr(`Invalid id (${rv}) in ${par.id} @${c}`);
-		return;
-	}
-	c+=n;
-	let id = rv;
-	if (!(rv = ebml_sz(buf,c))) return;
-	if (!rv[0]){
-		if (!no_error) cberr(`Got 0 length payload for id=${id}`);
-		return;
-	}
-	let bytes = buf.slice(rv[1],rv[0]+rv[1]);
-	if (kid) {//If not "Void" (0xec)
-		kids.push(`${kid.id}:${id}`);
-		kids.push(bytes);
-//		if (kid.kids) kids.push(bytes.length);
-//		else kids.push(bytes);
-	}
-	c=rv[0]+rv[1];
-	if (c==flen) break;
-}	
-return kids;
-};//»
-
-//const parse_webm=webm=>{//«
-
-//let iter=0;
-//let done = false;
-
-
-//return parse_section(webm, WEBM, 0, false);
-
-//};//»
-
-const ebml_sz=(buf, pos)=>{//«
-	let nb;
-	let b = buf[pos];
-
-//xxxxxxxx
-	if (b&128) {nb = 1; b^=128;}
-	else if (b&64) {nb = 2;b^=64;}
-	else if (b&32) {nb = 3;b^=32;}
-	else if (b&16) {nb = 4;b^=16;}
-	else if (b&8) {nb = 5;b^=8;}
-	else if (b&4) {nb = 6;b^=4;}
-	else if (b&2) {nb = 7;b^=2;}
-	else if (b&1) {nb = 8;b^=1;}
-	let str = "0x"+(b.toString(16));
-	let end = pos+nb;
-//	if (end>=buf.length) {
-//		cberr(`Invalid ebml size @${pos}`);
-//		return false;
-//	}
-	let ch; 
-	for (let i=pos+1; i < end; i++) {
-		ch = buf[i].toString(16);
-		if (ch.length==1) ch = "0"+ch;
-		str = str + ch;
-	}   
-	return [parseInt(str), end]
-}//»
-const arr2text=(arr)=>{//«
-	let ret="";
-	for (let i=0; i < arr.length; i++) {
-		let code = arr[i];
-		if (code===0) ret+=" ";
-		else ret+=String.fromCharCode(code);
-	}
-	return ret;
-}//»
-const hex2text=(val)=>{//«
-	let ret="";
-	for (let j=0; j < val.length; j+=2) ret+=String.fromCharCode(parseInt("0x"+val.slice(j,j+2)));
-	return ret;
-}//»
-const hexeq=(bufarg, start, offset, strarg, if_nowarn)=>{//«
-	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
-	var ret = arr.map(x=>{
-		let s = ""+x.toString(16);
-		if (s.length == 1) return "0"+s;
-		return s;
-	});
-	var str = ret.toString().replace(/,/g,"");
-	return (strarg===str);
-}//»
-const gethex=(bufarg, start, offset, if_fmt)=>{//«
-	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
-	var ret = arr.map(x=>{
-		let s = ""+x.toString(16);
-		if (s.length == 1) return "0"+s;
-		return s;
-	});
-	let raw = ret.toString().replace(/,/g,"");
-	let ret_str="";
-	if (!if_fmt) ret_str = raw;
-	else {
-		for (let i=0; i < raw.length; i+=2) ret_str += raw[i]+raw[i+1]+" ";
-	}
-	return ret_str;
-}//»
-const read_1byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 1));}
-const read_2byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 2));}
-const read_4byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 4));}
-const read_8byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 8));}
-const read_nbyte_int=(n, bufarg, offset)=>{
-	if (n===1) return read_1byte_int(bufarg, offset);
-	if (n===2) return read_2byte_int(bufarg, offset);
-	if (n===4) return read_4byte_int(bufarg, offset);
-	if (n===8) return read_8byte_int(bufarg, offset);
-};
-//function read_4byte_float(bufarg, offset){return parseFloat("0x"+gethex(bufarg, offset, 4));}
-//»
-
+const TRACK_TYPES={1:"video",2:"audio",3:"complex",16:"logo",17:"subtitle",18:"buttons",32:"control",33:"metadata"};
 //Webm IDs«
 
 const EBML_ID = "1a45dfa3";
@@ -1278,8 +652,9 @@ const TOPLEVEL_ID_MAP={
 
 
 //»
-const WEBM = {//«
-"id":"WEBM",
+
+const WebmTags = {//«
+"id":"WebmTags",
 "kids": {
 	"1a45dfa3": {//HEADER«
 		"id": "HEADER",
@@ -1485,7 +860,7 @@ const WEBM = {//«
 						"id": "BLOCKGROUP",
 						"out":[],
 						"mult":true,
-					"kids": {
+						"kids": {
 							"a1": {"id": "BLOCK"},
 							"9b": {"id": "BLOCKDURATION"},
 							"fb": {"id": "BLOCKREFERENCE"},
@@ -1565,1483 +940,1165 @@ const WEBM = {//«
 
 };
 
-const SEGMENT = WEBM.kids[SEGMENT_ID];
+const SEGMENT = WebmTags.kids[SEGMENT_ID];
 const SEGMENTKIDS = SEGMENT.kids;
 const SEEKHEAD = SEGMENTKIDS[SEEKHEAD_ID];
 const INFO = SEGMENTKIDS[INFO_ID];
+const TRACKS = SEGMENTKIDS[TRACKS_ID];
 const CUES = SEGMENTKIDS[CUES_ID];
+const CLUSTERS = SEGMENTKIDS[CLUSTER_ID];
 
 //»
 
+//»
+//Funcs«
+
+const WebmFile = function(){//«
+
+this.makeInfo=()=>{//«
+	let _dur = this.duration;
+	let _tcs = this.timeCodeScale;
+	let _ma = this.muxingApp;
+	let _wa = this.writingApp;
+	if (!(_dur&&_tcs&&_ma&&_wa)) {
+		cerr("Not all info are set");
+		return;
+	}
+	let tcs = make_ebml_elem([0x2a, 0xd7, 0xb1], num_to_arr(_tcs));
+	let durdat = new Uint8Array((new Float32Array([_dur])).buffer).reverse();
+	let dur = make_ebml_elem([0x44, 0x89], durdat);
+	let ma = make_ebml_elem([0x4d, 0x80], str_to_arr(_ma));
+	let wa = make_ebml_elem([0x57, 0x41], str_to_arr(_wa));
+
+	let info_arr = new Uint8Array(tcs.length+dur.length+ma.length+wa.length);
+	let cur=0;
+	info_arr.set(tcs,cur);cur+=tcs.length;
+	info_arr.set(dur,cur);cur+=dur.length;
+	info_arr.set(ma,cur);cur+=ma.length;
+	info_arr.set(wa,cur);
+	this.info = make_ebml_elem([0x15, 0x49, 0xa9, 0x66], info_arr);
+};//»
+
+this.makeClusters=async()=>{//«
+
+let a = this.clusterData;
+if (!a) return cerr("No cluster data");
+let all_clusters = [];
+let clust_tot = 0;
+let cluster_sizes = [];
+let cluster_times = [];
+while (a.length){
+	let clust = a.shift();
+	let tm = clust.timestamp;
+	let blocks = clust.blocks;
+	let all=[];
+	for (let b of blocks){
+		all.push(make_ebml_elem([0xa3], b));
+	}
+	let tot=0;
+	for (let bl of all) tot+=bl.length;
+	let allblocks = new Uint8Array(tot);
+	let cur=0
+	for (let bl of all){
+		allblocks.set(bl,cur);
+		cur+=bl.length;
+	}
+	let clustertimecode_elem = make_ebml_elem([0xe7], num_to_arr(tm));
+	let cluster_data = new Uint8Array(clustertimecode_elem.length+allblocks.length);
+	cluster_data.set(clustertimecode_elem, 0);
+	cluster_data.set(allblocks, clustertimecode_elem.length);
+
+//	let clustelem = make_ebml_elem([0x1f, 0x43, 0xb6, 0x75], cluster_data);
+	let clustelem = make_ebml_elem([0x1f, 0x43, 0xb6, 0x75], cluster_data);
+//log(clustelem);
+	clust_tot+=clustelem.length;
+	all_clusters.push(clustelem);
+	cluster_sizes.push(clustelem.length);
+	cluster_times.push(tm);
+}
+//log(cluster_sizes);
+//log(cluster_times);
+
+let all = new Uint8Array(clust_tot);
+let curpos = 0;
+for (let cl of all_clusters){
+	all.set(cl, curpos);
+	curpos+=cl.length;
+}
+//log(all);
+//this.clustersArray = all_clusters;
+this.clusters = all;
+this.clusterSizes = cluster_sizes;
+this.clusterTimes = cluster_times;
+
+};//»
+
+this.makeSeekHead=()=>{//«
+
+
+//"114d9b74":{"id":"SEEKHEAD","kids":{"4dbb":{"id":"SEEKENTRY",		//MULT "out":[],"mult":true,"kids":{"53ab":{"id":"SEEKID"},"53ac":{"id":"SEEKPOSITION"}}}}},
+//const INFO_ID = "1549a966";
+//const TRACKS_ID = "1654ae6b";
+//const CLUSTER_ID = "1f43b675";
+//const CUES_ID = "1c53bb6b";
+//
+//Each SEEKENTRY == 26 bytes???
+
+//So, SEEKHEAD datlen = 4*26
+//And, SEEKHEAD elemlen = 8 + datlen = 112
+
+
+	let mk_seekent=(id, pos)=>{
+		let entdat = new Uint8Array(20);
+		let idelem = make_ebml_elem([0x53, 0xab], id);
+		let poselem = make_ebml_elem([0x53, 0xac], new Uint8Array((new Uint32Array([pos])).buffer).reverse());
+		entdat.set(idelem, 0);
+		entdat.set(poselem, 10);
+		return make_ebml_elem([0x4d, 0xbb], entdat);
+	};
+
+//112 is the preknown size of the SeekHead element (8 + 4*26; each entry is 26 bytes)
+	let start_pos = 112;
+	let info_ent = mk_seekent(new Uint8Array([0x15, 0x49, 0xa9, 0x66]), start_pos);
+	start_pos+=this.info.length;
+	let tracks_ent = mk_seekent(new Uint8Array([0x16, 0x54, 0xae, 0x6b]), start_pos);
+	start_pos+=this.tracks.length;
+	this.clusterStart = start_pos;
+	let clusters_ent = mk_seekent(new Uint8Array([0x1f, 0x43, 0xb6, 0x75]), start_pos);
+	start_pos+=this.clusters.length;
+	let cues_ent = mk_seekent(new Uint8Array([0x1c, 0x53, 0xbb, 0x6b]), start_pos);
+
+	let seekhead_dat = new Uint8Array(4*26);
+	seekhead_dat.set(info_ent, 26*0);
+	seekhead_dat.set(tracks_ent, 26*1);
+	seekhead_dat.set(clusters_ent, 26*2);
+	seekhead_dat.set(cues_ent, 26*3);
+
+	this.seekhead = make_ebml_elem([0x11, 0x4d, 0x9b, 0x74], seekhead_dat);
+
+};//»
+
+this.makeCues = ()=>{//«
+
+//"1c53bb6b":{//CUES 28 "id":"CUES","kids":{"bb":{"id":"POINTENTRY",		//MULT "out":[],"mult":true,"kids":{"b3":{"id":"CUETIME"},"b7":{"id":"CUETRACKPOSITION","kids":{"f7":{"id":"CUETRACK"},"f1":{"id":"CUECLUSTERPOSITION"},"f0":{"id":"CUERELATIVEPOSITION"},"b2":{"id":"CUEDURATION"},"5378":{"id":"CUEBLOCKNUMBER"}}}	}}				}}
+	let st = this.clusterStart;
+	let sizes = this.clusterSizes;
+	let times = this.clusterTimes;
+
+	//log("START",st);
+	//log(sizes);
+	//log(TRACK_ONE_ELEM);
+	let curpos = st;
+	//for (let sz of sizes){
+	let entries = [];
+	for (let i=0; i < sizes.length; i++){
+	let sz = sizes[i];
+	let tm = times[i];
+	//log(curpos, sz);
+	let cuecluspos_elem = make_ebml_elem([0xf1], num_to_arr(curpos));
+	let cuetrackpos_dat = new Uint8Array(cuecluspos_elem.length + TRACK_ONE_ELEM.length);
+	cuetrackpos_dat.set(TRACK_ONE_ELEM, 0);
+	cuetrackpos_dat.set(cuecluspos_elem, TRACK_ONE_ELEM_LEN);
+
+	let cuetrackpos_elem = make_ebml_elem([0xb7], cuetrackpos_dat);
+	let cuetime_elem = make_ebml_elem([0xb3], num_to_arr(tm));
+
+	let pntentry_dat = new Uint8Array(cuetrackpos_elem.length+cuetime_elem.length);
+	pntentry_dat.set(cuetime_elem, 0);
+	pntentry_dat.set(cuetrackpos_elem, cuetime_elem.length);
+
+	let pntentry_elem = make_ebml_elem([0xbb], pntentry_dat);
+	entries.push(pntentry_elem);
+
+	curpos+=sz;
+	//log(cluspos_elem);
+	}
+	let entslen=0;
+	for (let ent of entries){
+		entslen+=ent.length;
+	}
+	let cues_dat = new Uint8Array(entslen);
+	curpos = 0;
+	for (let ent of entries){
+		cues_dat.set(ent, curpos);
+		curpos+=ent.length;
+	}
+	let cues_elem = make_ebml_elem([0x1c, 0x53, 0xbb, 0x6b], cues_dat);
+	this.cues = cues_elem;
+
+};//»
+
+this.makeSegment=()=>{//«
+	let skhd = this.seekhead;
+	let info = this.info;
+	let trcks = this.tracks;
+	let clstrs = this.clusters;
+	let cues = this.cues;
+	if (!(skhd&&info&&trcks&&clstrs&&cues)){
+	cerr("Need all five sections!");
+	return;
+	}
+	//const SEGMENT_ID = "18538067";
+	let segment_len = skhd.length + info.length + trcks.length + clstrs.length + cues.length;
+	let segment_dat = new Uint8Array(segment_len);
+	let curpos=0;
+	segment_dat.set(skhd, curpos);curpos+=skhd.length;
+	segment_dat.set(info, curpos);curpos+=info.length;
+	segment_dat.set(trcks, curpos);curpos+=trcks.length;
+	segment_dat.set(clstrs, curpos);curpos+=clstrs.length;
+	segment_dat.set(cues, curpos);
+
+	this.segment = make_ebml_elem([0x18, 0x53, 0x80, 0x67], segment_dat);
+}//»
+
+this.makeFile = ()=>{//«
+	let ebml = this.ebml;
+	let seg = this.segment;
+	if (!(ebml&&seg)){
+		cerr("Need ebml and segment!");
+		return;
+	}
+	let file = new Uint8Array(ebml.length+seg.length);
+	file.set(ebml, 0);
+	file.set(seg, ebml.length)
+
+	this.file = file;
+};//»
+
+
+};//»
+
+const encode_image_data=(video_frames, cutoff, Y)=>{//«
+	let cutoff_ticks = cutoff / 1000;
+	let blocks=[];
+	let last_time = video_frames[video_frames.length-1].timestamp;
+	const doencode=async()=>{//«
+		let config={
+			codec: "vp8",
+			width: 480,
+			height: 360,
+			bitrate: 1_000_000,
+			framerate: 30
+		};
+		let gotfirst = false;
+		const encoder = new VideoEncoder({//«
+			output:e=>{
+				let a = new Uint8Array(e.byteLength);
+				let tmstamp = e.timestamp;
+				let tm = Math.round(tmstamp/10**3);
+				let tmarr = new Uint8Array((new Uint16Array([tm-cutoff_ticks])).buffer);
+				e.copyTo(a);
+				let b = new Uint8Array(a.length+4);
+				b[0] = 129;
+				b[1] = tmarr[1];
+				b[2] = tmarr[0];
+				if (!gotfirst) {
+					b[3]=128;
+					gotfirst = true;
+				}
+				b.set(a, 4);
+				blocks.push(b);
+				if (tmstamp === last_time){
+					Y&&Y(blocks);
+					encoder.flush();
+				}
+			},
+			error:e=>{
+				cerr(e)
+			},
+		});//»
+		let {supported} = await VideoEncoder.isConfigSupported(config);
+		if (!supported) {
+			werr("UNSUPPORTED CONFIG!");
+cerr("UNSUPPORTED CONFIG!");
+			Y();
+			return;
+		}
+		encoder.configure(config);
+//		let iskey = true;
+//		werr(" ");
+		let didone = false;
+		for (let fr of video_frames) {
+			if (fr.timestamp < cutoff) {
+				fr.close();
+				continue;
+			}
+			encoder.encode(fr, {keyFrame: !didone});
+			didone = true;
+//log(fr);
+			fr.close();
+//			iskey=false;
+		}
+
+	};//»
+
+
+doencode();
+//log(dat);
+
+};//»
+
+const get_cluster_from_video_blocks=(blocks, cutoff)=>{//«
+
+return new Promise(async(Y,N)=>{
+
+	let tmdiff;
+	let chunks=[];
+	let didone=false;
+	for (let b of blocks){
+		let t;
+		let tm = toint([b[1],b[2]])*1000;
+//log(tm, cutoff);
+//		if (tm < cutoff) continue;
+
+		if (!didone) {
+			t = "key";
+			tmdiff = tm;
+		}
+		else t = "delta";
+
+		let ch = new EncodedVideoChunk({
+			timestamp: tm,
+			type: t,
+			data: b.slice(4)
+		});
+		didone = true;
+		chunks.push(ch);
+	}
+//log(chunks);
+
+	let num = chunks.length;
+	let lasttime = chunks[num-1].timestamp;
+	let frames = [];
+	const init = {
+		output: async fr=>{
+			let b = new Uint8Array(fr.allocationSize());
+			fr.copyTo(b);
+			let imdat = new ImageData(480, 360);
+			imdat.data.set(b);
+			let nfr = new VideoFrame(await createImageBitmap(imdat), {timestamp: fr.timestamp});
+			frames.push(nfr);
+			if (fr.timestamp===lasttime) encode_image_data(frames, cutoff, Y);
+			fr.close();
+		},
+		error: (e) => {
+			cerr(e.message);
+		}
+	};
+
+	const config={codec:"vp8",codedWidth:480,codedHeight:360};
+
+	const { supported } = 
+	await VideoDecoder.isConfigSupported(config);
+	const decoder = new VideoDecoder(init);
+	decoder.configure(config);
+	for (let ch of chunks) decoder.decode(ch);
+
+
+});
+
+};//»
+
+const make_image_from_bytes=async bytes=>{//«
+	let w = await Core.Desk.api.openApp("None");
+	let m = w.main;
+	let can = Core.api.mk('canvas');
+	let ctx = can.getContext('2d');
+	can.width=480;
+	can.height=360;
+	m.add(can);
+	let imdat = ctx.createImageData(480, 360);
+	imdat.data.set(bytes,0);
+	ctx.putImageData(imdat,0,0);
+};//»
+const get_images_from_muxed_blocks=async blocks=>{//«
+
+	let didone=false;
+	let chunks=[];
+
+	for (let b of blocks){
+		if (b[0]===130) continue;
+		let t;
+		if (!didone) t = "key";
+		else t = "delta";
+		let tm = toint([b[1],b[2]])*1000;
+		let ch = new EncodedVideoChunk({
+			timestamp: tm,
+			type: t,
+			data: b.slice(4)
+		});
+		didone = true;
+		chunks.push(ch);
+	}
+
+	let num = chunks.length;
+	let lasttime = chunks[num-1].timestamp;
+	let frames = [];
+	const init = {
+		output: async fr=>{
+			let b = new Uint8Array(fr.allocationSize());
+			fr.copyTo(b);
+			let imdat = new ImageData(480, 360);
+			imdat.data.set(b);
+			let nfr = new VideoFrame(await createImageBitmap(imdat), {timestamp: fr.timestamp});
+			frames.push(nfr);
+			if (fr.timestamp===lasttime) encode_image_data(frames);
+			fr.close();
+		},
+		error: (e) => {
+			cerr(e.message);
+		}
+	};
+
+	const config={codec:"vp8",codedWidth:480,codedHeight:360};
+
+	const { supported } = 
+	await VideoDecoder.isConfigSupported(config);
+	const decoder = new VideoDecoder(init);
+	decoder.configure(config);
+	for (let ch of chunks) decoder.decode(ch);
+
+};//»
+
+const make_cluster_elem_from_blocks=(timestamp, blocks)=>{//«
+	let all=[];
+	for (let b of blocks){
+		all.push(make_ebml_elem([0xa3], b));
+	}
+	let tot=0;
+	for (let bl of all) tot+=bl.length;
+	let allblocks = new Uint8Array(tot);
+	let cur=0
+	for (let bl of all){
+		allblocks.set(bl,cur);
+		cur+=bl.length;
+	}
+
+	let clustertimecode_elem = make_ebml_elem([0xe7], num_to_arr(timestamp));
+	let cluster_data = new Uint8Array(clustertimecode_elem.length+allblocks.length);
+	cluster_data.set(clustertimecode_elem, 0);
+	cluster_data.set(allblocks, clustertimecode_elem.length);
+	return make_ebml_elem([0x1f, 0x43, 0xb6, 0x75], cluster_data);
+};//»
+const new_clusters_data = (b, timestamp_diff)=>{//«
+	let c=0;
+	let iter=0;
+	let sizes=[];
+	let times=[];
+	while (true) {
+		if (iter > 1000000) return cberr("INFINITTEEEEE!!!!!");
+		if (!(b[c]==0x1f&&b[c+1]==0x43&&b[c+2]==0xb6&&b[c+3]==0x75)) {
+//Cues == 1c53bb6b
+			if (b[c]==0x1c&&b[c+1]==0x53&&b[c+2]==0xbb&&b[c+3]==0x6b) {
+				return {sizes: sizes, times: times, data:b};
+			}
+
+log(tohex(b.slice(c, c+20)));
+			return `Cluster ID NOT found @${c} (iter=${iter})`;
+		}
+		let rv = ebml_sz(b, c+4);
+		if (b[rv[1]]!==0xe7) return `Cluster Timecode NOT found @${rv[1]}`;
+		let from=rv[1]+1;
+		let r = ebml_sz(b, from);
+//log(timemult*(toint(b.slice(r[1], r[0]+r[1])) - start_timestamp));
+		let tm = toint(b.slice(r[1], r[0]+r[1])) - timestamp_diff;
+		times.push(tm);
+		let new_time_arr = num_to_arr(tm, r[0]);
+		b.set(new_time_arr, r[1]);
+		let new_c = rv[0]+rv[1];
+		sizes.push(new_c - c);
+		c=new_c;
+		if (c >= b.length) break;
+		iter++;
+	}
+	return {sizes: sizes, times: times, data:b};
+};//»
+const reencode_from_video_file = (path, start, end, shell_funcs={}) =>{//«
+return new Promise(async(Y,N)=>{
+
+	const canplay=()=>{return new Promise((Y,N)=>{video.oncanplay=Y;});};
+	const drawingLoop = async(timestamp, frame) => {//«
+		ctx.drawImage(await createImageBitmap(video), 0, 0);
+		let tm = video.currentTime;
+		if (start_time === null) start_time = tm;
+		video_frames.push(new VideoFrame(canvas, { timestamp: 1000000 * (tm - start_time) }));
+		wclerr(`Extracted ${video_frames.length} frames`);
+		if(video.currentTime >= end) {
+			video.pause();
+			return doencode();
+		}
+		video.requestVideoFrameCallback(drawingLoop);
+	};//»
+	const doencode=async()=>{//«
+//AHYBDHNT
+		let config={
+			codec: "vp8",
+			width: w,
+			height: h,
+			bitrate: 1_000_000,
+			framerate: 30
+		};
+		let gotfirst = false;
+		const encoder = new VideoEncoder({//«
+			output:e=>{
+				let a = new Uint8Array(e.byteLength);
+				let tm = Math.round(e.timestamp/10**3);
+				let tmarr = new Uint8Array((new Uint16Array([tm])).buffer);
+				e.copyTo(a);
+				let b = new Uint8Array(a.length+4);
+				b[0] = 129;
+				b[1] = tmarr[1];
+				b[2] = tmarr[0];
+				if (!gotfirst) {
+					b[3]=128;
+					gotfirst = true;
+				}
+				b.set(a, 4);
+				blocks.push(b);
+				wclerr(`Encoded ${blocks.length}/${video_frames.length} frames (${Math.round(blocks.length/video_frames.length)}%)`);
+				if (blocks.length === video_frames.length){
+					wclerr(`Encoded ${blocks.length}/${video_frames.length} frames (100%)`);
+					Y(blocks);
+					encoder.flush();
+				}
+			},
+			error:e=>{
+				cerr(e)
+			},
+		});//»
+		let {supported} = await VideoEncoder.isConfigSupported(config);
+		if (!supported) {
+			werr("UNSUPPORTED CONFIG!");
+cerr("UNSUPPORTED CONFIG!");
+			Y();
+			return;
+		}
+		encoder.configure(config);
+		let iskey = true;
+		werr(" ");
+		for (let fr of video_frames) {
+			encoder.encode(fr, {keyFrame: iskey});
+			fr.close();
+			iskey=false;
+		}
+
+	};//»
+
+	let start_time = null;
+	let video_frames = [];
+	let blocks = [];
+
+	const{werr,wclerr}=shell_funcs;
+	if (!werr) werr=NOOP;
+	if (!wclerr) wclerr=NOOP;
+
+	let video = Core.api.mk('video');
+	let canvas = Core.api.mk("canvas");
+	let ctx = canvas.getContext('2d');;
+
+	video.volume = 0;
+	video.src = Core.fs_url(path);
+	video.currentTime = start;
+	await canplay();
+
+	let w = video.videoWidth;
+	let h = video.videoHeight;
+	canvas.width = w;
+	canvas.height = h;
+	werr(" ");
+
+	video.play();
+	video.requestVideoFrameCallback(drawingLoop);
+
+});
+};//»
+const get_section_pos_of_webm_file=(id, bytes)=>{//«
+
+	let a = bytes;
+	if (!(a[0]==0x1a&&a[1]==0x45&&a[2]==0xdf&&a[3]==0xa3)) return "EBML header not found";
+
+	let rv = ebml_sz(a, 4);
+
+	let c = rv[0]+rv[1];
+	if (!(a[c] == 0x18 && a[c+1] == 0x53 && a[c+2] == 0x80 && a[c+3] == 0x67)) return "Segment ID not found";
+	c+=4;rv = ebml_sz(a, c);c = rv[1];
+	let segment_start = c;
+	//const SEEKHEAD_ID = "114d9b74";
+	if (!(a[c] == 0x11 && a[c+1]==0x4d && a[c+2] == 0x9b && a[c+3] == 0x74)) return "SeekHead ID not found";
+	rv = ebml_sz(a, c+4);
+
+	{//SeekHead
+		let bytes = a.slice(c, rv[0]+rv[1]);
+		let sect = parse_section(bytes, SEGMENT)[1];
+		for (let i=0; i < sect.length; i+=2){
+			let ent = sect[i+1];
+			if (ent[1][0] == id[0] && ent[1][1] == id[1] && ent[1][2] == id[2] && ent[1][3] == id[3]){
+				return {
+					offset: segment_start,
+					value: toint(ent[3])
+				}
+//				return toint(ent[3])+segment_start;
+			}
+		}
+	}
+
+};//»
+const get_timing_of_webm_file=(bytes)=>{//«
+	let duration, timecodescale;
+	let a = bytes;
+	let rv = get_section_pos_of_webm_file([0x15,0x49,0xa9,0x66], bytes);
+	if (!rv) return "Could not get the Info position from the file";
+	if (isstr(rv)) return rv;
+	let c = rv.offset + rv.value;
+	if (!(a[c] == 0x15 && a[c+1] == 0x49 && a[c+2]==0xa9 && a[c+3]==0x66)) return "Info ID not found";
+	rv = ebml_sz(a, c+4);
+	{//Info
+		let bytes = a.slice(c, rv[0]+rv[1]);
+		let sect = parse_section(bytes, SEGMENT)[1];
+		for (let i=0; i < sect.length; i+=2){
+			if (sect[i].match(/^DURATION/)) duration = tofloat(sect[i+1]);
+			else if (sect[i].match(/^TIMECODESCALE/)) timecodescale = toint(sect[i+1]);
+		}
+	}
+	if (!(duration && timecodescale)) return "duration/timecodescale not found";
+	return {
+		duration: duration,
+		timeCodeScale: timecodescale
+	}
+};//»
+const num_to_ebml=n=>{//«
+	if (n > 260000000){
+		cerr(`The number is out of range (want <= 260000000)`);
+		return;
+	}
+	let a = Array.from(new Uint8Array((new Uint32Array([n])).buffer).reverse());
+	a[0]|=0x10;
+	return a;
+};//»
+const make_ebml_elem=(tag, dat)=>{//«
+	let sz = num_to_ebml(dat.length);
+	let elem = new Uint8Array(tag.length+sz.length+dat.length);
+	elem.set(tag,0);
+	elem.set(sz, tag.length);
+	elem.set(dat, tag.length+sz.length);
+	return elem;
+};//»
+const add_sz_marker=(a, l)=>{//«
+	if (l==8) a[0]|=0x1;
+	else if (l==7) a[0]|=0x2;
+	else if (l==6) a[0]|=0x4;
+	else if (l==5) a[0]|=0x8;
+	else if (l==4) a[0]|=0x10;
+	else if (l==3) a[0]|=0x20;
+	else if (l==2) a[0]|=0x40;
+	else if (l==1) a[0]|=0x80;
+};//»
+const path_to_val = (bytes, qstr, fmt)=> {//«
+
+let qarr = qstr.split("\/");
+if (!qarr[0]) qarr.shift();
+
+let marr = [];
+let curobj = WebmTags;
+let curid;
+let rv;
+
+let subscript;
+let getall=false;
+let getlast=false;
+let getfromend=null;
+while (qarr.length) {
+	let q1 = qarr.shift();
+//log(q1);
+	let arrnum=null;
+	let bracks = q1.match(/^(.+)\[(\d*|f(\-\d+)?)\]$/);
+//log(bracks);
+	if (bracks){
+//log(bracks);
+		q1 = bracks[1];
+		let br2 = bracks[2];
+		let br3 = bracks[3];
+		if (br3){
+//log("BR3",br3);
+			getfromend = parseInt(br3);
+			getlast = false;
+//log(getfromend);
+		}
+		else if (br2==="") getall=true;
+		else if (br2==="f") {
+			getlast = true;
+		}
+//		else 
+		arrnum = parseInt(bracks[2]);
+	}
+	try {
+	rv = parse_section_flat(bytes, curobj);
+	}
+	catch(e){
+		return "Parse error";
+	}
+	let ids=[];
+	for (let i=0; i < rv.length - 1; i+=2){
+		if ((new RegExp("^.*"+q1+".*:","i")).test(rv[i])) {
+			ids.push(rv[i]);
+			curid = rv[i].split(":").pop();
+			marr.push(rv[i+1]);
+		}
+	}
+	if (!marr.length) return `No matches!`;
+	subscript = 0;
+	if (marr.length > 1) {
+		if (arrnum===null) {
+			return `Multiple matches(${marr.length}): ${q1}`;
+		}
+
+		if (arrnum >= marr.length) return `The requested array value(${arrnum}) is out of bounds [0-${marr.length-1}]`;
+		if (getall) {
+			if (qarr.length) return "Invalid query (all==true)";
+			return marr;
+		}
+		if (getlast) subscript = marr.length - 1;
+		else if (Number.isFinite(getfromend)){
+subscript = marr.length - 1 + getfromend;
+//log("SUBSCRIPT", subscript);
+if (subscript < 0) {
+cwarn("Subscript was negative", subscript);
+	subscript = 0;
+}
+//log(s);
+		}
+		else subscript = arrnum;
+	}
+
+	if (qarr.length) {
+		if (!curobj.kids) {
+log(curobj);
+			return "The current object has no kids!";
+		}
+		curobj = curobj.kids[curid];
+		bytes = marr[subscript];
+		marr=[];
+	}
+}
+
+{
+
+let val = marr[subscript];
+//if (val.length > 8)
+if (fmt==="int") {
+	if (val.length > 8) return `Does not appear to be an 'int' (size==${val.length})`;
+	return toint(val);
+}
+if (fmt=="float") {
+	if (val.length > 8) return `Does not appear to be a 'float' (size==${val.length})`;
+try {
+	return tofloat(val);
+}
+catch(e){
+return e.message;
+}
+}
+if (fmt=="hex") return [tohex(val)];
+if (fmt=="str") return [tostr(val)];
+return val;
+
+}
+
+}//»
+const tostr=(arr)=>{//«
+	let s='';
+	for (let code of arr) s+=String.fromCharCode(code);
+	return s;
+};//»
+const tohex=(arr, line_w)=>{//«
+	return to_hex_lines(arr, line_w);
+};//»
+const tofloat = (arr) => {//«
+	if (arr.length <= 4) return (new DataView(arr.buffer)).getFloat32();
+	if (arr.length <= 8) return (new DataView(arr.buffer)).getFloat64();
+}//»
+const toint = (arr, if_cp) => {//«
+	if (if_cp) arr = arr.slice().reverse();
+	else arr = arr.reverse();
+	let n = 0;
+	for (let i = 0; i < arr.length; i++) n |= (arr[i] << (i * 8));
+	return n;
+}//»
+const to_hex_str=(arr, max_len)=>{//«
+	let str = '';
+	let len = arr.length;
+	if (max_len) len = max_len;
+	for (let i=0; i < len; i++) str = str + arr[i].toString(16).padStart(2, "0");
+	return str;
+};//»
+const to_hex_lines=(arr, line_w)=>{//«
+	if (!line_w) line_w = 20;
+//	let line_w = 20;
+	let str = '';
+	for (let i=0; i < arr.length; i++) {
+		str = str + arr[i].toString(16).padStart(2, "0") + " ";
+		if (!((i+1)%line_w)) str+="\n";
+	}
+	return str;
+}//»
+const dump_hex_lines=(arr, line_w)=>{//«
+log(to_hex_lines(arr));
+}//»
+const num_to_arr=(num, want_size)=>{//«
+	let a = Array.from(new Uint8Array((new Uint32Array([num])).buffer).reverse());
+
+//if (want_size)
+	if (want_size && a.length === want_size) return a;
+	if (!a[0]) a.shift();
+	if (want_size && a.length === want_size) return a;
+	if (!a[0]) a.shift();
+	if (want_size && a.length === want_size) return a;
+	if (!a[0]) a.shift();
+	return a;
+//	if (want_size && a.length === want_size) return a;
+//	if (!a[0]) a.shift();
+//	return a;
+};//»
+const str_to_arr = (s)=>{//«
+	let out = new Uint8Array(s.length);
+	for (let i=0; i < s.length; i++) out[i]= s[i].charCodeAt();
+	return out;
+};//»
+const num_to_ebml_arr=(num, want_size)=>{//«
+	let arr = num_to_arr(num, want_size);
+	add_sz_marker(arr, want_size);
+	return arr;
+};//»
+const int_to_ebml=num=>{//«
+	let n;
+
+	if (num < 0) throw new Error(`Invalid number`);
+	if (num < 127) return [0x80 | num];
+	else if (num < 256) return [ 0x40, num];
+	if (num < 65536) n = 0x20;
+	else if (num <16777216) n = 0x10;
+	else if (num < 4294967296) n = 0x08;
+
+	if (!n) throw new Error(`Invalid number`);
+
+	let a = num_to_arr(num);
+	a.unshift(n);
+
+	return a;
+
+};//»
+const get_chunk=(arr, timemult, starttm)=>{//«
+
+const set_len=()=>{
+	let a = new Uint8Array((new Uint32Array([last-12])).buffer);
+//log("LEN", a);
+	out[8] = a[3];
+	out[9] = a[2];
+	out[10] = a[1];
+	out[11] = a[0];
+};
+if (!arr.length) return;
+//log(arr);
+let out = new Uint8Array(200000);
+out[0] = 0x1f;//CLUSTER_ID
+out[1] = 0x43;//   |
+out[2] = 0xb6;//   |
+out[3] = 0x75;//   v
+out[4] = 1;// 4->11 has the cluster length
+out[12] = 0xe7;//CLUSTERTIMECODE
+out[13] = 132;//Length = 4
+//out[13]=1;//Use 8 bytes
+{
+//let a = new Uint8Array((new Uint32Array([starttm])).buffer);
+let usetime;
+if (!starttm) usetime=1;
+else usetime = starttm;
+//let a = new Uint8Array((new Uint32Array([starttm])).buffer);
+let a = new Uint8Array((new Uint32Array([usetime])).buffer);
+//log(a);
+out[14] = a[3];
+out[15] = a[2];
+out[16] = a[1];
+out[17] = a[0];
+}
+//log("Start", starttm);
+let last=18;
+//1f43b675
+//a3
+let curtm = 0;
+for (let i=0; i < 1000; i+=2) {
+	let tm = arr.shift();
+	let dat = arr.shift();
+	if (!tm) {
+//log(i, curtm);
+		set_len();
+		return [out.slice(0, last), curtm];
+	}
+	let ln = dat.length;
+	out.set([0xa3], last);
+	last++;
+	let a = int_to_ebml(ln);
+try {
+//log(a);
+	out.set(a, last);
+}
+catch(e){
+cerr("Out of bounds?", last);
+return;
+}
+	last+=a.length;
+//	let a = new Uint8Array((new Uint32Array([ln])).buffer)
+//	out.set([0xa3, 1, 0, 0, 0, a[3], a[2], a[1], a[0]], last);
+//	last+=9;
+//log(curtm);
+	let b = new Uint8Array((new Uint16Array([curtm])).buffer);
+	dat.set([b[1], b[0]], 1);
+try {
+	out.set(dat, last);
+}
+catch(e){
+cerr("Out of bounds?", last);
+return;
+}
+
+//	out.set(dat, last);
+
+	last+=ln;
+	curtm+=Math.round(tm/timemult);
+}
+set_len();
+return [out.slice(0, last), curtm];
+
+
+};//»
+const parse_section=(buf, par, iter, done, if_debug)=>{//«
+	if (!done) done = false;
+	if (!iter) iter=0;
+	if (done) return;
+	iter++;
+	if (iter>10000) {
+		cberr("Inifite loop?");
+		return;
+	}
+let c=0;
+let flen = buf.length;
+let rv;
+let kids = [];
+while(1){
+	if (done) return kids;
+	iter++;
+	if (iter>10000) {
+		cberr("Inifite loop?");
+		return;
+	}
+
+	let s;
+	try{
+		s=buf[c].toString(16);
+	}
+	catch(e){
+		werr(`Read error @${c} in ${par.id}`);
+		done=true;
+		return;
+	}
+	let ch = s[0];
+	let n;
+
+	if (ch=="1"){n=4;}
+	else if (ch.match(/[23]/)){n=3;}
+	else if (ch.match(/[4-7]/)){n=2;}
+	else n=1;
+	rv=gethex(buf, c, n);
+	let kid = par.kids[rv];
+
+	if (rv=="ec"){
+//log("kid", kid);
+	}
+	else if (!kid){
+		if (!no_error) cberr(`Invalid id (${rv}) in ${par.id} @${c}`);
+		return;
+	}
+	c+=n;
+	let id = rv;
+	if (!(rv = ebml_sz(buf,c))) return;
+if (!rv[0]){
+//log(c, buf.slice(c-1, c+20));
+if (!no_error) cberr(`Got 0 length payload for id=${id}`);
+return;
+}
+	let bytes = buf.slice(rv[1],rv[0]+rv[1]);
+	if (kid) {//If not "Void" (0xec)
+		kids.push(`${kid.id}:${id}`);
+if (if_debug) log(`${kid.id}:${id}`);
+		if (kid.kids) {
+			let sect = parse_section(bytes, kid, iter, done, if_debug);
+			if (!sect) return;
+if (debug_section) {
+log(sect);
+}
+			kids.push(sect);
+		}
+		else {
+			kids.push(bytes);
+		}
+
+	}
+	c=rv[0]+rv[1];
+	if (c==flen) break;
+}	
+return kids;
+};//»
+const parse_section_flat=(buf, par, iter, done)=>{//«
+	if (!done) done = false;
+	if (!iter) iter=0;
+	if (done) return;
+	iter++;
+	if (iter>10000) {
+		cberr("Inifite loop?");
+		return;
+	}
+let c=0;
+let flen = buf.length;
+let rv;
+let kids = [];
+while(1){
+	if (done) return kids;
+	iter++;
+	if (iter>10000) {
+		cberr("Inifite loop?");
+		return;
+	}
+
+	let s;
+	try{
+		s=buf[c].toString(16);
+	}
+	catch(e){
+		werr(`Read error @${c} in ${par.id}`);
+		done=true;
+		return;
+	}
+	let ch = s[0];
+	let n;
+
+	if (ch=="1"){n=4;}
+	else if (ch.match(/[23]/)){n=3;}
+	else if (ch.match(/[4-7]/)){n=2;}
+	else n=1;
+	rv=gethex(buf, c, n);
+	let kid = par.kids[rv];
+	if (rv=="ec"){
+	}
+	else if (!kid){
+		if (!no_error) cberr(`Invalid id (${rv}) in ${par.id} @${c}`);
+		return;
+	}
+	c+=n;
+	let id = rv;
+	if (!(rv = ebml_sz(buf,c))) return;
+	if (!rv[0]){
+		if (!no_error) cberr(`Got 0 length payload for id=${id}`);
+		return;
+	}
+	let bytes = buf.slice(rv[1],rv[0]+rv[1]);
+	if (kid) {//If not "Void" (0xec)
+		kids.push(`${kid.id}:${id}`);
+		kids.push(bytes);
+//		if (kid.kids) kids.push(bytes.length);
+//		else kids.push(bytes);
+	}
+	c=rv[0]+rv[1];
+	if (c==flen) break;
+}	
+return kids;
+};//»
+const ebml_sz = (buf, pos)=>{//«
+	let nb;
+	let b = buf[pos];
+
+//xxxxxxxx
+	if (b&128) {nb = 1; b^=128;}
+	else if (b&64) {nb = 2;b^=64;}
+	else if (b&32) {nb = 3;b^=32;}
+	else if (b&16) {nb = 4;b^=16;}
+	else if (b&8) {nb = 5;b^=8;}
+	else if (b&4) {nb = 6;b^=4;}
+	else if (b&2) {nb = 7;b^=2;}
+	else if (b&1) {nb = 8;b^=1;}
+	let str = "0x"+(b.toString(16));
+	let end = pos+nb;
+//	if (end>=buf.length) {
+//		cberr(`Invalid ebml size @${pos}`);
+//		return false;
+//	}
+	let ch; 
+	for (let i=pos+1; i < end; i++) {
+		ch = buf[i].toString(16);
+		if (ch.length==1) ch = "0"+ch;
+		str = str + ch;
+	}   
+	return [parseInt(str), end]
+}//»
+const arr2text=(arr)=>{//«
+	let ret="";
+	for (let i=0; i < arr.length; i++) {
+		let code = arr[i];
+		if (code===0) ret+=" ";
+		else ret+=String.fromCharCode(code);
+	}
+	return ret;
+}//»
+const hex2text=(val)=>{//«
+	let ret="";
+	for (let j=0; j < val.length; j+=2) ret+=String.fromCharCode(parseInt("0x"+val.slice(j,j+2)));
+	return ret;
+}//»
+const hexeq=(bufarg, start, offset, strarg, if_nowarn)=>{//«
+	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
+	var ret = arr.map(x=>{
+		let s = ""+x.toString(16);
+		if (s.length == 1) return "0"+s;
+		return s;
+	});
+	var str = ret.toString().replace(/,/g,"");
+	return (strarg===str);
+}//»
+const gethex=(bufarg, start, offset, if_fmt)=>{//«
+	var arr =Array.prototype.slice.call(bufarg.slice(start,start+offset));
+	var ret = arr.map(x=>{
+		let s = ""+x.toString(16);
+		if (s.length == 1) return "0"+s;
+		return s;
+	});
+	let raw = ret.toString().replace(/,/g,"");
+	let ret_str="";
+	if (!if_fmt) ret_str = raw;
+	else {
+		for (let i=0; i < raw.length; i+=2) ret_str += raw[i]+raw[i+1]+" ";
+	}
+	return ret_str;
+}//»
+const read_1byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 1));}
+const read_2byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 2));}
+const read_4byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 4));}
+const read_8byte_int=(bufarg, offset)=>{return parseInt("0x"+gethex(bufarg, offset, 8));}
+const read_nbyte_int=(n, bufarg, offset)=>{//«
+	if (n===1) return read_1byte_int(bufarg, offset);
+	if (n===2) return read_2byte_int(bufarg, offset);
+	if (n===4) return read_4byte_int(bufarg, offset);
+	if (n===8) return read_8byte_int(bufarg, offset);
+};//»
+//function read_4byte_float(bufarg, offset){return parseFloat("0x"+gethex(bufarg, offset, 4));}
+//»
+
+const NANOSECS_PER_SEC = 10**9;
+const UINT_ONE = new Uint8Array([1]);
+const TRACK_ONE_ELEM = make_ebml_elem([0xf7], UINT_ONE);
+const TRACK_ONE_ELEM_LEN = TRACK_ONE_ELEM.length;
 
 COMS[comarg](args);
 
 }//»
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*OLD«
-
-WEBM:async ()=>{//«
-
-let killed = false;
-Shell.kill_register(cb=>{
-	killed = true;
-	cb&&cb();
-});
-let opts = failopts(args,{s:{s:3,e:3},l:{start:3,end:3}});
-if (!opts) return;
-
-let startpos = opts.start||opts.s;
-let endpos = opts.end||opts.e;
-if (!(startpos && endpos)) return cberr("Expected start and end args!");
-if (startpos==="-") startpos=0;
-else{
-	startpos=parseFloat(startpos);
-	if (!Number.isFinite(startpos) && startpos>=0) return cberr("Invalid start");
-}
-
-//log(startpos, endpos);
-//cberr();
-//return;
-
-//NOTE1
-
-
-//General types anywhere:
-//ec void
-//bf crc32
-const arr_to_num = (arr)=>{let n = 0;for (let i=0; i<arr.length;i++)n|=(arr[i]<<(i*8)); return n;}
-const NF=(s)=>{
-cberr(`${s}: not found`);
-};
-let path = args.shift();
-if (!path) return cberr('No path given!');
-
-
-//log(parse_section(await fsapi.readFile(normpath(path),{binary:true}), WEBM, 0, false));
-let init_bytes = 20000;
-
-let a = await fsapi.readFile(normpath(path),{binary:true, start: 0, end: init_bytes});
-if (!a) return cberr(`${path}: not found`);
-if (!(a[0]==0x1A&&a[1]==0x45&&a[2]==0xDF&&a[3]==0xA3)){
-return NF("EBML ID");
-}
-let c;
-let r = ebml_sz(a, 4);
-c = r[0]+r[1];
-if (!(a[c]==0x18&&a[c+1]==0x53&&a[c+2]==0x80&&a[c+3]==0x67)){
-	return NF("Segment ID");
-}
-r = ebml_sz(a, c+4);
-let seg_start = r[1]
-c=seg_start;
-if (!(a[c]==0x11&&a[c+1]==0x4D&&a[c+2]==0x9B&&a[c+3]==0x74)) return NF("SeekHead ID");
-
-r = ebml_sz(a, c+4);
-
-//const SEGMENT = WEBM.kids[SEGMENT_ID].kids;
-const SEGMENT = WEBM.kids[SEGMENT_ID];
-const SEGMENTKIDS = SEGMENT.kids;
-const SEEKHEAD = SEGMENTKIDS[SEEKHEAD_ID];
-const INFO = SEGMENTKIDS[INFO_ID];
-const CUES = SEGMENTKIDS[CUES_ID];
-
-let skhd = parse_section(a.slice(r[1], r[1]+r[0]), SEEKHEAD, 0, false);
-let cues_off;
-let info_off;
-let cluster_off;
-let tracks_off;
-for (let i=0; i < skhd.length; i+=2){//«
-	if (skhd[i]!=="SEEKENTRY:4dbb") return NF("SeekEntry Id");
-	let ent = skhd[i+1];
-	if (ent.length!==4) return cberr(`Bad SeekEntry length: ${ent.length}`);
-	if (ent[0]!=="SEEKID:53ab") return NF("SeekID Id");
-	if (ent[2]!=="SEEKPOSITION:53ac") return NF("SeekPosition Id");
-	let id = ent[1];
-	if (id.length!==4) return cberr(`Bad SeekId array length: ${idarr.length}`);
-	if (id[0]==0x1c&&id[1]==0x53&&id[2]==0xbb&&id[3]==0x6b){
-		cues_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-	else if (id[0]==0x15&&id[1]==0x49&&id[2]==0xa9&&id[3]==0x66){
-		info_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-//"1f43b675"
-	else if (id[0]==0x1f&&id[1]==0x43&&id[2]==0xb6&&id[3]==0x75){
-		cluster_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-	else if (id[0]==0x16&&id[1]==0x54&&id[2]==0xae&&id[3]==0x6b){
-		tracks_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-//1654ae6b
-}//»
-
-//log(seg_start, info_off, cues_off, cluster_off, tracks_off);
-
-if (!(info_off&&cues_off&&tracks_off)) return cberr("Did not get info_off, cues_off and tracks_off!");
-
-if (!cluster_off){
-
-{
-let from = cues_off;
-
-let sz = ebml_sz(a, cues_off+4);
-
-//Hardcoded the location/size of the first POINTENTRY in the CUES
-let arr = a.slice(from+6, from+20);
-
-let rv = parse_section(arr, WEBM.kids["18538067"].kids["1c53bb6b"]);
-let first_cluster = toint(rv[1][3][3])+seg_start;
-
-//vvvvvvv  THERE IS A CLUSTER ID HERE   xxxxxxxxxx
-log(tohex(a.slice(first_cluster, first_cluster+4)));
-
-}
-
-cberr("Find cluster off...");
-return;
-}
-
-
-if (cluster_off > init_bytes){
-	let rv = await fsapi.readFile(normpath(path),{binary:true, start: init_bytes, end: cluster_off});
-	let b = new Uint8Array(init_bytes+rv.length);
-	b.set(a, 0);
-	b.set(rv, init_bytes);
-	a=b;
-}
-
-r = ebml_sz(a, info_off+4);
-let info = parse_section(a.slice(r[1], r[1]+r[0]), INFO, 0, false);
-let duration;
-let tcs;
-for (let i=0; i < info.length; i+=2){//«
-	if (info[i]=="DURATION:4489"){
-		if (info[i+1].length !== 4) return cberr("Expected 4 bytes for Duration, got: "+info[i+1].length);
-		duration = (new DataView(info[i+1].buffer)).getFloat32();
-//		d+1].buration = (new DataView(info[i+1].buffer)).getFloat32();
-	}
-	else if (info[i]=="TIMECODESCALE:2ad7b1"){
-		tcs = arr_to_num(info[i+1].reverse());
-//log("TCS",tcs);
-	}
-}//»
-if (!(duration&&tcs)) return cberr("Did not get duration and tcs!");
-let tmmult = tcs/10**9;
-//log("TMMULT",tmmult);
-duration*=tmmult;
-if (startpos >= duration) return cberr(`Invalid startpos duration=${duration}`);
-
-if (endpos==="-") endpos=duration;
-else{
-	endpos=parseFloat(endpos);
-	if (!(Number.isFinite(endpos) && endpos>startpos && endpos <= duration)) return cberr("Invalid endpos");
-}
-if (startpos == 0 && endpos == duration) return cbok("Nothing to do!");
-
-r = ebml_sz(a, cues_off+4);
-
-let cues = parse_section(a.slice(r[1], r[1]+r[0]), CUES, 0, false);
-
-let ALLCUES=[];
-let prev_tm=null, prev_off;
-for (let i=0; i < cues.length; i+=2){//«
-	if (cues[i]!=="POINTENTRY:bb") return NF("PointEntry Id");
-	let cue = cues[i+1]
-	if (cue.length!==4) return cberr(`Bad Cue array length: ${cue.length}`);
-	if (cue[0]!=="CUETIME:b3") return NF("CueTime Id");
-	if (cue[2]!=="CUETRACKPOSITION:b7") return NF("CueTrackPosition Id");
-	let tm = arr_to_num(cue[1].reverse())*tmmult;
-	let pos = cue[3];
-	if (pos.length!==4) return cberr(`Bad Cue position array length: ${pos.length}`);
-	if (pos[0]!=="CUETRACK:f7") return NF("CueTrack Id");
-	if (pos[2]!=="CUECLUSTERPOSITION:f1") return NF("CueClusterPosition Id");
-	if (pos[1].length!==1 && pos[1][0]!==1) return cberr("Expected CueTrack==1 (for audio track)");
-	let off = arr_to_num(pos[3].reverse())+seg_start;
-	if (tm < startpos) {
-		prev_tm = tm;
-		prev_off = off;
-		continue;
-	}
-	if (prev_tm!==null){
-		ALLCUES.push(prev_tm, prev_off);
-		prev_tm = null;
-	}
-	ALLCUES.push(tm, off);
-	if (tm > endpos) break;
-}//»
-if (prev_tm!==null){
-	ALLCUES.push(prev_tm, prev_off);
-	prev_tm = null;
-}
-
-{
-let tm1 = ALLCUES[0];
-let pos1 = ALLCUES[1];
-let tm2 = ALLCUES[ALLCUES.length-2];
-let pos2 = ALLCUES[ALLCUES.length-1];
-//log(ALLCUES.length/2);
-//log(ALLCUES);
-let rv = await fsapi.readFile(normpath(path),{binary:true, start: pos1, end: pos2});
-{
-
-
-//NOTE2
-
-
-}
-//log(rv.slice(5,12));
-
-//NOTE3
-
-
-//log(rv);
-//rv = parse_section(rv, SEGMENT, 0, false);
-//log(rv);
-//log(rv.length/2);
-//log(pos2-pos1);
-//log(rv);
-
-}
-
-//cbok();
-
-//return;
-
-//log(ALLCUES);
-
-let ALLBLOCKS = [];
-
-//prev_tm=null;
-let prev_dur;
-let prev_block;
-let tot_dur=0;
-let ALLCUESLEN = ALLCUES.length;
-let num_clusters = Math.floor(ALLCUESLEN/2);
-werr(`Reading ${num_clusters} clusters from disk...`);
-wclerr("0%");
-
-for (let i=0; i < ALLCUESLEN - 2; i+=2){//«
-
-wclerr(`${Math.floor(100*i/ALLCUESLEN)}%`);
-let tm1 = ALLCUES[i];
-let b1 = ALLCUES[i+1];
-let tm2 = ALLCUES[i+2];
-let b2 = ALLCUES[i+3];
-//cwarn(`Getting: ${b1}->${b2}`);
-let a = await fsapi.readFile(normpath(path),{binary:true, start: b1, end: b2});
-if (killed) return;
-if (!(a[0]==0x1f&&a[1]==0x43&&a[2]==0xb6&&a[3]==0x75)) return cberr("Cluster ID not found");
-
-let cluster = parse_section(a, SEGMENT, 0, false);
-if (cluster[0]!=="CLUSTER:1f43b675") return cberr("Cluster ID not found");
-let blocks = cluster[1];
-if (!blocks.shift()[0]==="CLUSTERTIMECODE:e7") return cberr("ClusterTimeCode ID not found");
-let gottm = arr_to_num(blocks.shift().reverse())
-if (tm1 !== gottm*tmmult) return cberr(`tm1 (${tm1}) !== gottm*tmmult (${gottm*tmmult})`);
-
-for (let j=0; j < blocks.length; j+=2){//«
-
-if (blocks[j]!=="SIMPLEBLOCK:a3") {//«
-
-//NOTE4
-
-	if (i+2==ALLCUES.length && j+2==blocks.length){
-cwarn(`Ignoring final block '${blocks[j]}'`);
-		break;
-	}
-
-	return cberr("SimpleBlock ID not found");
-}//»
-
-let blk1 = blocks[j+1];
-let blk2 = blocks[j+3];
-let blk1tm = (tm1+arr_to_num([blk1[2], blk1[1]])*tmmult);
-let blk2tm;
-let blkdur;
-if (blk2) blk2tm = (tm1+arr_to_num([blk2[2], blk2[1]])*tmmult);
-else blk2tm = tm2;
-blkdur = blk2tm - blk1tm;
-
-if (blk1tm < startpos) {
-	prev_dur = blkdur;
-	prev_block = blk1;
-	continue;
-}
-if (Number.isFinite(prev_dur)){
-//log(tot_dur, prev_dur);
-	tot_dur+=prev_dur;
-//log(tot_dur);
-	ALLBLOCKS.push(prev_dur, prev_block);
-	prev_dur = null;
-}
-
-if (blkdur > 0) {
-//log(tot_dur, blkdur);
-	tot_dur+=blkdur;
-}
-else {
-	blkdur = 0;
-	cwarn(`blk1tm(${blk1tm})  >  blk2tm(${blk2tm})`);
-}
-ALLBLOCKS.push(blkdur, blk1);
-if (blk1tm > endpos) break;
-
-}//»
-
-}//»
-
-//log(tot_dur);
-
-//log(ALLBLOCKS);
-//cberr("Have we renumbered all the blocks???");
-//return;
-
-if (killed) return;
-//log("???");
-
-wclerr(`100%`);
-werr("Reclustering...");
-werr("0%");
-
-//let new_duration_bytes = (new Uint8Array(new Float32Array([tot_dur]).buffer)).reverse();
-
-let head = a;
-
-const process=async()=>{//«
-
-const _get_chunk=()=>{
-	return new Promise((Y,N)=>{
-		setTimeout(()=>{
-			Y(get_chunk(ALLBLOCKS, tmmult, curtm));
-		}, 0);
-	});
-};
-
-let cluster;
-let curtm=0;
-let clusters=[];
-let tot_bytes=0;
-let chunk_iter=0;
-while (cluster = await _get_chunk()){//«
-	if (killed) return;
-//log(cluster);
-	let cl = cluster[0];
-	clusters.push([curtm, cl]);
-	tot_bytes+=cl.length;
-	curtm+=cluster[1];
-	chunk_iter++;
-//	wclerr(`${Math.floor(100*chunk_iter)}`);
-	wclerr(`${Math.floor(100*chunk_iter/num_clusters)}%`);
-}//»
-wclerr("100%");
-let body;
-let a = new Uint8Array(tot_bytes);
-body = a;
-let curoff = 0;
-let posns=[];
-//let times = [];
-//log(clusters);
-for (let arr of clusters){
-	let cl = arr[1];
-//	posns.push(int_to_ebml(arr[0]), int_to_ebml(curoff+seg_start));
-	posns.push(arr[0], curoff+seg_start);
-	a.set(cl, curoff);
-	curoff+=cl.length;
-}
-
-
-//NOTE5
-
-//cwarn("Cues");
-//log("TIMES",times);
-
-let cue_len = 0;
-let cues_arr=[];
-for (let i=0; i < posns.length; i+=2){//«
-
-let tm = num_to_arr(posns[i]);
-if (!tm.length) tm=[0];
-let tmlen = tm.length;
-
-let pos = num_to_arr(posns[i+1]);
-if (!pos.length) pos=[0];
-let poslen = pos.length;
-
-let entlen = 11+tmlen+poslen;
-
-let a = new Uint8Array(entlen);
-
-a[0]=0xbb;//POINTENTRY == 187
-a[1]=128|(entlen-2);
-
-a[2]=0xb3;//CUETIME == 179
-a[3] = 128|(tmlen);
-a.set(tm, 4);
-let cur = 4+tmlen;
-
-a[cur++]=0xb7;//CUETRACKPOSITION == 183
-a[cur++]=128|(5+poslen);
-
-a[cur++]=0xf7;//CUETRACK == 247 
-a[cur++]=129;// 1 ==  (audio)
-a[cur++]=1;
-
-a[cur++]=0xf1;//CUECLUSTERPOSITION == 241
-a[cur++]=128|(poslen);
-a.set(pos, cur);
-
-cue_len+=a.length;
-cues_arr.push(a);
-
-}//»
-let cues_len_arr = int_to_ebml(cue_len);
-let cues = new Uint8Array(cue_len+4+cues_len_arr.length);
-cues[0]=0x1c;
-cues[1]=0x53;
-cues[2]=0xbb;
-cues[3]=0x6b;
-cues.set(cues_len_arr, 4);
-curoff=4+cues_len_arr.length;
-for (let cue of cues_arr){
-	cues.set(cue, curoff);
-	curoff+=cue.length;
-}
-
-head.set(cues, cues_off);
-
-let cues_end = cues_off+cues.length;
-let diff = head.length - cues_end;
-if (diff) {
-
-	let new_head = head;
-	new_head.set(new Uint8Array(diff), cues_end);
-
-	if (diff > 9) {
-		let diff_arr = num_to_arr(diff-9);
-		let len = diff_arr.length;
-		new_head[cues_end++] = 0xec;
-		new_head[cues_end++] = 1;
-		while (diff_arr.length<7) diff_arr.unshift(0);
-		new_head.set(diff_arr, cues_end);
-	}
-	else {
-console.warn(`Got (strangely small) diff==${diff}!!!`);
-	}
-
-	head = new_head;
-
-}
-
-
-{//«
-
-
-
-let a = head;
-
-//	"18538067":
-for (let i=0; i < a.length-4; i++){
-
-if (a[i+0]==0x18&&a[i+1]==0x53&&a[i+2]==0x80&&a[i+3]==0x67) {
-if (a[i+4]!==1){
-return cberr("Barfing on some weird a[i+4]!==1 ");
-
-}
-let rv = ebml_sz(a, i+4);
-let cur_sz = rv[0];
-//log("CURSEGSZ",cur_sz);
-//log("NEWSEGSZ",head.length-seg_start+body.length);
-let szarr = num_to_arr(head.length-seg_start+body.length);
-while (szarr.length<7) szarr.unshift(0);
-a.set(szarr, i+5);
-
-
-//log(szarr);
-//dump_hex_lines(a.slice(i, i+60));
-
-break;
-}
-
-}
-
-
-let gothead;
-let arr;
-for (let i=0; i < a.length-4; i++){
-	if (gothead) break;
-	if (a[i+0]==0x15&&a[i+1]==0x49&&a[i+2]==0xa9&&a[i+3]==0x66) {
-		let ar = a.slice(i);
-no_error = true;
-		let rv = parse_section(ar, SEGMENT, false, 0);
-no_error = false;
-		if (rv) {
-//log(rv);
-			gothead = i;
-			arr = ar;
-		}
-	}
-}
-if (!arr) return cberr("Could not find Info!?!?!");
-
-let gotdur;
-let dur_pos;
-for (let i=0; i < arr.length-2; i++){
-	if (gotdur) break;
-	if (arr[i]==0x44&&arr[i+1]==0x89) {
-		let sz = ebml_sz(arr, i+2);
-		if (sz[0]==4){
-			dur_pos = sz[1]+gothead;
-			break;
-		}
-		else{
-cwarn("Skipping sz returned", sz);
-		}
-	}
-}
-if (!dur_pos) return cberr("Could not find duration position!?!?!");
-
-let dur = (new DataView(head.slice(dur_pos, dur_pos+4).buffer)).getFloat32();
-if (dur*tmmult!==duration) return cberr("Got a different duration this time?!?!?!?");
-//log(tot_dur/tmmult);
-//log(new Uint8Array(new Float32Array([tot_dur/tmmult]).buffer));
-{
-//log("New duration", tot_dur);
-let arr = new Uint8Array((new Float32Array([tot_dur/tmmult])).buffer);
-//log(arr);
-//arr = arr.reverse();
-head.set(arr.reverse(), dur_pos);
-}
-dump_hex_lines(head.slice(dur_pos-3, dur_pos+17));
-
-}//»
-
-//log(head);
-
-let file = new Uint8Array(head.length+body.length);
-file.set(head, 0);
-file.set(body, cluster_off);
-//log("FILESZ",file.length);
-//debug_section = true;
-let rv = parse_section(file, WEBM, 0, false);
-log(rv);
-//debug_section = false;
-woutobj(new Blob([file.buffer],{type:"audio/webm"}));
-
-cbok();
-
-}//»
-
-setTimeout(process, 10);
-
-return;
-
-
-},//»
-
-GETCLUSTERS:async()=>{//«
-
-let path = args.shift();
-if (!path) return cberr('No file path given!');
-let a = await fsapi.readFile(normpath(path),{binary:true});
-if (!a) return cberr(`${path}: not found`);
-
-//let rv = path_to_val(a, "seg/clus[]");
-//rv = rv.slice(0,2);
-//let sz=0;
-//rv.forEach(arr=>{sz+=arr.length});
-
-cbok();
-
-},//»
-WEBZLERM:async()=>{//«
-
-//81 00 00 80 fc ff fe
-//81 00 15 80 bc ff fe
-//...
-//10 minutes starts with >150 of these with "bc"
-
-
-
-//let head = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04, 0x42, 0xf3, 0x81, 0x08, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d, 0x42, 0x87, 0x81, 0x04, 0x42, 0x85, 0x81, 0x02]);
-
-//log(tohex(head));
-
-
-
-
-cbok();
-
-},//»
-WEBOIMST:async()=>{//«
-
-//Given some path of (possibly partial) IDS, and array positions, return the given data
-
-//1: head/maxid
-
-//2 seg/clust[0]/timecode
-
-
-//let opts = failopts(args,{s:{s:3,e:3},l:{start:3,end:3}});
-//if (!opts) return;
-
-let path = args.shift();
-if (!path) return cberr('No file path given!');
-
-let qstr = args.shift();
-if (!qstr) return cberr("No query string given!");
-
-const OK_FMTS=["float","int", "hex", "str", "none"];
-
-let fmt = args.shift();
-if (fmt && !OK_FMTS.includes(fmt)) return cberr(`Invalid 'fmt' arg: ${fmt}`);
-else if (!fmt) fmt="none";
-
-let a = await fsapi.readFile(normpath(path),{binary:true});
-if (!a) return cberr(`${path}: not found`);
-
-let rv = path_to_val(a, qstr, fmt);
-
-if (typeof rv === "string" && rv.length) return cberr(rv);
-if (!rv && !Number.isFinite(rv)) return cberr("Nothing returned");
-
-if (Number.isFinite(rv)) wout(`${rv}`);
-else if (rv instanceof Uint8Array) log(rv);
-else if (rv.length===1 && typeof rv[0]==='string') {
-	let lns = rv[0].split("\n");
-//if (termobj.h <= 4){
-//	wout(rv[0]);
-//	if (lns.length >= termobj.h) wout(`${lns.length-termobj.h+2} more lines (see console)`);
-//}
-//else {
-if (termobj.h>1) {
-	for (let i=0; i < termobj.h-2; i++){
-		let ln = lns.shift();
-		if (ln) wout(ln);
-		else break;
-	}
-}
-	if (lns.length) wout(`${lns.length} more lines (see console)`);
-//}
-log(rv[0]);
-}
-else {
-cwarn("Unknown returned value");
-	log(rv);
-}
-
-cbok();
-
-},//»
-INTTOEBML:()=>{//«
-let s = args.shift();
-let MAX = 2**32-1;
-
-if (!s) return cberr('Nothing!');
-
-let n = s.pnni({MAX:MAX});
-if (!Number.isFinite(n)) return cberr("Invalid number");
-if (n > MAX) return cberr("Too big");
-log(int_to_ebml(n));
-
-//log("GOT", n);
-
-cbok();
-
-},//»
-OLDWEBM:async ()=>{//«
-
-let killed = false;
-Shell.kill_register(cb=>{
-	killed = true;
-	cb&&cb();
-});
-let opts = failopts(args,{s:{s:3,e:3},l:{start:3,end:3}});
-if (!opts) return;
-
-let startpos = opts.start||opts.s;
-let endpos = opts.end||opts.e;
-if (!(startpos && endpos)) return cberr("Expected start and end args!");
-if (startpos==="-") startpos=0;
-else{
-	startpos=parseFloat(startpos);
-	if (!Number.isFinite(startpos) && startpos>=0) return cberr("Invalid start");
-}
-
-//log(startpos, endpos);
-//cberr();
-//return;
-
-
-const EBML_ID = "1a45dfa3";
-const SEGMENT_ID = "18538067";
-const SEEKHEAD_ID = "114d9b74";
-const INFO_ID = "1549a966";
-const TRACKS_ID = "1654ae6b";
-const CUES_ID = "1c53bb6b";
-const CLUSTER_ID = "1f43b675";
-
-//NOTE6
-
-
-//General types anywhere:
-//ec void
-//bf crc32
-const arr_to_num = (arr)=>{let n = 0;for (let i=0; i<arr.length;i++)n|=(arr[i]<<(i*8)); return n;}
-const NF=(s)=>{
-cberr(`${s}: not found`);
-};
-let path = args.shift();
-if (!path) return cberr('No path given!');
-
-
-//log(parse_section(await fsapi.readFile(normpath(path),{binary:true}), WEBM, 0, false));
-let init_bytes = 1000;
-
-let a = await fsapi.readFile(normpath(path),{binary:true, start: 0, end: init_bytes});
-if (!a) return cberr(`${path}: not found`);
-if (!(a[0]==0x1A&&a[1]==0x45&&a[2]==0xDF&&a[3]==0xA3)){
-return NF("EBML ID");
-}
-let c;
-let r = ebml_sz(a, 4);
-c = r[0]+r[1];
-if (!(a[c]==0x18&&a[c+1]==0x53&&a[c+2]==0x80&&a[c+3]==0x67)){
-	return NF("Segment ID");
-}
-r = ebml_sz(a, c+4);
-let seg_start = r[1]
-c=seg_start;
-if (!(a[c]==0x11&&a[c+1]==0x4D&&a[c+2]==0x9B&&a[c+3]==0x74)) return NF("SeekHead ID");
-
-r = ebml_sz(a, c+4);
-
-//const SEGMENT = WEBM.kids[SEGMENT_ID].kids;
-const SEGMENT = WEBM.kids[SEGMENT_ID];
-const SEGMENTKIDS = SEGMENT.kids;
-const SEEKHEAD = SEGMENTKIDS[SEEKHEAD_ID];
-const INFO = SEGMENTKIDS[INFO_ID];
-const CUES = SEGMENTKIDS[CUES_ID];
-
-let skhd = parse_section(a.slice(r[1], r[1]+r[0]), SEEKHEAD, 0, false);
-let cues_off;
-let info_off;
-let cluster_off;
-let tracks_off;
-for (let i=0; i < skhd.length; i+=2){//«
-	if (skhd[i]!=="SEEKENTRY:4dbb") return NF("SeekEntry Id");
-	let ent = skhd[i+1];
-	if (ent.length!==4) return cberr(`Bad SeekEntry length: ${ent.length}`);
-	if (ent[0]!=="SEEKID:53ab") return NF("SeekID Id");
-	if (ent[2]!=="SEEKPOSITION:53ac") return NF("SeekPosition Id");
-	let id = ent[1];
-	if (id.length!==4) return cberr(`Bad SeekId array length: ${idarr.length}`);
-	if (id[0]==0x1c&&id[1]==0x53&&id[2]==0xbb&&id[3]==0x6b){
-		cues_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-	else if (id[0]==0x15&&id[1]==0x49&&id[2]==0xa9&&id[3]==0x66){
-		info_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-//"1f43b675"
-	else if (id[0]==0x1f&&id[1]==0x43&&id[2]==0xb6&&id[3]==0x75){
-		cluster_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-	else if (id[0]==0x16&&id[1]==0x54&&id[2]==0xae&&id[3]==0x6b){
-		tracks_off = arr_to_num(ent[3].reverse())+seg_start;
-	}
-//1654ae6b
-}//»
-if (!(info_off&&cues_off&&cluster_off&&tracks_off)) return cberr("Did not get info_off, cues_off, tracks_off and cluster_off!");
-
-if (cluster_off > init_bytes){
-	let rv = await fsapi.readFile(normpath(path),{binary:true, start: init_bytes, end: cluster_off});
-	let b = new Uint8Array(init_bytes+rv.length);
-	b.set(a, 0);
-	b.set(rv, init_bytes);
-	a=b;
-}
-
-r = ebml_sz(a, info_off+4);
-let info = parse_section(a.slice(r[1], r[1]+r[0]), INFO, 0, false);
-let duration;
-let tcs;
-for (let i=0; i < info.length; i+=2){//«
-	if (info[i]=="DURATION:4489"){
-		if (info[i+1].length !== 4) return cberr("Expected 4 bytes for Duration, got: "+info[i+1].length);
-		duration = (new DataView(info[i+1].buffer)).getFloat32();
-//		d+1].buration = (new DataView(info[i+1].buffer)).getFloat32();
-	}
-	else if (info[i]=="TIMECODESCALE:2ad7b1"){
-		tcs = arr_to_num(info[i+1].reverse());
-//log("TCS",tcs);
-	}
-}//»
-if (!(duration&&tcs)) return cberr("Did not get duration and tcs!");
-let tmmult = tcs/10**9;
-//log("TMMULT",tmmult);
-duration*=tmmult;
-if (startpos >= duration) return cberr(`Invalid startpos duration=${duration}`);
-
-if (endpos==="-") endpos=duration;
-else{
-	endpos=parseFloat(endpos);
-	if (!(Number.isFinite(endpos) && endpos>startpos && endpos <= duration)) return cberr("Invalid endpos");
-}
-if (startpos == 0 && endpos == duration) return cbok("Nothing to do!");
-
-//cwarn("SLICE", startpos , endpos);
-r = ebml_sz(a, cues_off+4);
-
-let cues = parse_section(a.slice(r[1], r[1]+r[0]), CUES, 0, false);
-
-let ALLCUES=[];
-let prev_tm=null, prev_off;
-for (let i=0; i < cues.length; i+=2){//«
-	if (cues[i]!=="POINTENTRY:bb") return NF("PointEntry Id");
-	let cue = cues[i+1]
-	if (cue.length!==4) return cberr(`Bad Cue array length: ${cue.length}`);
-	if (cue[0]!=="CUETIME:b3") return NF("CueTime Id");
-	if (cue[2]!=="CUETRACKPOSITION:b7") return NF("CueTrackPosition Id");
-	let tm = arr_to_num(cue[1].reverse())*tmmult;
-	let pos = cue[3];
-	if (pos.length!==4) return cberr(`Bad Cue position array length: ${pos.length}`);
-	if (pos[0]!=="CUETRACK:f7") return NF("CueTrack Id");
-	if (pos[2]!=="CUECLUSTERPOSITION:f1") return NF("CueClusterPosition Id");
-	if (pos[1].length!==1 && pos[1][0]!==1) return cberr("Expected CueTrack==1 (for audio track)");
-	let off = arr_to_num(pos[3].reverse())+seg_start;
-	if (tm < startpos) {
-		prev_tm = tm;
-		prev_off = off;
-		continue;
-	}
-	if (prev_tm!==null){
-		ALLCUES.push(prev_tm, prev_off);
-		prev_tm = null;
-	}
-	ALLCUES.push(tm, off);
-	if (tm > endpos) break;
-}//»
-if (prev_tm!==null){
-	ALLCUES.push(prev_tm, prev_off);
-	prev_tm = null;
-}
-
-//log(ALLCUES);
-
-let ALLBLOCKS = [];
-
-//prev_tm=null;
-let prev_dur;
-let prev_block;
-let tot_dur=0;
-let ALLCUESLEN = ALLCUES.length;
-let num_clusters = Math.floor(ALLCUESLEN/2);
-werr(`Reading ${num_clusters} clusters from disk...`);
-wclerr("0%");
-
-for (let i=0; i < ALLCUESLEN - 2; i+=2){//«
-
-wclerr(`${Math.floor(100*i/ALLCUESLEN)}%`);
-let tm1 = ALLCUES[i];
-let b1 = ALLCUES[i+1];
-let tm2 = ALLCUES[i+2];
-let b2 = ALLCUES[i+3];
-//cwarn(`Getting: ${b1}->${b2}`);
-let a = await fsapi.readFile(normpath(path),{binary:true, start: b1, end: b2});
-if (killed) return;
-if (!(a[0]==0x1f&&a[1]==0x43&&a[2]==0xb6&&a[3]==0x75)) return cberr("Cluster ID not found");
-
-let cluster = parse_section(a, SEGMENT, 0, false);
-if (cluster[0]!=="CLUSTER:1f43b675") return cberr("Cluster ID not found");
-let blocks = cluster[1];
-if (!blocks.shift()[0]==="CLUSTERTIMECODE:e7") return cberr("ClusterTimeCode ID not found");
-let gottm = arr_to_num(blocks.shift().reverse())
-if (tm1 !== gottm*tmmult) return cberr(`tm1 (${tm1}) !== gottm*tmmult (${gottm*tmmult})`);
-
-for (let j=0; j < blocks.length; j+=2){//«
-
-if (blocks[j]!=="SIMPLEBLOCK:a3") {//«
-
-//BLOCKGROUP{
-//	BLOCK[129, 17, 128, 0, 252, 255, 254],
-//	DISCARDPADDING[0, 227, 237, 156]
-//}
-	if (i+2==ALLCUES.length && j+2==blocks.length){
-cwarn(`Ignoring final block '${blocks[j]}'`);
-		break;
-	}
-
-	return cberr("SimpleBlock ID not found");
-}//»
-
-let blk1 = blocks[j+1];
-let blk2 = blocks[j+3];
-let blk1tm = (tm1+arr_to_num([blk1[2], blk1[1]])*tmmult);
-let blk2tm;
-let blkdur;
-if (blk2) blk2tm = (tm1+arr_to_num([blk2[2], blk2[1]])*tmmult);
-else blk2tm = tm2;
-blkdur = blk2tm - blk1tm;
-
-if (blk1tm < startpos) {
-	prev_dur = blkdur;
-	prev_block = blk1;
-	continue;
-}
-if (prev_dur!==null){
-	tot_dur+=prev_dur;
-	ALLBLOCKS.push(prev_dur, prev_block);
-	prev_dur = null;
-}
-
-if (blkdur > 0) {
-	tot_dur+=blkdur;
-}
-else {
-	blkdur = 0;
-	cwarn(`blk1tm(${blk1tm})  >  blk2tm(${blk2tm})`);
-}
-ALLBLOCKS.push(blkdur, blk1);
-if (blk1tm > endpos) break;
-
-}//»
-
-}//»
-
-//log(tot_dur);
-
-//log(ALLBLOCKS);
-//cberr("Have we renumbered all the blocks???");
-//return;
-
-if (killed) return;
-//log("???");
-
-wclerr(`100%`);
-werr("Reclustering...");
-werr("0%");
-
-//let new_duration_bytes = (new Uint8Array(new Float32Array([tot_dur]).buffer)).reverse();
-
-let head = a;
-
-const process=async()=>{//«
-
-const _get_chunk=()=>{
-	return new Promise((Y,N)=>{
-		setTimeout(()=>{
-			Y(get_chunk(ALLBLOCKS, tmmult, curtm));
-		}, 0);
-	});
-};
-
-let cluster;
-let curtm=0;
-let clusters=[];
-let tot_bytes=0;
-let chunk_iter=0;
-while (cluster = await _get_chunk()){//«
-	if (killed) return;
-//log(cluster);
-	let cl = cluster[0];
-	clusters.push([curtm, cl]);
-	tot_bytes+=cl.length;
-	curtm+=cluster[1];
-	chunk_iter++;
-//	wclerr(`${Math.floor(100*chunk_iter)}`);
-	wclerr(`${Math.floor(100*chunk_iter/num_clusters)}%`);
-}//»
-wclerr("100%");
-let body;
-let a = new Uint8Array(tot_bytes);
-body = a;
-let curoff = 0;
-let posns=[];
-//let times = [];
-//log(clusters);
-for (let arr of clusters){
-	let cl = arr[1];
-//	posns.push(int_to_ebml(arr[0]), int_to_ebml(curoff+seg_start));
-	posns.push(arr[0], curoff+seg_start);
-	a.set(cl, curoff);
-	curoff+=cl.length;
-}
-
-//NOTE7
-
-
-cwarn("Cues");
-//log("TIMES",times);
-let cue_len = 0;
-let cues_arr=[];
-
-
-for (let i=0; i < posns.length; i+=2){//«
-
-let tm = num_to_arr(posns[i]);
-if (!tm.length) tm=[0];
-let tmlen = tm.length;
-
-let pos = num_to_arr(posns[i+1]);
-if (!pos.length) pos=[0];
-let poslen = pos.length;
-
-let entlen = 11+tmlen+poslen;
-
-let a = new Uint8Array(entlen);
-
-a[0]=0xbb;//POINTENTRY == 187
-a[1]=128|(entlen-2);
-
-a[2]=0xb3;//CUETIME == 179
-a[3] = 128|(tmlen);
-a.set(tm, 4);
-let cur = 4+tmlen;
-
-a[cur++]=0xb7;//CUETRACKPOSITION == 183
-a[cur++]=128|(5+poslen);
-
-a[cur++]=0xf7;//CUETRACK == 247 
-a[cur++]=129;// 1 ==  (audio)
-a[cur++]=1;
-
-a[cur++]=0xf1;//CUECLUSTERPOSITION == 241
-a[cur++]=128|(poslen);
-a.set(pos, cur);
-
-cue_len+=a.length;
-cues_arr.push(a);
-
-}//»
-
-
-
-let cues_len_arr = int_to_ebml(cue_len);
-let cues = new Uint8Array(cue_len+4+cues_len_arr.length);
-cues[0]=0x1c;
-cues[1]=0x53;
-cues[2]=0xbb;
-cues[3]=0x6b;
-cues.set(cues_len_arr, 4);
-curoff=4+cues_len_arr.length;
-for (let cue of cues_arr){
-	cues.set(cue, curoff);
-	curoff+=cue.length;
-}
-
-head.set(cues, cues_off);
-
-let cues_end = cues_off+cues.length;
-let diff = head.length - cues_end;
-if (diff) {
-
-	let new_head = head;
-	new_head.set(new Uint8Array(diff), cues_end);
-
-	if (diff > 9) {
-		let diff_arr = num_to_arr(diff-9);
-		let len = diff_arr.length;
-		new_head[cues_end++] = 0xec;
-		new_head[cues_end++] = 1;
-		while (diff_arr.length<7) diff_arr.unshift(0);
-		new_head.set(diff_arr, cues_end);
-	}
-	else {
-console.warn(`Got (strangely small) diff==${diff}!!!`);
-	}
-
-	head = new_head;
-
-}
-
-
-{//«
-
-
-
-let a = head;
-
-//	"18538067":
-for (let i=0; i < a.length-4; i++){
-
-if (a[i+0]==0x18&&a[i+1]==0x53&&a[i+2]==0x80&&a[i+3]==0x67) {
-if (a[i+4]!==1){
-return cberr("Barfing on some weird a[i+4]!==1 ");
-
-}
-let rv = ebml_sz(a, i+4);
-let cur_sz = rv[0];
-//log("CURSEGSZ",cur_sz);
-//log("NEWSEGSZ",head.length-seg_start+body.length);
-let szarr = num_to_arr(head.length-seg_start+body.length);
-while (szarr.length<7) szarr.unshift(0);
-a.set(szarr, i+5);
-
-
-//log(szarr);
-//dump_hex_lines(a.slice(i, i+60));
-
-break;
-}
-
-}
-
-
-let gothead;
-let arr;
-for (let i=0; i < a.length-4; i++){
-	if (gothead) break;
-	if (a[i+0]==0x15&&a[i+1]==0x49&&a[i+2]==0xa9&&a[i+3]==0x66) {
-		let ar = a.slice(i);
-no_error = true;
-		let rv = parse_section(ar, SEGMENT, false, 0);
-no_error = false;
-		if (rv) {
-//log(rv);
-			gothead = i;
-			arr = ar;
-		}
-	}
-}
-if (!arr) return cberr("Could not find Info!?!?!");
-
-let gotdur;
-let dur_pos;
-for (let i=0; i < arr.length-2; i++){
-	if (gotdur) break;
-	if (arr[i]==0x44&&arr[i+1]==0x89) {
-		let sz = ebml_sz(arr, i+2);
-		if (sz[0]==4){
-			dur_pos = sz[1]+gothead;
-			break;
-		}
-		else{
-cwarn("Skipping sz returned", sz);
-		}
-	}
-}
-if (!dur_pos) return cberr("Could not find duration position!?!?!");
-
-let dur = (new DataView(head.slice(dur_pos, dur_pos+4).buffer)).getFloat32();
-if (dur*tmmult!==duration) return cberr("Got a different duration this time?!?!?!?");
-//log(tot_dur/tmmult);
-//log(new Uint8Array(new Float32Array([tot_dur/tmmult]).buffer));
-{
-//log("New duration", tot_dur);
-let arr = new Uint8Array(new Float32Array([tot_dur/tmmult]));
-//arr = arr.reverse();
-head.set(arr.buffer, dur_pos);
-}
-dump_hex_lines(head.slice(dur_pos-3, dur_pos+17));
-
-}//»
-
-//log(head);
-
-let file = new Uint8Array(head.length+body.length);
-file.set(head, 0);
-file.set(body, cluster_off);
-//log("FILESZ",file.length);
-//debug_section = true;
-let rv = parse_section(file, WEBM, 0, false);
-log(rv);
-//debug_section = false;
-woutobj(new Blob([file.buffer],{type:"audio/webm"}));
-
-cbok();
-
-}//»
-
-setTimeout(process, 10);
-
-return;
-
-
-},//»
-
-
-«NOTE1
-For the nth Cluster,
-Cues[n]->PointEntry->CueTime == Clusters[n]->ClusterTimeCode
-
-Given a slicing operation:
-
-
-
-When slicing, should SeekHead stay the same???
-What changes?
-Set Info->Duration to the new Float32
-
-const arr_to_num = (arr)=>{let n = 0;for (let i=0; i<arr.length;i++)n|=(arr[i]<<(i*8)); return n;}
-
-arr_to_num([64, 66, 15]); //1000000
-
-atn = arr_to_num
-
-NPS: Nanoseconds per second
-nps = 10**9 = 1_000_000_000
-
-SOSS = Size of Segment Size
-Number of bytes to encode the size of the segment in bytes (1-8 bytes)
-
-HOS = Header of Segment
-0x18 0x53 0x80 0x67 + SOSS (5-12 bytes)
-
-BOS = Beginning of Segment (byte offset into the file after the EBML/Header and HOS)
-
-
-DUR: Info->Duration
-
-					   DUR[0]  DUR[1]  DUR[2] DUR[3]
-arr = new Uint8Array([   70  ,  133  ,  234  , 0    ])
-
-(new DataView(arr.buffer)).getFloat32() -> Multiply by TCS
-
-
-
-TCS: Info->TimeCodeScale
-	  	    TCS[2]  TCS[1]  TCS[0] 
-tcs = atn([   64   ,  66   ,  15   ]) => 1000000
-
-TM: TimeMultiplier:
-	tcs/nps => 1000000/nps => 10**-3 => .001 
-
-
-CTC: Cluster->ClusterTimeCode
-
-CT: Cues->CueTime
-	  CT[1]  CT[0]
-atn([  17  , 39  ]) -> 10001
-
-CCP: Cues->CueTrackPosition->CueClusterPosition
-  (For Audio Track, Cues->CueTrackPosition->CueTrack == 1)
-	  CCP[2]   CCP[1]  CCP[0]
-atn([  167  ,   131  ,   2   ]) -> 164775 (byte offset from BOS)
-
-
-
-SB: SimpleBlock
-
-	  SB[2]  SB[1]	
-atn([  208  ,  27   ]) * TM 
-
-
-
-//»
-NOTE2//«
-let cur=0;
-let nb = pos2-pos1;
-
-while(1){
-if (!rv[cur+4]) break;
-log("=========================================");
-if (!(rv[cur+4]===1 && rv[cur+12]===0xe7)){
-cerr("UHOH!!!");
-}
-else{
-log(cur, `Found ClusterTimeCode (e7) @${cur+12}`);
-}
-dump_hex_lines(rv.slice(cur,cur+20), cur);
-let r = ebml_sz(rv, cur+4);
-let sz = r[0];
-cur = r[1]+sz;
-if (cur===nb) {
-log("Done!");
-	break
-}
-else if (cur > nb){
-cerr(`cur (${cur}) > nb (${nb}) !!!`);
-break;
-}
-//log(cur, nb);
-//log();
-}
-//»
-//«NOTE3
-rv is the full clusters block... just need to update the timestamps of each cluster
-at CLUSTERTIMECODE: 0xe7/231.  Since this will only go down, it is just a matter of
-overwriting.
-
-So, just:
-1) Update timestamps for each cluster here
-2) Create a new Cues section, pointing to these new clusters.
-//»
-NOTE4//«
-BLOCKGROUP{
-	BLOCK[129, 17, 128, 0, 252, 255, 254],
-	DISCARDPADDING[0, 227, 237, 156]
-}
-//»
-
-//NOTE5
-//"1c53bb6b": {//CUES 28 83 187 107«
-	"id": "CUES",
-	"kids": {
-187		"bb": {// 1 + 1 
-			"id": "POINTENTRY",		//MULT
-			"out":[],
-			"mult":true,
-			"kids": {
-179				"b3": {"id": "CUETIME"}, //2 + tmarr.length
-183				"b7": {// 1+1
-					"id": "CUETRACKPOSITION",
-					"kids": {
-247						"f7": {"id": "CUETRACK"},// 2+1
-241						"f1": {"id": "CUECLUSTERPOSITION"},// 2+posnarr.length
-						"f0": {"id": "CUERELATIVEPOSITION"},
-						"b2": {"id": "CUEDURATION"},
-						"5378": {"id": "CUEBLOCKNUMBER"}
-					}
-				}	
-			}
-		}				
-	}
-},
-
-if (cues[i]!=="POINTENTRY:bb") return NF("PointEntry Id");
-let cue = cues[i+1]
-if (cue.length!==4) return cberr(`Bad Cue array length: ${cue.length}`);
-if (cue[0]!=="CUETIME:b3") return NF("CueTime Id");
-if (cue[2]!=="CUETRACKPOSITION:b7") return NF("CueTrackPosition Id");
-let tm = arr_to_num(cue[1].reverse())*tmmult;
-let pos = cue[3];
-if (pos.length!==4) return cberr(`Bad Cue position array length: ${pos.length}`);
-if (pos[0]!=="CUETRACK:f7") return NF("CueTrack Id");
-if (pos[2]!=="CUECLUSTERPOSITION:f1") return NF("CueClusterPosition Id");
-
-//»
-
-//NOTE6«
-
-For the nth Cluster,
-Cues[n]->PointEntry->CueTime == Clusters[n]->ClusterTimeCode
-
-Given a slicing operation:
-
-
-
-When slicing, should SeekHead stay the same???
-What changes?
-Set Info->Duration to the new Float32
-
-const arr_to_num = (arr)=>{let n = 0;for (let i=0; i<arr.length;i++)n|=(arr[i]<<(i*8)); return n;}
-
-arr_to_num([64, 66, 15]); //1000000
-
-atn = arr_to_num
-
-NPS: Nanoseconds per second
-nps = 10**9 = 1_000_000_000
-
-SOSS = Size of Segment Size
-Number of bytes to encode the size of the segment in bytes (1-8 bytes)
-
-HOS = Header of Segment
-0x18 0x53 0x80 0x67 + SOSS (5-12 bytes)
-
-BOS = Beginning of Segment (byte offset into the file after the EBML/Header and HOS)
-
-
-DUR: Info->Duration
-
-					   DUR[0]  DUR[1]  DUR[2] DUR[3]
-arr = new Uint8Array([   70  ,  133  ,  234  , 0    ])
-
-(new DataView(arr.buffer)).getFloat32() -> Multiply by TCS
-
-
-
-TCS: Info->TimeCodeScale
-	  	    TCS[2]  TCS[1]  TCS[0] 
-tcs = atn([   64   ,  66   ,  15   ]) => 1000000
-
-TM: TimeMultiplier:
-	tcs/nps => 1000000/nps => 10**-3 => .001 
-
-
-CTC: Cluster->ClusterTimeCode
-
-CT: Cues->CueTime
-	  CT[1]  CT[0]
-atn([  17  , 39  ]) -> 10001
-
-CCP: Cues->CueTrackPosition->CueClusterPosition
-  (For Audio Track, Cues->CueTrackPosition->CueTrack == 1)
-	  CCP[2]   CCP[1]  CCP[0]
-atn([  167  ,   131  ,   2   ]) -> 164775 (byte offset from BOS)
-
-
-
-SB: SimpleBlock
-
-	  SB[2]  SB[1]	
-atn([  208  ,  27   ]) * TM 
-
-
-
-//»
-
-//NOTE7
-"1c53bb6b": {//CUES 28 83 187 107«
-	"id": "CUES",
-	"kids": {
-187		"bb": {// 1 + 1 
-			"id": "POINTENTRY",		//MULT
-			"out":[],
-			"mult":true,
-			"kids": {
-179				"b3": {"id": "CUETIME"}, //2 + tmarr.length
-183				"b7": {// 1+1
-					"id": "CUETRACKPOSITION",
-					"kids": {
-247						"f7": {"id": "CUETRACK"},// 2+1
-241						"f1": {"id": "CUECLUSTERPOSITION"},// 2+posnarr.length
-						"f0": {"id": "CUERELATIVEPOSITION"},
-						"b2": {"id": "CUEDURATION"},
-						"5378": {"id": "CUEBLOCKNUMBER"}
-					}
-				}	
-			}
-		}				
-	}
-},
-
-if (cues[i]!=="POINTENTRY:bb") return NF("PointEntry Id");
-let cue = cues[i+1]
-if (cue.length!==4) return cberr(`Bad Cue array length: ${cue.length}`);
-if (cue[0]!=="CUETIME:b3") return NF("CueTime Id");
-if (cue[2]!=="CUETRACKPOSITION:b7") return NF("CueTrackPosition Id");
-let tm = arr_to_num(cue[1].reverse())*tmmult;
-let pos = cue[3];
-if (pos.length!==4) return cberr(`Bad Cue position array length: ${pos.length}`);
-if (pos[0]!=="CUETRACK:f7") return NF("CueTrack Id");
-if (pos[2]!=="CUECLUSTERPOSITION:f1") return NF("CueClusterPosition Id");
-
-//»
-
-»*/
 
 
