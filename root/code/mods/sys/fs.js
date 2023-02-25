@@ -1,17 +1,18 @@
-/*@HYTEKLFHSN: To stop clobbering folders and easily creating an inconsistent system:«
+/*@SKUYTGKLW: A lesson in the tribulations involved when NOT having a central
+factory method for creating file node objects. The .entry property was not
+there previously, meaning that the Desktop's logic of folder creation yielded
+a folder node that did not work inside the new pathToObj, which depends on the
+.entry property!!!*/
 
-BUT THIS PROBABLY ISN'T CORRECT BECAUSE WE (USUALLY) JUST OVERWRITE FILES W/ FILES...//
+/*@HYTEKLFHSN: To stop clobbering folders and easily creating an inconsistentsystem:«
+
+BUT THIS PROBABLY ISN'T CORRECT BECAUSE WE (USUALLY) JUST OVERWRITE FILES W/
+FILES...//
     
-~$ mkdir blotz
-~$ mkdir blotz/harp
-~$ touch harp
-~$ mv harp blotz/
-mv: cannot overwrite directory 'blotz/harp' with non-directory
-~$ touch blotz/frinj
-~$ mkdir frinj
-~$ mv frinj/ blotz/
-mv: cannot overwrite non-directory 'blotz/frinj' with directory 'frinj/'
-»*/ 
+~$ mkdir blotz ~$ mkdir blotz/harp ~$ touch harp ~$ mv harp blotz/ mv: cannot
+overwrite directory 'blotz/harp' with non-directory ~$ touch blotz/frinj ~$
+mkdir frinj ~$ mv frinj/ blotz/ mv: cannot overwrite non-directory
+'blotz/frinj' with directory 'frinj/' »*/ 
 
 /* XXX UHOH: obj.fullpath XXX«
 
@@ -1170,6 +1171,7 @@ const mk_fs_dir = async(parpatharg, fname, cb, is_root, if_no_make_icon) => {//�
 
         let [ret] = await _getOrMakeDir(parpath, fname);
 		if (ret) {
+log("RET",ret);
 			if (!Desk) return cbok();
 			if (!if_no_make_icon) Desk.make_icon_if_new(ret);
 			cbok();
@@ -1425,6 +1427,8 @@ cerr(e);
 			APP: FOLDER_APP,
 			root: rootobj,
 			par: obj,
+//SKUYTGKLW
+			entry: dirret,
 			fullpath: obj.fullpath+"/"+name,
 			KIDS: {},
 			MOVE_LOCKS:[]
@@ -3459,13 +3463,16 @@ this.set_fent = async(cb) => {//«
 this.save_from_file = (arg) => {//«
 	if (saving_from_file) return cerr("Already saving from a File object");
 	if (stream_started) return cerr("Already saving from a stream");
-	if (!writer) return cerr("No writer is set!");
+//	if (!writer) return cerr("No writer is set!");
 	saving_from_file = true;
 	fSize = arg.size;
 	file = arg;
 	if (!update_cb) cwarn("update_cb is NOT set!");
 	if (!done_cb) cwarn("done_cb is NOT set!");
-	save_file_chunk();
+//	save_file_chunk();
+	setTimeout(()=>{
+		save_file_chunk();
+	},0);
 };//»
 this.start_blob_stream=()=>{//«
 	if(stream_started)return cerr("blob stream is already started!");

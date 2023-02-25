@@ -5609,12 +5609,12 @@ log(item);
 return;
 »*/
 
-poperr("Rewrite the Filesaver parts of save_dropped_files, just like in fs.com_mv!!");
-return;
+//poperr("Rewrite the Filesaver parts of save_dropped_files, just like in fs.com_mv!!");
+//return;
 
 // vvv Rewrite this vvv
-/*
-return new Promise(async(y,n)=>{«
+///*
+return new Promise(async(y,n)=>{
 	let usepath;
 	let usepos = null;
 	if (!where) {
@@ -5658,6 +5658,7 @@ cerr(mess);
 				}
 				return dofile();
 			}
+			let fObj = r3;
 			let parts = getNameExt(nameret);
 			let ext = parts.pop();
 			let fname = parts.pop();
@@ -5665,8 +5666,10 @@ cerr(mess);
 			let odiv = curicon.overdiv;
 			odiv.innerHTML = "0%";
 			odiv.cancel_func = () => {
-				rm_icon(curicon);
-				saver.cancel(dofile);
+				fObj.unlock_file();
+//				saver.end_blob_stream();
+//				rm_icon(curicon);
+//				saver.cancel(dofile);
 			};
 			saver.set_cb("update", per => {
 				odiv.innerHTML = per + "%";
@@ -5674,17 +5677,20 @@ cerr(mess);
 			saver.set_cb("done", () => {
 				if (odiv.context_menu) odiv.context_menu.kill();
 				curicon.activate();
+//				saver.end_blob_stream();
+				fObj.unlock_file();
 				dofile();
 			});
 			saver.save_from_file(f);
 		};//»
-		saver.set_writer(writer_func);
+//		saver.set_writer(writer_func);
+		saver.set_fent(writer_func);
 //		});
 //		});
 	};
 	dofile();
-});»
-*/
+});
+//*/
 
 
 }
