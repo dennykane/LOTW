@@ -1694,10 +1694,13 @@ const trace = (args,num) => {//«
 	let arr = s.split(":");
 //	let col = arr.pop().replace(/\)/,"");
 	arr.pop();
+	let str="";
+try{
 	let line = arr.pop();
 	let fname = arr.pop().split("/").pop().split("?")[0];
 //	let str = `${fname}:${line}:${col}`;
-	let str = `${fname}:${line}`;
+	str = `${fname}:${line}`;
+}catch(e){}
 	if (num===0) console.log(...args,str);
 	else if (num===1) console.warn(...args,str);
 	else console.error(...args,str);
