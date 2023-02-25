@@ -2401,11 +2401,14 @@ win._mintitle.innerText = s
 		topwin.obj.killed = true;
 		topwin.del();
 		let icn = topwin.icon;
+		let file_node = topwin.file_node;
 		if (icn) {
-			if (icn.file_node) delete icn.file_node.unlock_file();
+			if (!file_node) file_node = icn.file_node;
+//			if (icn.file_node) delete icn.file_node.unlock_file();
 			icn.win = null;
 		}
-		else if (topwin.file_node) topwin.file_node.unlock_file();
+//		else if (topwin.file_node) topwin.file_node.unlock_file();
+		if (file_node && file_node.unlock_file) file_node.unlock_file();
 		if (gotpar) {
 			delete gotpar.child_win;
 			Desk.CWIN = gotpar;
@@ -5697,7 +5700,7 @@ open_file_by_path(globals.home_path, null, {
 			return;
 		}
 		let icn = await make_new_file(val, ext, fwin._fullpath, fwin);
-		if (!icn ) {
+		if (!icn) {
 //cwarn("GOT NO ICON AFTER Desk.Make_new_file!!!");
 			win.cur_save_folder.easy_kill();
 		}
