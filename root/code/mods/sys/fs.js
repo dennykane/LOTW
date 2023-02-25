@@ -541,7 +541,7 @@ const get_local_file = async (patharg, cb, opts={}, stream_cb) => {//«
 
 //»
 //***New HTML5 FS***«
-
+/*
 const getFsEntry=(path,opts={})=>{//«
 	return new Promise((Y,N)=>{
 		webkitResolveLocalFileSystemURL(fs_url(path),Y,(e)=>{
@@ -551,6 +551,7 @@ const getFsEntry=(path,opts={})=>{//«
 		});
 	});
 };//»
+*/
 const getFsFileFromEntry=(ent)=>{//«
 	return new Promise((Y,N)=>{
 		ent.file(Y);
@@ -585,11 +586,15 @@ const getDataFromFsFile=(file,format,start,end)=>{//«
 	});
 };//»
 
+
 const getFsDirKids=(path, parobj, opts={})=>{//«
 return new Promise(async(Y,N)=>{
 	let kids = parobj.KIDS;
 	let cb = opts.streamCb;
-	let dent = await getFsEntry(path, opts);
+	let patharr = path.split("/");
+	patharr.shift();
+	let rootname = patharr.shift();
+	let [objret, dent] = await _getOrMakeDir(rootname, patharr.join("/"), true);
 	if (!dent) return Y();
 	if (!dent.isDirectory){
 		let mess = `The entry is not a Directory! (isFile==${dent.isFile})`;
@@ -1880,6 +1885,8 @@ const get_fs_by_path = async(patharg, cb, opts = {}) => {//«
 	let path = null;
 	if (arr.length) path = arr.join("/");
     let [objret, dirret] = await _getOrMakeDir(rootname, path, true);
+//log(patharg);
+//log(objret, dirret);
     if (!dirret) {
         cb(null, `${rootname}/${path}/${fname}: could not stat the file`);
         return;
@@ -1901,6 +1908,13 @@ const getFsByPath=(patharg, opts)=>{
 		get_fs_by_path(patharg, (rv1, rv2, rv3)=>{
 			Y([rv1, rv2, rv3]);
 		}, opts);
+	});
+};
+const getFsEntry=(patharg)=>{
+	return new Promise((Y,N)=>{
+		get_fs_by_path(patharg, (rv1, rv2, rv3)=>{
+			Y([rv1, rv2, rv3]);
+		}, {ENT: true, ROOT: true});
 	});
 };
 //»
