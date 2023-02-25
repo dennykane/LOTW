@@ -1001,7 +1001,8 @@ return;
 				d.h = WDIE.clientY - e.clientY - scrtopdiff;
 			}
 drag_timeout = setTimeout(()=>{
-	select_icons_in_drag_box_win(e, w, scrleftdiff, scrtopdiff);
+//	select_icons_in_drag_box_win(e, w, d, scrleftdiff, scrtopdiff);
+	select_icons_in_drag_box_win(w, d);
 },0);
 		}//»
 
@@ -5019,62 +5020,29 @@ this.check_open_files = check_open_files;
 
 */
 
-const select_icons_in_drag_box_win = (e, win, scrld, scrtd) => {//«
-	if (!WDIE) {
-cwarn("NO WDIE");
-//		return icon_array_off(10);
-		return;
-	}
-	let icons = win.main.getElementsByClassName("icon");
-	let hix = null,
-		lox;
-	let hiy = null,
-		loy;
-	let r = win.main.getBoundingClientRect();
-	let wl = r.left;
-	let wt = r.top;
-	let mn = win.main;
-	let scrl = mn.scrollLeft;
-	let scrt = mn.scrollTop;;
-	if (WDIE.clientX < e.clientX) {
-		hix = e.clientX - wl + scrl;
-		lox = WDIE.clientX - wl - scrld + scrl;
-	} else {
-
-		hix = WDIE.clientX - wl - scrld + scrl;
-		lox = e.clientX - wl + scrl;
-	}
-	if (WDIE.clientY < e.clientY) {
-
-		hiy = e.clientY - wt + scrt;
-		loy = WDIE.clientY - wt - scrtd + scrt;
-	} else {
-
-		hiy = WDIE.clientY - wt - scrtd + scrt;
-		loy = e.clientY - wt + scrt;
-
-	}
-	if (hix == null || hiy == null) return;
-	hix-=winx();
-	hiy-=winy();
-	lox-=winx();
-	loy-=winy();
-	let OK=[];
+const select_icons_in_drag_box_win= (win, d) =>{//«
+let drect = d.getBoundingClientRect();
+let dr = drect.right;
+let dl = drect.left;
+let dt = drect.top;
+let db = drect.bottom;
+let OK=[];
+let icons = win.main.getElementsByClassName("icon");
 	for (let icn of icons) {
 		let wrap = icn.wrapper;
 		if (!wrap) continue;
-		let left = wrap.offsetLeft;
-		let right = left+wrap.offsetWidth;
-		let top = wrap.offsetTop;
-		let bot = top+wrap.offsetHeight;
-		if (!(left > hix || right < lox || top > hiy || bot < loy)) {
+		let r = wrap.getBoundingClientRect();
+		if (!(r.left > dr || r.right < dl || r.top > db || r.bottom < dt)) {
 			OK.push(icn);
 			icon_on(icn);
 		}
-		else icon_off(icn);
+		else {
+			icon_off(icn);
+		}
 	}
 	ICONS = OK;
-}//»
+};//»
+
 const select_icons_in_drag_box_desk = (e) => {//«
 	if (!DDIE) {
 cwarn("NO DDIE");
