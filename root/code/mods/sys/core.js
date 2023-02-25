@@ -110,6 +110,8 @@ const TEXT_EXTENSIONS = [//«
 "synth",
 "walt"
 ];//»
+const MEDIA_EXTENSIONS=["webm","mp4","m4a","ogg","mp3"];
+const IMAGE_EXTENSIONS=["jpg","gif","png","webp"];
 const INIT_SCRIPT="/etc/init.sh";
 let init_str;
 
@@ -375,6 +377,8 @@ const globals = {//«
 	FOLDER_APP: FOLDER_APP,
 	TEXT_APP: TEXT_APP,
 	TEXT_EXTENSIONS: TEXT_EXTENSIONS,
+	MEDIA_EXTENSIONS: MEDIA_EXTENSIONS,
+	IMAGE_EXTENSIONS: IMAGE_EXTENSIONS,
 	lst:lst,
 	ext_app_arr: APP_ARR,
 	ext_to_app_map: EXT_TO_APP_MAP,
@@ -660,7 +664,7 @@ const getNameExt = (fullname, if_fullpath, if_in_parts) => {//«
 	let name;
 	if ((marr = fullname.match(/\.([_a-zA-Z][_a-zA-Z0-9]*)$/))) {
 		let tryext = marr[1];
-		if (globals.all_extensions.includes(tryext)) {
+		if (globals.all_extensions.includes(tryext.toLowerCase())) {
 			ext = tryext;
 			name = fullname.replace(/\.([_a-zA-Z][_a-zA-Z0-9]*)$/, "");
 		} else name = fullname;
@@ -697,7 +701,7 @@ return {
 db: DB,
 extToApp:(arg)=>{
 	let ext = arg.split(".").pop();
-	let num = EXT_TO_APP_MAP[ext];
+	let num = EXT_TO_APP_MAP[ext.toLowerCase()];
 	if (!Number.isFinite(num)) return DEF_APP;
 	return APP_ARR[num];
 },

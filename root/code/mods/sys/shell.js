@@ -2684,7 +2684,12 @@ const _get_options = (args, com, opts) => {
 				else if (!lopts[marr[1]]) err.push(com + ":\x20unexpected long option:\x20'" + marr[1]);
 				args.splice(i, 1);
 			} else args.splice(i, 1);
-		} else i++;
+		} 
+		else if (marr = args[i].match(/^(---+[a-zA-Z][-a-zA-Z]+)$/)) {
+			err.push(com + ":\x20unexpected option:\x20'" + marr[1]+"'");
+			args.splice(i, 1);
+		}
+		else i++;
 	}
 	return [obj, err];
 }
@@ -3504,6 +3509,7 @@ const com_ls=(args, cbarg)=>{//«
 			}
 			cb();
 		};//»
+/*
 		const dopath = async() => {//«
 			const fileout = () => {
 				filekids[path] = ret;
@@ -3560,6 +3566,73 @@ const com_ls=(args, cbarg)=>{//«
 			if (!kidret) kidret = {};
 			kidsout(kidret);
 		};//»
+*/
+const dopath = async() => {//«
+	const fileout = () => {
+		filekids[path] = ret;
+		dopath();
+	};
+	const kidsout = kids => {
+		let keys = getkeys(kids).sort();
+		let newkids = {};
+		for (let k of keys) {
+			if (!get_all && k.match(/^\./)) continue;
+			if (kids[k].rootonly && !is_root) {} else newkids[k] = kids[k];
+		}
+		getlist(newkids, saypath, dopath);
+	};
+	iter++;
+	let path = dirargs[iter];
+	if (!path && iter > 0) {
+		if (getkeys(filekids).length) getlist(filekids, null, doend);
+		else doend();
+		return;
+	}
+	let saypath;
+	if (!path) {
+		path = cur_dir;
+		saypath = "";
+	}
+	else if (len == 1) saypath = "";
+	else saypath = path;
+	if (recurse) saypath = path;
+	let ret = await pathToNode(path, getlink);
+	if (!ret) {
+		errout.push(`ls: cannot access '${path}': No such file or directory`);
+		dopath();
+		return;
+	}
+	if (forceget) delete ret.done;
+	let type = ret.root.TYPE;
+	let tot=0;
+	let usepath;
+	let streamCb=val=>{
+		tot+=val.length;
+		wclerr(`Caching: '${usepath}' (${tot})`);
+	};
+	if (ret.APP !== FOLDER_APP) {
+		if (islong) {
+			let dir = ret.par;
+			if (forceget || !dir.longdone) {
+				usepath = dir.NAME;
+				werr(`Caching: '${usepath}' (0)`);
+				let kidret = await fsapi.popDir(dir, {LONG: true, streamCb});
+				let tmp = kidret[ret.NAME];
+				ret = tmp;
+				fileout();
+			} 
+			else fileout();
+		}
+		else fileout();
+		return;
+	}
+	if (ret.done) return kidsout(ret.KIDS);
+	usepath = ret.NAME;
+	werr(`Caching: '${usepath}' (0)`);
+	let kidret = await fsapi.popDir(ret,{streamCb});
+	if (!kidret) kidret = {};
+	kidsout(kidret);
+};//»
 		dopath();
 	};//»
 	dodirs(args);
@@ -4629,6 +4702,57 @@ cbok();
 }//»
 
 sys_builtins = {//«
+
+'sysrm': async args => {//«
+// Add a developer 'rm' function in mods/sys/shell.js or another lib
+// This can help for when the filesystem develops an inconsistency,
+// like when link file names are colliding with directories or regular files.
+// This only takes harcoded filesystem: url schemes,
+// e.g., filesystem:http://localhost:8080/temporary/def/home/me/filename.txt
+// Perhaps make this command "root only"
+	let opts = failopts(args, {
+		SHORT: {},
+		LONG: {}
+	});
+	if (!opts) return;
+	const dorm = (path) => {
+		return new Promise((Y, N) => {
+			webkitResolveLocalFileSystemURL(path, (fent) => {
+				let nm = fent.name;
+				if (fent.isDirectory) {
+					let rdr = fent.createReader();
+					rdr.readEntries(async arr => {
+						if (arr.length) {
+							werr(`Not removing non-empty directory: ${nm}`);
+							Y();
+							return;
+						}
+						fent.remove(() => {
+							werr(`OK:${nm}`); 
+							Y();
+						}, () => {
+							werr(`Remove FAILURE: ${nm}`); 
+							Y();
+						})
+					});
+					return;
+				}
+				fent.remove(() => {
+					werr(`OK: ${nm}`);
+					Y();
+				}, () => {
+					werr(`Remove FAILURE:${nm}`);
+					Y();
+				})
+			}, (err) => {
+				werr(`Resolve FAILURE:${path}`);
+				Y();
+			});
+		});
+	};
+	for (let arg of args) await dorm(arg);
+	cbok();
+},//»
 
 'deluser': args=>{
 	let user = args.shift();

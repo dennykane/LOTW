@@ -2294,7 +2294,8 @@ cwarn("handle_tab():  GOWDA LINK YO NOT FULLPATH LALA");
 				}
 				else {
 //FS888
-					let obj = await fsapi.pathToNode(link, {root:root_state});
+//					let obj = await fsapi.pathToNode(link, {root:root_state});
+					let obj = await fsapi.pathToNode(link);
 					if (obj&&obj.APP==FOLDER_APP) handle_letter_press("/");
 					else {
 						if (!lines[cy()][cx()]) handle_letter_press(" ");

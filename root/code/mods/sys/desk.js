@@ -18,7 +18,7 @@ Desk.ENV=_;
 
 const MODS = NS.mods;
 const{KC,kc,simulate,globals,log,cwarn,cerr,sys_url,xget}=Core;
-const{home_path, widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions,FOLDER_APP, TEXT_APP, TEXT_EXTENSIONS, is_local}=globals;
+const{home_path, widgets:WDG,qobj,fs,stats,FSBRANCH,FSPREF,util, all_extensions,FOLDER_APP, TEXT_APP, TEXT_EXTENSIONS, MEDIA_EXTENSIONS, IMAGE_EXTENSIONS, is_local}=globals;
 
 const {pathToNode}=fsapi;
 
@@ -108,7 +108,7 @@ let minimized_windows=[];
 //String/Regex constants/vars«
 
 
-const MEDIAPLAYER_EXTENSIONS=["webm","mp4","m4a","ogg","mp3"];
+//const MEDIAPLAYER_EXTENSIONS=["webm","mp4","m4a","ogg","mp3"];
 let TEXT_EDITOR_APP = "util.TextEdit";
 const DEF_BIN_OPENER = "util.BinView";
 const UNZIP_APP = "util.Unzip";
@@ -4253,7 +4253,9 @@ const icon_dblclick = async(icon, e, win_cb, use_app) => {//«
 	if (!(parobj&&parobj.root)) return noopen();
 	let roottype = parobj.root.TYPE;
 	if (roottype == "fs") {
-		if (MEDIAPLAYER_EXTENSIONS.includes(gotext)) return open_app("media.MediaPlayer", null, false, null, {file: fullpath});
+		if (MEDIA_EXTENSIONS.includes(gotext.toLowerCase())) return open_app("media.MediaPlayer", null, false, null, {file: fullpath});
+		if (IMAGE_EXTENSIONS.includes(gotext.toLowerCase())) return open_app("util.ImageView", null, false, null, {file: fullpath});
+//		if (MEDIAPLAYER_EXTENSIONS.includes(gotext)) return open_app("media.MediaPlayer", null, false, null, {file: fullpath});
 		if (!fs.check_fs_dir_perm(parobj)) return noopen("permission denied");
 		let ret = await fsapi.readFile(fullpath, {BINARY: true});
 		if (!ret) return noopen();
@@ -5318,7 +5320,10 @@ const open_file_by_path = async(patharg, cb, opt={}) => {//«
 	let arr = getNameExt(fullpath);
 	let ext = arr[1];
 	if (ext) {
-		if (MEDIAPLAYER_EXTENSIONS.includes(ext)) return open_app("media.MediaPlayer", cb, false, null, {file: fullpath, noplay: opt.noplay});
+		ext = ext.toLowerCase();
+		if (MEDIA_EXTENSIONS.includes(ext)) return open_app("media.MediaPlayer", cb, false, null, {file: fullpath, noplay: opt.noplay});
+		if (IMAGE_EXTENSIONS.includes(ext)) return open_app("util.ImageView", cb, false, null, {file: fullpath});
+//		if (MEDIAPLAYER_EXTENSIONS.includes(ext)) return open_app("media.MediaPlayer", cb, false, null, {file: fullpath, noplay: opt.noplay});
 		fakeicon.name = arr[0];
 		fakeicon.ext = ext;
 		fakeicon.app = ext_to_app(ext);

@@ -205,6 +205,42 @@ else cwarn("Opening in 'app mode'");
 	}
 //HDKMHHNDUH
 //	if (if_reinit || !dir.done){
+
+//Show a loading message in the Main window of the Folder app: //«
+//In apps/sys/Folder.js->init
+    if (!dir.done){
+        stat("Getting entries...");
+        let cb=(ents)=>{
+            num_entries+=ents.length;
+            stat_num();
+            if (numdiv) numdiv.innerHTML=`${num_entries} entries loaded`;
+        };
+        let numdiv;
+        let done = false;
+        setTimeout(()=>{
+            if (done) return;
+            numdiv = make("div");
+            numdiv.tcol="#bbb";
+            numdiv.pad=10;
+            numdiv.fs=24;
+            numdiv.fw="bold";
+            numdiv.ta="center";
+            numdiv.innerHTML=`${num_entries} entries loaded`;
+            numdiv.pos="absolute";
+            numdiv.vcenter();
+            Main.add(numdiv);
+        }, 100);
+        await fs.populateDirObjByPath(path, {par:dir,streamCb:cb});
+        done = true;
+        if (numdiv) numdiv.del();
+        dir.done=true;
+        load_dir();
+    }
+	else{
+		load_dir();
+	}
+//»
+/*
 	if (!dir.done){
 		stat("Getting entries...");
 		let cb=(ents)=>{
@@ -215,9 +251,7 @@ else cwarn("Opening in 'app mode'");
 		dir.done=true;
 		load_dir();
 	}
-	else{
-		load_dir();
-	}
+*/
 	if (dir.root.TYPE!=="fs") {
 		num_entries = Object.keys(dir.KIDS).length-2;
 		stat_num();
