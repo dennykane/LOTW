@@ -975,6 +975,10 @@ return;
 			let scrtopdiff = m.scrollTop - WDIE.scrtop;
 			let scrleftdiff = m.scrollLeft - WDIE.scrleft;
 			let d = w.drag_div;
+if (!d){
+WDIE = null;
+return;
+}
 			let x_scroll_diff = m.offsetWidth - m.clientWidth;
 			let y_scroll_diff = m.offsetHeight - m.clientHeight;
 			let gotw;
@@ -3856,20 +3860,32 @@ if (globals.read_only){
 					icn.parwin = usewin;
 				}
 				let wins = get_win_by_path(usewin.fullpath(), null, true);
-				for (let w of wins) w.obj.update(didnum);
+				for (let w of wins) {
+					if (w.obj && (w.obj.update instanceof Function)) w.obj.update(didnum);
+//					w.obj.update(didnum);
+				}
 			}
 		}
 		else {
 			for (let icn of del_icons) icn.del();
 			let wins = get_win_by_path(destpath, null, true);
-			for (let w of wins) w.obj.update();
+			for (let w of wins) {
+				if (w.obj && (w.obj.update instanceof Function)) w.obj.update();
+//				w.obj.update();
+			}
 		}
 
 		if (origwin && origwin.app == FOLDER_APP) {
 			let wins = get_win_by_path(origwin.fullpath(), null, true);
 			for (let w of wins) {
-				if (do_copy) w.obj.reload();
-				else w.obj.update(-didnum);
+				if (do_copy) {
+					if (w.obj && (w.obj.reload instanceof Function)) w.obj.reload();
+//					w.obj.reload();
+				}
+				else {
+					if (w.obj && (w.obj.update instanceof Function)) w.obj.update(-didnum);
+//					w.obj.update(-didnum);
+				}
 			}
 		}
 		if (do_copy){
@@ -5028,19 +5044,19 @@ let dt = drect.top;
 let db = drect.bottom;
 let OK=[];
 let icons = win.main.getElementsByClassName("icon");
-	for (let icn of icons) {
-		let wrap = icn.wrapper;
-		if (!wrap) continue;
-		let r = wrap.getBoundingClientRect();
-		if (!(r.left > dr || r.right < dl || r.top > db || r.bottom < dt)) {
-			OK.push(icn);
-			icon_on(icn);
-		}
-		else {
-			icon_off(icn);
-		}
+for (let icn of icons) {
+	let wrap = icn.wrapper;
+	if (!wrap) continue;
+	let r = wrap.getBoundingClientRect();
+	if (!(r.left > dr || r.right < dl || r.top > db || r.bottom < dt)) {
+		OK.push(icn);
+		icon_on(icn);
 	}
-	ICONS = OK;
+	else {
+		icon_off(icn);
+	}
+}
+ICONS = OK;
 };//»
 
 const select_icons_in_drag_box_desk = (e) => {//«
@@ -5078,7 +5094,7 @@ cwarn("NO DDIE");
 	let OK=[];
 
 	for (let icn of icons) {
-		if (!icn) continue;
+		if (!(icn&&icn.wrapper)) continue;
 		let r = icn.wrapper.getBoundingClientRect();
 		let left = r.left;
 		let right = r.right;
