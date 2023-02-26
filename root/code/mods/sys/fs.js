@@ -282,8 +282,9 @@ const pathToObj = (patharg, if_get_link, iter) =>{//«
 		let parts = path.split("/");
 		parts.shift();
 		let topname = parts.shift();
-		if (!parts.length) return Y([root.KIDS[topname],root, path]);
 		let curpar = root.KIDS[topname];
+		if (!curpar) return Y([null, root, path]);
+		if (!parts.length) return Y([curpar, root, path]);
 
 		let curkids = curpar.KIDS;
 		let curpath = curpar.fullpath;
@@ -2098,10 +2099,32 @@ return new Promise((Y,N)=>{
 
 });
 };//»
+const make_dev_tree = ()=>{//«
+	return new Promise(async (Y,N)=>{
+		let par = mount_dir("dev", get_tree("dev", "dev"));
+		let kids = par.KIDS;
+		let arr = ["null", "log"];
+		for (let name of arr){
+			let kid = {
+				NAME: name,
+				APP: "Device"
+			};
+			kid.fullpath = "/dev/"+name;
+			kid.par = par;
+			kid.root = par;
+			kids[name]=kid;
+		}
+//		par.perm=true;
+		par.done=true;
+		par.longdone=true;
+		Y();
+	});
+};//»
 this.make_all_trees = async(allcb) => {//«
 	mount_dir("mnt", get_tree("mnt", "mount"));
 	mount_dir("www", get_tree("www", "www"));
 	await make_bin_tree();
+	await make_dev_tree();
 	for (let name of root_dirs){
 		let ret = await make_dir_tree(name);
 		if (name == "tmp") ret.perm = true;
@@ -2113,57 +2136,6 @@ this.make_all_trees = async(allcb) => {//«
 	allcb(true);
 }
 //»
-
-/*
-const mkdirkid = (par, name, opts) => {//«
-//const mkdirkid = (par, name, is_dir, sz, mod_time, path, hashsum, file, ent) => 
-
-	let is_dir = opts.isDir;
-	let is_link = opts.isLink;
-	let sz = opts.size;
-	let mod_time = opts.modTime;
-	let path = opts.path;
-	let file = opts.file;
-	let ent = opts.entry;
-
-	let kid;
-	if (opts.useKid) kid = opts.useKid;
-	else {
-//YEIMNJHFP
-		kid={NAME:name,par:par,root:par.root};
-	}
-
-	if (is_dir) {
-		kid.APP = FOLDER_APP;
-		if (par.par.treeroot == true) {
-			if (par.NAME == "home") kid.perm = name;
-			else if (par.NAME == "var" && name == "cache") kid.readonly = true;
-		}
-		let kidsobj = {
-			'..': par
-		};
-		kidsobj['.'] = kid;
-		kid.KIDS = kidsobj;
-		kid.MOVE_LOCKS=[];
-		set_rm_move_lock(kid);
-	}
-	else if (is_link) kid.APP="Link";
-	else {
-		kid.APP = capi.extToApp(name);
-		add_lock_funcs(kid);
-	}	
-	if (mod_time) {
-		kid.MT = mod_time;
-		kid.SZ = sz;
-	}
-	kid.path = path;
-	kid.fullpath = path + "/" + name;
-	kid.file = file;
-	kid.entry = ent;
-	return kid;
-}//»
-*/
-
 const mkdirkid = (par, name, opts) => {//«
 //const mkdirkid = (par, name, is_dir, sz, mod_time, path, hashsum, file, ent) => 
 
@@ -2212,7 +2184,6 @@ const mkdirkid = (par, name, opts) => {//«
 	kid.entry = ent;
 	return kid;
 }//»
-
 const populate_dirobj_by_path = async(patharg, cb, opts={}) => {//«
 	let obj = await pathToNode(patharg);
 	if (!obj) return cb(null, `${patharg}: not found`);
@@ -2233,7 +2204,6 @@ const populate_dirobj = (dirobj, cb = NOOP, opts = {}) => {//«
 	if (type == "bin") return cb(root.KIDS.bin.KIDS);
 }
 //»
-
 const populate_fs_dirobj_by_path = async(patharg, cb=NOOP, opts={}) => {//«
 //cwarn("popdir",patharg);
 	let parobj = opts.par;
@@ -2327,101 +2297,6 @@ const populate_fs_dirobj_by_path = async(patharg, cb=NOOP, opts={}) => {//«
 
 }
 //»
-
-/*
-const populate_fs_dirobj_by_path = async(patharg, cb=NOOP, opts={}) => {//«
-
-	let parobj = opts.par;
-	let if_long = opts.long;
-
-	let rootarg;
-	let fsarg;
-
-	patharg = patharg.regpath();
-
-	if (!parobj) {
-		let arr = patharg.split("/");
-		if (!arr[0]) arr.shift();
-		if (!arr[arr.length - 1]) arr.pop();
-		let gotpar = await pathToNode(("/" + arr.join("/")).regpath());
-		if (!gotpar) {
-			cb();
-			return;
-		}
-		parobj = gotpar;
-	}
-
-	if (parobj.done) return cb(parobj.KIDS);	
-
-	let rootobj = parobj.root;
-	let kids = parobj.KIDS;
-	if (patharg == "/") return cb(kids);
-	let ents = await getFsDirKids(patharg, opts);
-	let links=[];
-
-	for (let ent of ents){//«
-		let name = ent.name;
-		if (ent.isDirectory) {
-
-			kids[name] = mkdirkid(parobj, name, {
-				isDir: true,
-				size: 0,
-				modTime: 0,
-				path: patharg
-			});
-			kids[name].entry = ent;
-			continue;
-		}
-
-		let file = await getFsFileFromEntry(ent);
-		let timestr = get_time_str_from_file(file);
-		let is_link = false;
-		if (LINK_RE.test(name)) {
-			name = name.replace(`.${LINK_EXT}`,"");
-			is_link = true;
-		}
-		let gotkid = kids[name];
-		let kid = mkdirkid(parobj, name, {
-			isLink: is_link,
-			size: file.size,
-			modTime: timestr,
-			path: patharg,
-			file: file,
-			entry: ent,
-			useKid: gotkid
-		});
-		if (!gotkid) kids[name] = kid;
-
-		let narr = capi.getNameExt(name);
-		kid.name = narr[0];
-		kid.ext = narr[1];
-		if (!kid.ext) kid.fullname = kid.name;
-		else kid.fullname = name;;
-		if (is_link){
-			let val = await getDataFromFsFile(file, "text");
-			kid.LINK = val;
-			links.push(kid);
-		}
-		else if (name.match(/\.app$/)){
-			kid.appicon = await getDataFromFsFile(file, "text");
-		}
-		else{
-			kid.app = capi.extToApp(name);
-			kid.APP=kid.app;
-		}
-	}//»
-
-	parobj.longdone = true;
-	parobj.done = true;
-
-	for (let kid of links) kid.ref = await pathToNode(kid.LINK);
-
-	cb(kids);
-
-}
-//»
-*/
-
 const populate_rem_dirobj = async(patharg, cb, dirobj, opts = {}) => {//«
 	let holdpath = patharg;
 	let parts = patharg.split("/");
@@ -3071,7 +2946,7 @@ dokids();
 this.get_term_fobj = function(termobj, cur_dir, fname, flags, cb, is_root) {//«
 
 let EOF = termobj.EOF;
-const chomp_eof = (arr) => {
+const chomp_eof = (arr) => {//«
 	const isarr = (arg) => {
 		return (arg && typeof arg === "object" && typeof arg.length !== "undefined");
 	};
@@ -3079,7 +2954,7 @@ const chomp_eof = (arr) => {
 	let pos = arr.indexOf(EOF);
 	if (pos > -1) arr = arr.slice(0, pos);
 	return arr;
-};
+};//»
 
 const FileObj=function(fname, flags, cb){
 
@@ -3166,6 +3041,21 @@ this.lines = (arr, arg2, arg3, arg4, cb, write_cb) => {//«
 };//»
 this.sync = async cb=>{//«
 
+const buffer_to_output=()=>{//«
+	let str;
+	if (_buffer instanceof Blob) str = _buffer;
+	else if (isarr(_buffer)){
+		if (isstr(_buffer[0])) {
+			_buffer = chomp_eof(_buffer);
+			str = _buffer.join("\n");
+			if (flags.append) str = "\n" + str;
+		}
+		else if (_buffer.length == 1) str = _buffer[0];
+		else str = _buffer;
+	}
+	return str;
+};//»
+
 delete termobj.file_objects[_ukey];
 
 let path;
@@ -3173,6 +3063,13 @@ if (_fent.fullpath) path = _fent.fullpath;
 else path = path_from_node(_fent);
 
 if (_type !== "fs") {
+	if (_type === "dev"){
+		if (path==="/dev/null") return cb();
+		if (path==="/dev/log") {
+			console.log(buffer_to_output());
+			return cb();
+		}
+	}
 	cb({ERR: `${path}: permission denied`});
 	return;
 }
@@ -3193,14 +3090,7 @@ if (_fent.write_locked){
 	}
 }
 
-let str;
-if (_buffer instanceof Blob) str = _buffer;
-else {
-	_buffer = chomp_eof(_buffer);
-	str = _buffer.join("\n");
-	if (flags.append) str = "\n" + str;
-}
-cb(await saveFsByPath(path, str, {APPEND: flags.append, ROOT: is_root}));
+cb(await saveFsByPath(path, buffer_to_output(), {APPEND: flags.append, ROOT: is_root}));
 
 }//»
 
@@ -3281,8 +3171,8 @@ const make_fobj = async(type, fent, ukey) => {//«
 }//»
 
 (async()=>{//«
-
-let fobj = await pathToNode(get_fullpath(fname, cur_dir));
+let fullpath = get_fullpath(fname, cur_dir);
+let fobj = await pathToNode(fullpath);
 if (fobj){
 	if (fobj.APP == FOLDER_APP) return cb(`${fname}: is a directory`);
 	let ukey;
@@ -3321,7 +3211,7 @@ if (fname.match(/\x2f/)) {
 	usefname = fname;
 }
 
-if (!(dirobj && usefname)) return cb("Error id: 1856");
+if (!(dirobj && usefname)) return cb(`${fullpath}: invalid path`);
 if (dirobj.treeroot) return cb(`cannot save to the root directory`);
 let root = dirobj.root;
 let type = root.TYPE;

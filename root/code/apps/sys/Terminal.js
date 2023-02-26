@@ -72,10 +72,10 @@ const DEL_LIBS=[
 //	"av"
 //	"crypto",
 //	"imap"
-"audio.webm"
+//"audio.webm"
 ];
 const DEL_MODS=[
-//	"sys.shell",
+	"sys.shell",
 //	"sys.vim",
 //	"math.trading",
 //	"sys.idb",

@@ -1302,9 +1302,11 @@ const path_parts=(arg)=>{//«
 };//»
 const com_grep=(args, is_matching)=>{//«
 	let is_done = false;
-	let ret = failnoopts(args);
-	if (!ret) return;
-	let opts = ret[0];
+//	let ret = failnoopts(args);
+	let opts = failopts(args, {SHORT:{v:1}});
+	if (!opts) return;
+//	let opts = ret[0];
+	let nonmatching = opts.v;
 	let patstr = args.shift();
 	if (!patstr) {
 		cberr("a pattern is required");
@@ -1338,20 +1340,25 @@ const com_grep=(args, is_matching)=>{//«
 		else if (fname) cur_fname = fname;
 		else if (isstr(ret)) {
 			if (marr=re.exec(ret)) {
-				gotret = true;
-				if (is_matching) wout(marr[0]);
-				else wout(ret);
-				refresh();
+				if (!nonmatching) {
+					gotret = true;
+					if (is_matching) wout(marr[0]);
+					else wout(ret);
+					refresh();
+				}
 			}
+			else if (nonmatching) wout(ret);
 		}
 		else if (isarr(ret)) {
 			let outarr = [];
 			for (let ln of ret) {
 				if (marr=re.exec(ln)) {
+					if (nonmatching) continue;
 					gotret = true;
 					if (is_matching) outarr.push(marr[0]);
 					else outarr.push(ln);
 				}
+				else if (nonmatching) outarr.push(ln);
 			}
 
 			woutarr(outarr);

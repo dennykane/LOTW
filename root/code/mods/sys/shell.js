@@ -4358,11 +4358,11 @@ return;
 'wc': args => {//«
 	let _ = shell_exports;
 	let curfile = null;
-	let words = null,
-		chars;
-	let numlines;
+	let words = 0,
+		chars = 0;
+	let numlines = 0;
+//let 
 	_.read_file_args_or_stdin(args, (ret, filearg, errarg) => {
-//log(ret);
 		if (filearg) {
 			curfile = filearg;
 			return;
@@ -4371,26 +4371,32 @@ return;
 			return;
 		}
 		if (isobj(ret) && ret.EOF) {
-			if (words) _.wout(numlines + "  " + words + "  " + chars);
+			let strout = numlines + "  " + words + "  " + chars;
+			if (curfile) strout += "  " + curfile;
+			_.wout(strout);
+//			if (words) _.wout(numlines + "  " + words + "  " + chars);
 			return _.cbok();
 		}
+//log(ret);
 		if (isarr(ret)) {
-			words = 0, chars = 0;
+
+//			words = 0, chars = 0;
 			for (let i = 0; i < ret.length; i++) {
 				let warr = ret[i].split(/\x20+/);
 				words += warr.length;
 				for (let j = 0; j < warr.length; j++) chars += warr[j].length;
 			}
-			let strout = ret.length + "  " + words + "  " + chars;
-			if (curfile) strout += "  " + curfile;
-			words = null;
-			_.wout(strout);
+//			let strout = ret.length + "  " + words + "  " + chars;
+//			if (curfile) strout += "  " + curfile;
+//			words = null;
+			numlines+=ret.length;
+//			_.wout(strout);
 		} else if (isstr(ret)) {
-			if (words === null) {
-				words = 0;
-				chars = 0;
-				numlines = 0;
-			}
+//			if (words === null) {
+//				words = 0;
+//				chars = 0;
+//				numlines = 0;
+//			}
 			numlines++;
 			let warr = ret.split(/\x20+/);
 			words += warr.length;
