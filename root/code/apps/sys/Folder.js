@@ -35,6 +35,7 @@ const{make,mkdv,mk,mksp}=util;
 const {fs}=NS.api;
 let CUR_FOLDER_XOFF = 5;
 let topwin = Main.top;
+//log(topwin);
 let winid = topwin.id;
 let path = topwin._fullpath;
 let statbar = topwin.status_bar;
@@ -43,6 +44,7 @@ let num_entries = 0;
 const{poperr} = globals.widgets;
 
 let picker_mode;
+
 // = false;
 
 
@@ -50,6 +52,24 @@ let picker_mode;
 
 //DOM«
 
+///*
+const FOOTER_HGT = 0;
+//const FOOTER_HGT = 38;
+//let Main = _Main;
+let savebut, canbut;
+//*/
+/*
+const FOOTER_HGT = 38;
+let Main = mkdv();
+Main.pos="absolute";
+Main.loc(0,0);
+Main.w="100%";
+Main.overy="hidden";
+Main.h=_Main.h-FOOTER_HGT;
+_Main.add(Main);
+topwin.main = Main;
+*/
+//log(_Main);
 let WDIE;
 let dd = mkdv();
 dd.pos = 'absolute';
@@ -78,7 +98,6 @@ icondv.style.flexShrink=0;
 icondv.style.flexGrow=0;
 icondv.style.flexWrap="wrap";
 Main.add(icondv);
-
 topwin.drag_div = dd;
 topwin.icon_div = icondv;
 Main.icon_div = icondv;
@@ -194,8 +213,42 @@ return new Promise(async(Y,N)=>{
 	if (topwin._savecb) {
 		picker_mode = true;
 		topwin.title = `Save\xa0Location\xa0:\xa0'${topwin.title}'`;
+
+let botdiv = topwin.bottom_div;
+let both = botdiv.getBoundingClientRect().height-4;
+savebut = mk('button');
+savebut.fw="bold";
+savebut.bgcol="#dde";
+savebut.innerText="\xa0Save\xa0";
+savebut.style.cssFloat="right";
+savebut.h = both;
+savebut.marr=5;
+canbut = mk('button');
+canbut.fw="bold";
+canbut.bgcol="#dde";
+canbut.marr=5;
+canbut.innerText="Cancel";
+canbut.style.cssFloat="right";
+canbut.h = both;
+
+topwin._save_escape_cb=()=>{
+	savebut.disabled = false;
+};
+savebut.onclick=()=>{
+	topwin._savecb(topwin);
+	savebut.disabled = true;
+};
+canbut.onclick=()=>{
+//	topwin._savecb(topwin);
+	topwin.close_button.click();
+};
+
+botdiv.add(canbut);
+botdiv.add(savebut);
+//savebut.tabIndex="-1";
+//canbut.tabIndex="-1";
+//savebut.focus();
 	}
-//log(topwin._savecb);
 
 	dir = await fs.pathToNode(path);
 	if (!dir) {
@@ -267,12 +320,26 @@ else cwarn("Opening in 'app mode'");
 //OBJ/CB«
 
 this.reload=reload;
+this.onescape=()=>{
 
+if (savebut) {
+let act = document.activeElement;
+if (act===savebut) {
+	savebut.blur();
+	return true;
+}
+if (act===canbut) {
+	canbut.blur();
+	return true;
+}
+}
+return false;
+};
 this.onkeydown = function(e,s) {//«
 
 if (s=="r_")reload(path);
 else if (s=="0_"){
-	if (topwin.CURSOR) {
+	if (topwin.CURSOR&&topwin.CURSOR.ison()) {
 		topwin.CURSOR.zero();
 	}
 //topwin.CURSOR.set();
@@ -282,7 +349,7 @@ else if (s=="b_"){
 if (path=="//"||path==="/") return;
 let arr = path.split("/");
 arr.pop();
-let opts = {WINARGS: {X: topwin.x, Y:topwin.y, WID: Main.w, HGT: Main.h}};
+let opts = {WINARGS: {X: topwin.x, Y:topwin.y, WID: Main.w, HGT: Main.h, BOTTOMPAD: topwin._bottompad}};
 if (topwin._savecb) {
 	opts.SAVE_CB = topwin._savecb;
 	opts.SAVE_FOLDER_CB = topwin._savefoldercb;
@@ -305,6 +372,19 @@ else{
 }
 
 }
+else if (s==="TAB_"){
+
+if (savebut) {
+e.preventDefault();
+let act = document.activeElement;
+
+if (act===savebut) canbut.focus();
+else {
+//log("?");
+	savebut.focus();
+}
+}
+}
 }//»
 this.onkill = function(if_reload, if_force) {//«
 	if (if_force){
@@ -317,14 +397,15 @@ this.onkill = function(if_reload, if_force) {//«
 	icondv.del();
 }//»
 this.onresize = function() {//«
-let cur = topwin.CURSOR;
-if (!cur) return;
-let icn = Main.lasticon;
-if (!icn) return;
-icn.scrollIntoViewIfNeeded();
-//cur.loc(icn.offsetLeft+CUR_FOLDER_XOFF, icn.offsetTop);
-cur.loc(icn.offsetLeft+2, icn.offsetTop+2);
 
+	if (FOOTER_HGT) Main.h=_Main.h-FOOTER_HGT;
+
+	let cur = topwin.CURSOR;
+	if (!cur) return;
+	let icn = Main.lasticon;
+	if (!icn) return;
+	icn.scrollIntoViewIfNeeded();
+	cur.loc(icn.offsetLeft+2, icn.offsetTop+2);
 
 }//»
 

@@ -1647,23 +1647,18 @@ return;
 	let destarr = destpath.split("/");
 	let newname = destarr.pop();
 	let destparpath = destarr.join("/");
-	let realsrcpath, realnewname;
-	if (apparg==="Link") {
-		realsrcpath = `${srcpath}.${LINK_EXT}`;
-		realnewname = `${newname}.${LINK_EXT}`;
-	}
-	else {
-		realsrcpath = srcpath;
-		realnewname = newname;
-	}
-	let [fent,errmess] = await _getFsEntByPath(realsrcpath, apparg === FOLDER_APP, false, true);
+	let realnewname;
+	if (apparg==="Link") realnewname = `${newname}.${LINK_EXT}`;
+//	let [fent,errmess] = await _getFsEntByPath(srcpath, apparg === FOLDER_APP, false, true);
+	let [fent,errmess] = await _getFsEntByPath(srcpath, {isDir:(apparg===FOLDER_APP), isRoot: true, isLink:(apparg==="Link")});
 	if (!fent){
 cwarn("No fent returned from srcpath:" + srcpath);
 cerr(errmess);
 		cb();
 		return;
 	}
-	let [dirent] = await _getFsEntByPath(destparpath, true, false, true);
+//	let [dirent] = await _getFsEntByPath(destparpath, true, false, true);
+	let [dirent] = await _getFsEntByPath(destparpath, {isDir: true, isRoot: true});
 	try {
 		if (if_copy) {
 			fent.copyTo(dirent, realnewname, ()=>{
@@ -1690,7 +1685,8 @@ cerr(e);
 const rm_fs_file = async(path, cb, ifdir, if_root) => {//«
 	if(globals.read_only){READONLY();cb();return;}
 	if (ifdir) {
-		let [dirent, errmess] = await _getFsEntByPath(path, true, false, if_root);
+//		let [dirent, errmess] = await _getFsEntByPath(path, true, false, if_root);
+		let [dirent, errmess] = await _getFsEntByPath(path, {isDir: true, isRoot: if_root});
 		if (!dirent) return cb(null, errmess);
 		dirent.removeRecursively(() => {
 			cb(true);
@@ -1720,24 +1716,26 @@ const rmFsFile=(path, if_dir, if_root)=>{//«
 const touch_fs_file = async(patharg, cb, if_root) => {//«
 };
 //»
-const get_fs_ent_by_path = (patharg, cb, if_dir, if_make, if_root) => {//«
+const get_fs_ent_by_path = (patharg, cb, if_dir, if_make, if_root, if_link) => {//«
 	if (typeof if_dir == "string") {
 		if (if_dir != FOLDER_APP) if_dir = false;
 		else if_dir = true;
 	}
 	get_fs_by_path(patharg, cb, {
-		GETLINK: LINK_RE.test(patharg),//WONTYDJPO
+//		GETLINK: LINK_RE.test(patharg),
+		GETLINK: if_link,
 		ENT: true,
 		DIR: if_dir,
 		MAKE: if_make,
 		ROOT: if_root
 	});
 }
-const _getFsEntByPath=(path, if_dir, if_make, if_root)=>{
+//const _getFsEntByPath=(path, if_dir, if_make, if_root)=>{
+const _getFsEntByPath=(path, opts={})=>{
 	return new Promise((Y,N)=>{
 		get_fs_ent_by_path(path,(rv1,rv2)=>{
 			Y([rv1, rv2]);
-		}, if_dir, if_make, if_root);
+		}, opts.isDir, opts.create, opts.isRoot, opts.isLink);
 	});
 };
 //»
@@ -3466,7 +3464,8 @@ cerr("Missing cwd");
 });
 };//»
 this.set_fent = async(cb) => {//«
-	let [ret,errmess] = await _getFsEntByPath(fullpath, false, true);
+//	let [ret,errmess] = await _getFsEntByPath(fullpath, false, true);
+	let [ret,errmess] = await _getFsEntByPath(fullpath, {create: true});
 	if (!ret) return cb(null, errmess);
 	fEnt = ret;
 	let [rv, arg2, arg3] = await _writeFsFileByEntry(fEnt, new Blob([""]), {append: true});

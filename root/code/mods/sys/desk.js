@@ -167,6 +167,8 @@ let std_keysym_map={
 //Style/CSS Values«
 
 //const TASK_BAR_COL_RGB="16,16,16";
+const SAVEAS_BOTTOM_HGT = 30;
+
 let DEF_APP_BG_COL = "#271313";
 let APP_BG_COL;
 
@@ -200,6 +202,7 @@ let CURBORSTY="solid";//dotted dashed solid double groove ridge inset outset non
 //let CURBORCOL="rgba(16,16,16,0)";
 let CURBORCOL="#555";
 let CURBGCOL="rgba(0,0,0,1)";
+//let CURBGCOL="rgba(255,255,255,0.5)";
 
 let WIN_CYCLE_CG_OP = 0;
 //let WINBUT_OFF_COL = "#889";
@@ -562,12 +565,15 @@ CUR.zero=()=>{
 		CUR.scrollIntoViewIfNeeded();
 	}
 	else{
+		CUR.main.scrollTop=0;
 		CUR.x=CUR_FOLDER_XOFF;
-		CUR.y=CUR.main.scrollTop;
-		let icn = CUR.geticon();
-		if (!icn) return;
-		CUR.x = icn.offsetLeft;
-		CUR.y = icn.offsetTop;
+		CUR.y=CUR_FOLDER_YOFF;
+//		CUR.x=CUR_FOLDER_XOFF;
+//		CUR.y=CUR.main.scrollTop;
+//		let icn = CUR.geticon();
+//		if (!icn) return;
+//		CUR.x = icn.offsetLeft;
+//		CUR.y = icn.offsetTop;
 	}
 };
 CUR.todesk=()=>{
@@ -889,7 +895,7 @@ return;
 				}
 			} else {
 				CRW.main.w = CRW.main.w + (e.clientX - (pi(CRW.main.offsetWidth) + CRW.x)) - winx();
-				CRW.main.h = CRW.main.h + (e.clientY - (pi(CRW.main.offsetHeight) + CRW.y + CRW.titlebar.h + CRW.footer.h)) - winy();
+				CRW.main.h = CRW.main.h + (e.clientY - (pi(CRW.main.offsetHeight) + CRW.y + CRW.titlebar.h + CRW.footer.getBoundingClientRect().height)) - winy();
 				if (CRW.main.w < min_win_width) CRW.main.w = min_win_width;
 			}
 			CRW.status_bar.resize();
@@ -2090,6 +2096,7 @@ this.update_folder_statuses=update_folder_statuses;
 
 const make_window = (arg) => {//«
 
+//«
 	let do_center = false;
 	let is_embedded = arg.EMBEDDED;
 	let is_chrome = arg.ISCHROME;
@@ -2103,6 +2110,7 @@ const make_window = (arg) => {//«
 	let win = make("div");
 //	if (arg.SAVEFOLDERCB) arg.SAVEFOLDERCB(win);
 	if (arg.SAVECB) {
+		win._bottompad = arg.BOTTOMPAD;
 		win._savecb = arg.SAVECB;
 		win._savefoldercb = arg.SAVEFOLDERCB;
 		arg.SAVEFOLDERCB(win);
@@ -2160,7 +2168,6 @@ cwarn("No drop on main window");
 	win.ondragover = nopropdef;
 //	win.ondragenter = e => {
 //		e.stopPropagation();
-//log("win enter");
 //	};
 
 	if (arg.DIALOG) win.dialog = arg.DIALOG;
@@ -2171,13 +2178,11 @@ cwarn("No drop on main window");
 	if (is_chrome || arg.NOCHROME) win.nowindecs = true;
 	no_select(win);
 
-/*
-	if (appobj.path) {
-		if (app.match(/^\./)) win.app = app;
-		else win.app = appobj.path.replace(/\x2f/g,".") + "."+app
-	}
-	else win.app = app;
-*/
+//	if (appobj.path) {
+//		if (app.match(/^\./)) win.app = app;
+//		else win.app = appobj.path.replace(/\x2f/g,".") + "."+app
+//	}
+//	else win.app = app;
 
 //Test for app.match(/filesystem:.+.js$/, and "slice out" the "app" name)
 	let marr;
@@ -2191,9 +2196,7 @@ cwarn("No drop on main window");
 	win.type = "window";
 //	if (!is_embedded) win.pos = "absolute";
 	if (!is_embedded) win.pos = "fixed";
-	if (!win.nowindecs) {
-		win.bor = "1px solid #333";
-	}
+	if (!win.nowindecs) win.bor = "1px solid #333";
 
 	if (arg.ID) {
 		if (!arg.ID.match(/^win_\d+$/)) throw new Error("What arg.ID here:" + arg.ID);
@@ -2270,7 +2273,12 @@ cwarn("No drop on main window");
 	});
 	titlebar.add(title);
 	titlebar.label = win.namespan;
-	if (is_normal) {
+	titlebar.onmouseover=e=>{
+		if (CDL) titlebar.style.cursor = "";
+		else titlebar.style.cursor = "move";
+	};
+//»
+	if (is_normal) {//«
 		win["bgcol.on"]=WIN_COL_ON;
 		win["bgcol.off"]=WIN_COL_OFF;
 
@@ -2281,7 +2289,7 @@ cwarn("No drop on main window");
 		namespan["tcol.off"] = WINNAME_COL_OFF;
 		namespan.title = winid;
 		win.namespan = namespan;
-		Object.defineProperty(win, "title", {
+		Object.defineProperty(win, "title", {//«
 			get: () => {
 				return namespan.innerText.trim();
 			},
@@ -2292,18 +2300,11 @@ if (win.is_minimized){
 win._mintitle.innerText = s
 }
 			}
-		});
+		});//»
 		win.title = arg.NAME;
 		title.add(namespan);
-
 		main.over="hidden";
 
-	}
-	titlebar.onmouseover=e=>{
-		if (CDL) titlebar.style.cursor = "";
-		else titlebar.style.cursor = "move";
-	};
-	if (is_normal) {
 		let img_div = make('div');
 		img_div.pos = "absolute";
 		img_div.bor = "0px solid transparent";
@@ -2311,7 +2312,7 @@ win._mintitle.innerText = s
 		img_div.y = 0;
 		img_div.padb = 3;
 		img_div.style.cursor = "default";
-		win.context_menu_on = (e) => {
+		win.context_menu_on = (e) => {//«
 			if (!win.obj.get_context) return;
 			CG.on();
 			let op_hold = img_div.op;
@@ -2338,7 +2339,7 @@ win._mintitle.innerText = s
 					setTimeout(win.obj.onfocus,50);
 				}
 			};
-		};
+		};//»
 
 		img_div.draggable=true;
 		img_div.ondragstart=nopropdef;
@@ -2351,14 +2352,12 @@ win._mintitle.innerText = s
 			img_div.img = useimg;
 			img_div.add(useimg);
 		}
-
 		else igen.attach({
 			PAR: img_div,
 			APP: app,
 			OPTS:{LETS:arg.LETS}
 		});
-
-		Object.defineProperty(win, "titleimg", {
+		Object.defineProperty(win, "titleimg", {//«
 			get: () => {
 				return img_div.img;
 			},
@@ -2370,7 +2369,7 @@ win._mintitle.innerText = s
 				igen.attach({APP: app, PAR:img_div, OPTS:arg});
 				img_div.img.style.maxWidth = TITLE_DIM
 			}
-		});
+		});//»
 		img_div.id="titleimgdiv_"+winid;
 		img_div.fs=12;
 		img_div.tcol="#a7a7a7";
@@ -2378,9 +2377,8 @@ win._mintitle.innerText = s
 //		img_div.img.id="titleimg_"+winid;
 		img_div.title = app.split(".").pop();
 		win.style.boxShadow = window_boxshadow;
-	} 
-/*Buttons on right*/
-//«
+	} //»
+//«Buttons on right
 	const doclose = function(evt, thisarg, force, if_dev_reload) {
 		if (win.is_minimized) return;
 		let _this = this;
@@ -2531,7 +2529,7 @@ doclose(null, close);
 			if (pr) usepr = pi(pr);
 			w.loc(1,0);
 			w.main.style.width = winw() - usepl - usepr - 2;
-			w.main.style.height = winh() - titlebar.gbcr().height - footer.gbcr().height;
+			w.main.style.height = winh() - titlebar.gbcr().height - footer_wrap.gbcr().height;
 			max.innerText="\u{1f5d7}";
 			max.title="Unmaximize";
 			win.style.boxShadow = "";
@@ -2598,12 +2596,37 @@ cwarn("win!==Desk.CWIN ????");
 	title.add(butdiv);
 //»
 
-	let footer=make('div');
-	footer.id="foot_"+winid;
+	let footer=make('div');//«
+	let footer_wrap=make('div');
+	if (arg.BOTTOMPAD){
+
+/*
+
+The BOTTOMPAD property is ultimately given to us via a WINARG argument, so
+that, for example, from Desk.api.saveAs (@DWEUNFKL), a folder window can be
+opened up that has a Main window with a smaller height than normal (shrunken by
+the amount of SAVEAS_BOTTOM_HGT), so that buttons (like Save and Cancel) can be
+put on the bottom. The point is that this bottom area is considered to be part
+of the system's "window chrome" (like the titlebar), and the application
+doesn't have to worry about changing anything about the logic of it's own
+layout.
+
+*/
+		let botpad = arg.BOTTOMPAD;
+		let bottom_div = make('div');
+		bottom_div.bgcol="#373747";
+		bottom_div.bort="1px solid #556";
+		bottom_div.borb="1px solid #556";
+		bottom_div.h=botpad-2;
+		footer_wrap.add(bottom_div);
+		win.bottom_div = bottom_div;
+	}
+
 	if (!win.nowindecs && is_normal) {
 		footer.dis="flex";
 		footer.style.justifyContent="space-between";
 		footer.h=18;
+//		footer.h=42;
 		let statdiv=make('div');
 		statdiv.id="stat_"+winid;
 		statdiv.onmousedown=e=>{
@@ -2640,14 +2663,18 @@ cwarn("win!==Desk.CWIN ????");
 		win.rs_div = rsdiv;
 		footer.add(statdiv);
 		footer.add(rsdiv);
+		footer_wrap.add(footer);
 	}
-	win.footer=footer;
+	win.footer=footer_wrap;
+//	win.footer=footer;
+//»
 	win.add(titlebar);
 	win.add(main);
-	win.add(footer);
+//	win.add(footer);
+	win.add(footer_wrap);
 	desk.add(win);
-//	if (is_normal) win.img_div.img.style.maxWidth = TITLE_DIM;
 	if (do_center) Core.api.center(win);
+//«
 	win.obj = {};
 	arg.MAIN = main;
 	arg.TOPWIN = win;
@@ -2661,11 +2688,11 @@ cwarn("win!==Desk.CWIN ????");
 	arg.Desk = Desk;
 	arg.NS = NS;
 	arg.FS_URL = fs_url;
+//»
 	if (win.nosave) arg.APPMODE = true;
 	if (!arg.ISBLANK) make_app_window(arg);
 	return win;
 }
-this.make_window=make_window;
 //»
 const make_app_window = (arg) => {//«
 
@@ -3176,7 +3203,8 @@ const do_toggle_win_chrome = w => {//«
 
 	} else {
 		bar.dis = "block";
-		foot.dis = "flex";
+//		foot.dis = "flex";
+		foot.dis = "";
 		w.bor = w.bor_hold;
 		delete w.bor_hold;
 		m.h -= m.diff_h;
@@ -4259,7 +4287,7 @@ const icon_dblclick = async(icon, e, win_cb, use_app) => {//«
 		if (w._savecb || (w!==desk&&!try_force_open)){
 			let obj;
 			if (w._savecb) obj={SAVECB: w._savecb, SAVEFOLDERCB: w._savefoldercb};
-			icon.winargs={X: w.x, Y:w.y, WID: w.main.w, HGT: w.main.h};
+			icon.winargs={BOTTOMPAD: w._bottompad, X: w.x, Y:w.y, WID: w.main.w, HGT: w.main.h};
 			w.easy_kill();
 			win = open_new_window(icon, null, obj);
 		}
@@ -5400,14 +5428,19 @@ const open_new_window = (icon, cb, opts={}) => {//«
 	if (NUM(winargs.WID)) usew = winargs.WID;
 	else if (winargs.WID === "100%") usew = winw();
 	else usew = defwinargs.WID;
-
+//log(winargs);
+	let botpad = winargs.BOTTOMPAD;
 	if (NUM(winargs.HGT)) useh = winargs.HGT;
 	else if (winargs.HGT === "100%") useh = winh();
-	else useh = defwinargs.HGT;
+	else {
+		useh = defwinargs.HGT;
+		if (botpad) useh -= botpad;
+	}
 	if (!usepath) usepath="";
 	let fullpath = `${usepath}/${usename}`;
 	if (useext) fullpath+=`.${useext}`;
 	let win = make_window({
+		BOTTOMPAD: botpad,
 		FULLPATH: fullpath,
 		HIDDEN: opts.hidden,
 		X:usex,
@@ -5687,8 +5720,9 @@ cerr(mess);
 api.saveAs=(win, val, ext)=>{
 
 return new Promise(async(Y,N)=>{
-
 open_file_by_path(globals.home_path, null, {
+//DWEUNFKL
+	WINARGS: {BOTTOMPAD: SAVEAS_BOTTOM_HGT},
 	SAVE_FOLDER_CB: fwin=>{
 		win.cur_save_folder = fwin;
 	},
@@ -5952,6 +5986,7 @@ if (keydiv){
 	if (act) act_type = act.type;
 	let usecwin;
 	let text_inactive = true;
+//log(act.tagName);
 /*
 These are the keycodes that are used by the browser to do various things that we might not give 
 a crap about in LOTW, so we stop that thing from happening here. (I mean, who needs Ctrl+p to 
@@ -6017,12 +6052,16 @@ up everything (even plain Escapes).
 				save_icon_editing();
 			}
 			else {
+//log();
+				if (CEDICN.parwin._save_escape_cb) CEDICN.parwin._save_escape_cb();
 				CEDICN.del();
 				CEDICN = null;
 			}
 			CG.off();
 		}
 		else if (kstr == 'ENTER_') {
+//log();
+
 //			if (kstr == "ESC_") CEDICN.area.value = CEDICN.name;
 			save_icon_editing();
 		}
@@ -6193,7 +6232,10 @@ return;
 				return 
 			}
 			else if (kstr == "LEFT_C" || kstr == "RIGHT_C" || kstr == "UP_C" || kstr == "DOWN_C") return CUR.move(kstr[0],true);
-			else if (kstr=="ENTER_") return CUR.select();/*Simple select*/
+			else if (kstr=="ENTER_") {
+				if (act.tagName=="BUTTON") return;
+				return CUR.select();/*Simple select*/
+			}
 			else if (kstr=="ENTER_C") return CUR.select(null,null,{ctrlKey:true});/*Force open and deselect*/
 			else if (kstr=="ENTER_A") return CUR.select(null,true);/*Force open and deselect*/
 			else if (kstr=="ENTER_CA") return CUR.select(null,true, {ctrlKey:true});/*Force open and deselect*/
@@ -6361,6 +6403,9 @@ log(w.fullpath());
 //}
 }
 
+}
+else if (kstr=="0_"){
+if (CUR.ison()) CUR.zero();
 }
 
 }
