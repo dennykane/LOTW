@@ -24,6 +24,7 @@ const {pathToNode}=fsapi;
 
 const{popup:_popup,poperr:_poperr,popok:_popok,make_popup:_make_popup}=WDG;
 const WDGAPI = NS.api.widgets
+const {popwait, popyesno} = WDGAPI;
 const popup=(s,opts)=>{_popup(s,opts);};
 const poperr=(s,opts)=>{_poperr(s,opts);};
 const popok=(s,opts)=>{_popok(s,opts);};
@@ -1926,15 +1927,14 @@ const check_icon_loc=(icn)=>{
 //		setTimeout(()=>{desk.scrollTop = r.bottom;},0);
 	}
 };
-const place_in_icon_slot = (icon, pos, if_create, if_load, which) => {//«
-//log(icon, pos, if_create, which);
-//if (which === 2){
-//throw new Error("YADADADADA");
-//}
+const placeInIconSlot=(icon, opts={})=>{
+	return place_in_icon_slot(icon, opts.pos, opts.create, opts.load, opts.noVacate);
+};
+const place_in_icon_slot = (icon, pos, if_create, if_load, if_no_vacate) => {//«
 	let startx = desk_grid_start_x;
 	let starty = desk_grid_start_y;
 	let elem = desk;
-	if (icon.name && !if_create) vacate_icon_slot(icon);
+	if (icon.name && !if_create && !if_no_vacate) vacate_icon_slot(icon);
 	let arr = get_icon_array(elem);
 //log(arr);
 	if (if_create){
@@ -4158,7 +4158,7 @@ cwarn(`Skipping icn.app!='${FOLDER_APP}'`, icn.fullpath());
 //			icn.loc(r.left, r.top+scrdiff);
 			icn.loc(r.left+scrl, r.top+scrdiff+scrt);
 			desk.add(icn);
-			proms.push(place_in_icon_slot(icn,{X:e.clientX+scrl,Y:e.clientY+scrt}, do_copy, null, 1));
+			proms.push(place_in_icon_slot(icn,{X:e.clientX+scrl,Y:e.clientY+scrt}, do_copy));
 		}
 		else { /*Onto a folder main window,from the desktop or another folder. The folder automatically places it*/
 			const movecb=()=>{//«
@@ -4548,7 +4548,7 @@ const delete_icons = async which => {//«
 	}
 	arr = arr.uniq();
 	if (arr.length) {
-		let ret = await WDGAPI.popyesno("Delete " + arr.length + " icons?",{reverse:DEF_NO_DELETE_ICONS});//, ret => {
+		let ret = await popyesno("Delete " + arr.length + " icons?",{reverse:DEF_NO_DELETE_ICONS});//, ret => {
 		if (!ret) return;
 		let errprompt;
 		let errors = [];
@@ -4723,7 +4723,10 @@ const make_folder_icon_cb = async(winarg, winpath, namearg, if_autopos, roottype
 	let parobj = await pathToNode(usepath);
 	if (!parobj) return;
 	let rtype = parobj.root.TYPE;
-	if (rtype != "fs") return poperr("Not making a directory of type:\x20" + rtype);
+	if (rtype != "fs") {
+		if (rtype == "testing") return popup('CREATE DIRECTORY IN TESTING');
+		return poperr(`Not making a directory of type: '${rtype}'`);
+	}
 	let obj;
 	let icon = make_icon({NAME: name, KIDS:true});
 	if (usewin===desk) {
@@ -4762,7 +4765,12 @@ const make_new_file = (val, ext, path, winarg)=>{//«
 		let parobj = await pathToNode(path);
 		if (!parobj) return;
 		let rtype = parobj.root.TYPE;
-		if (rtype != "fs") return poperr("Not making a directory of type:\x20" + rtype);
+		if (rtype != "fs") {
+			if (rtype == "testing") await popwait(`CREATE FILE IN TESTING`);
+			else await popwait(`Cannot create a file of type: '${rtype}'`, "error");
+			Y();
+			return;
+		}
 		let fobj = {NAME: `${name}.${ext}`};
 		if (ext==="app") fobj.appicon = val;
 		let icon = make_icon(fobj);
@@ -5001,7 +5009,7 @@ console.error("HAVE LINK IN AUTOMAKE ICON, WITHOUT node IN OPTS???");
 	if (ext) fullpath+=`.${ext}`;
 	if (ext==="app") o.appicon = await fsapi.readFsFile(fullpath);
 	let icon = make_icon(o);
-	if (where===desk) place_in_icon_slot(icon, opts.pos, true, null, 2);
+	if (where===desk) place_in_icon_slot(icon, opts.pos, true);
 	else add_icon_to_folder_win(icon, where);
 	
 	icon_off(icon);
@@ -5647,7 +5655,7 @@ return new Promise(async(y,n)=>{
 	else usepath = where.fullpath();
 	let files = fs.event_to_files(e);
 	if (files.length===1 && files[0].name.match(/\.zip$/i)){
-		if (await WDGAPI.popyesno(`Extract all files to ${usepath}?`)){
+		if (await popyesno(`Extract all files to ${usepath}?`)){
 			let win = await Desk.openApp(UNZIP_APP, true);
 			let dat = await capi.toBytes(files[0]);
 			win.obj.onloadfile(dat, null, null, usepath, true);
@@ -5733,9 +5741,12 @@ open_file_by_path(globals.home_path, null, {
 			Y();
 			return;
 		}
+//log("MKNEW");
 		let icn = await make_new_file(val, ext, fwin._fullpath, fwin);
+//log(icn);
 		if (!icn) {
 //cwarn("GOT NO ICON AFTER Desk.Make_new_file!!!");
+//log(win.cur_save_folder.easy_kill);
 			win.cur_save_folder.easy_kill();
 		}
 		else {
@@ -6211,12 +6222,11 @@ After the longest time of having the icon selection and moving procedures being
 done in the typical mousedown and mousemove kinds of ways, I decided to turn it
 into a cursor based approach. You select icons by moving the cursor over them.
 */
-if (kstr == "f_CAS") return toggle_fullscreen();
-//if (kstr=="c_CAS"){
-if (kstr=="/_"){
-toggle_cursor();
-return;
-}
+		if (kstr == "f_CAS") return toggle_fullscreen();
+		if (kstr=="/_"){
+			toggle_cursor();
+			return;
+		}
 		if (cwin&&(kstr==="PGDOWN_"||kstr==="PGUP_"||kstr==="HOME_"||kstr==="END_")){
 			let mn = cwin.main;
 			if (kstr==="PGDOWN_") mn.scrollTop+=mn.clientHeight;
@@ -6254,17 +6264,30 @@ return;
 			else icons = Array.from(cwin.icon_div.childNodes);
 			for (let icn of icons) icon_on(icn,true);
 		}
-		else if ((!cwin||cwin.app==FOLDER_APP)){
-if (kstr=="c_"){
-if (CUR.ison()) {
-	CUR.off(true);
-}
-else {
-	CUR.on(true);
-}
+//		else if (!cwin||cwin.app==FOLDER_APP){
+		else {
+			if (kstr=="c_"){
+				if (CUR.ison()) CUR.off(true);
+				else CUR.on(true);
+				return;
+			}
+if (kstr=="s_"){//«Switch the locations of 2 icons on the desktop
+if (!(!cwin && CUR.ison() && ICONS.length===1)) return;
+let icn1 = CUR.geticon();
+if (!icn1) return;
+let icn2 = ICONS[0];
+if (icn1 == icn2) return;
+let r1 = icn1.gbcr();
+let r2 = icn2.gbcr();
+let scrl = desk.scrollLeft;
+let scrt = desk.scrollTop;
+vacate_icon_slot(icn1);
+vacate_icon_slot(icn2);
+placeInIconSlot(icn1, {noVacate: true, pos: {X:r2.left+scrl, Y:r2.top+scrt}});
+placeInIconSlot(icn2, {noVacate: true, pos: {X:r1.left+scrl, Y:r1.top+scrt}});
+icon_array_off();
 return;
-}
-//			if (CUR.ison()) {
+}//»
 			if (kstr=="m_"){//«/*Move icons*/
 const move_icon_array = ()=>{//«
 	let r;
@@ -6330,7 +6353,7 @@ toggle_show_windows(true);
 setTimeout(move_icon_array, 10);
 }
 else move_icon_array();
-
+return;
 			}//»
 		}
 	}

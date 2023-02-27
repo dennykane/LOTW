@@ -653,6 +653,11 @@ const popwait = (str, cb, type) => {
 	});
 }
 this.popwait=popwait;
+api.popwait = (str, type)=>{
+	return new Promise((y,n)=>{
+		popwait(str,y,type);
+	});
+};
 
 const popform = (arr, cb, title) => {//«
 	let table = make('table');

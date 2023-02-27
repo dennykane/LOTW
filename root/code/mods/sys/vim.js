@@ -4447,12 +4447,16 @@ const editsave=async(if_nostat)=>{//«
 	let numlines = arr[1];
 	let opts={};
 
+	let usepath = edit_fullpath;
 	if (edit_ftype!=="fs") {
-		stat_message = "Unknown file system type: " + edit_ftype;
+		if (edit_ftype=="testing") {
+			stat_message = `CREATE '${edit_fname}' IN TESTING`;
+			stat_message_type = STAT_WARNING;
+		}
+		else stat_message = "Invalid file system type: " + edit_ftype;
 		render();
 		return;
 	}
-	let usepath = edit_fullpath;
 if (splice_mode){
 opts.spliceStart = splice_start;
 opts.spliceEnd = splice_end;

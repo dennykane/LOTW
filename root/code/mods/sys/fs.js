@@ -268,8 +268,6 @@ const pathToObj = (patharg, if_get_link, iter) =>{//«
 		});
 	}//»
 	const stop=()=>{return new Promise(()=>{});}
-//log("IN",patharg, if_get_link);
-
 //		if (!if_get_link && LINK_RE.test(path)) path = path.replace(`.${LINK_EXT}`,"");
 
 	return new Promise(async(Y,N)=>{//«
@@ -1151,193 +1149,24 @@ const mk_fs_dir = async(parpatharg, fname, cb, is_root, if_no_make_icon) => {//�
 		cberr(`${parpath}: no such directory`);
 		return;
 	}
-	const mkfobj = () => {
-		let newobj = {
-			NAME: fname,
-			APP: FOLDER_APP,
-			root: obj.root,
-			par: obj,
-			fullpath: parpath+"/"+fname,
-			KIDS: {},
-			MOVE_LOCKS:[]
-		};
-		set_rm_move_lock(newobj);
-		newobj.KIDS['.'] = newobj;
-		newobj.KIDS['..'] = obj;
-		obj.KIDS[fname] = newobj;
-	};
-
 	let type = obj.root.TYPE;
 	let kids = obj.KIDS;
 	if (!kids) return cberr(`${parpath}: not a directory`);
 	if (kids[fname]) return cberr(`${parpath}/${fname}: already exists`);
-	if (type == "fs") {
-		if (obj.NAME == "home" && obj.par.treeroot && fname === Core.get_username()) {}
-		else if (!check_fs_dir_perm(obj, is_root)) return cberr("permission denied");
-
-        let [ret] = await _getOrMakeDir(parpath, fname);
-		if (ret) {
-log("RET",ret);
-			if (!Desk) return cbok();
-			if (!if_no_make_icon) Desk.make_icon_if_new(ret);
-			cbok();
-		} else cberr();
-/*
-		_get_or_make_dir(parpath, fname, async ret => {
-			if (ret) {
-				if (!Desk) return cbok();
-				if (!if_no_make_icon) Desk.make_icon_if_new(ret);
-				cbok();
-
-			} else cberr();
-		});
-*/
-	}
-	else {
-		cberr(`not supporting type: ${type}`);
-		return;
-	}
+	if (type !== "fs")  return cberr(`not supporting type: ${type}`);
+	if (obj.NAME == "home" && obj.par.treeroot && fname === Core.get_username()) {}
+	else if (!check_fs_dir_perm(obj, is_root)) return cberr("permission denied");
+	let [ret] = await _getOrMakeDir(parpath, fname);
+	if (!ret) return cberr();
+	if (!Desk) return cbok();
+	if (!if_no_make_icon) Desk.make_icon_if_new(ret);
+	cbok();
 }//»
 const mkFsDir = (parpatharg, fname, is_root, if_no_make_icon)=>{//«
 	return new Promise((Y,N)=>{
 		mk_fs_dir(parpatharg, fname, Y, is_root, if_no_make_icon);
 	});
 };//»
-/*
-const _get_or_make_dir = (rootname, path, cb, getonly, if_mkdir) => {//«
-if (globals.read_only&&if_mkdir){
-//log(getonly, if_mkdir);
-READONLY();
-cb();
-return;
-}
-	const check_or_make_dir = (obj, dir, name, _cb) => {//«
-		if (obj.KIDS) {
-			let kidobj = obj.KIDS[name];
-			if (kidobj) {
-				dir.getDirectory(name, {
-					create: true
-				}, dirret => {
-					if (kidobj.APP == FOLDER_APP) _cb(kidobj, dirret);
-					else _cb();
-				}, log);
-			} else if (getonly) {
-				dir.getDirectory(name, {}, dirret => {
-					let haveobj = {
-						NAME: name,
-						APP: FOLDER_APP,
-						root: rootobj,
-						par: obj,
-						KIDS: {},
-						MOVE_LOCKS:[]
-					};
-					set_rm_move_lock(haveobj);
-					haveobj.KIDS['.'] = haveobj;
-					haveobj.KIDS['..'] = obj;
-					obj.KIDS[name] = haveobj;
-					_cb(haveobj, dirret);
-				}, _ => {
-					_cb();
-				});
-			} else {
-				dir.getDirectory(name, {
-					create: true
-				}, dirret => {
-					let newobj = {
-						NAME: name,
-						APP: FOLDER_APP,
-						root: rootobj,
-						par: obj,
-						fullpath: obj.fullpath+"/"+name,
-						KIDS: {},
-						MOVE_LOCKS:[]
-					};
-					set_rm_move_lock(newobj);
-					newobj.KIDS['.'] = newobj;
-					newobj.KIDS['..'] = obj;
-					obj.KIDS[name] = newobj;
-					_cb(newobj, dirret);
-					if (if_mkdir && Desk) Desk.make_desk_folder(obj.fullpath, name);
-				}, log);
-			}
-		} else _cb();
-	};//»
-	if (rootname.match(/\x2f/)) {
-		let arr = rootname.split("\/");
-		if (!arr[0]) arr.shift();
-		rootname = arr.shift();
-		path = arr.join("/") + "/" + path;
-	}
-	let usefs = fs_root;
-	let useroot = root;
-	let rootobj = useroot.KIDS[rootname];
-	let rootdir;
-	let argobj;
-	if (getonly) argobj = {};
-	else {
-		argobj = {create: true};
-	}
-	usefs.getDirectory(rootname, argobj, dirret => {
-		if (!path) {
-			cb(rootobj, dirret);
-			return;
-		}
-		rootdir = dirret;
-		let arr = path.split("/");
-		if (!arr[0]) arr.shift();
-		if (!arr[arr.length - 1]) arr.pop();
-		if (!arr.length) {
-			cb(rootobj, dirret);
-			return;
-		}
-		if (rootobj && rootobj.par.treeroot) {
-			let rtype = rootobj.TYPE;
-			if (rtype == "fs") {
-				let curobj = rootobj;
-				let curdir = rootdir;
-				let iter = -1;
-				let dodir = () => {
-					iter++;
-					if (iter == arr.length) {
-						cb(curobj, curdir);
-						return;
-					}
-					check_or_make_dir(curobj, curdir, arr[iter], (objret, dirret) => {
-						curobj = objret;
-						curdir = dirret;
-						if (!curobj) {
-							cb();
-							return;
-						}
-						dodir();
-					});
-				};
-				dodir();
-			}
-		} else {
-			cb();
-			log("_get_or_make_dir():NO rootobj && rootobj.par.treeroot:<" + rootname + "><" + path + ">");
-			log(rootobj);
-		}
-	}, _ => {
-cerr(`can't get /${rootname}`);
-		cb();
-	});
-}
-const _getOrMakeDir=(rootname, path, getonly, if_mkdir)=>{
-	return new Promise((Y,N)=>{
-		_get_or_make_dir(rootname, path, (rv1, rv2)=>{
-			Y([rv1, rv2]);
-		}, getonly, if_mkdir);
-	});
-};
-const getOrMakeDir=(rootname, path, opts={})=>{
-	return new Promise((Y,N)=>{
-		_get_or_make_dir(rootname, path, Y, opts.getOnly, opts.mkDir);
-	});
-};
-//»
-*/
 
 const _get_or_make_dir = async(rootname, path, cb, getonly, if_mkdir) => {//«
 if (globals.read_only&&if_mkdir){
@@ -1933,6 +1762,10 @@ const save_fs_by_path = async(patharg, val, cb, opts={}) => {//«
 	let path = null;
 	if (arr.length) path = arr.join("/");
 	else path = "/";
+	if (!root_dirs.includes(rootname)){
+		cb(null, `'${rootname}': invalid toplevel directory`);
+		return;
+	}
 	let [objret, dirret] = await _getOrMakeDir(rootname, path, false, if_mkdir);
 	if (!dirret) {
 		cb(null, "Could not stat the file");
@@ -2004,8 +1837,8 @@ cerr(`${fname}: not writing to 'link' extension (${LINK_EXT})`);
 //»
 //Init/Populate Dirs«
 
-const get_tree=(which,type)=>{//«
-	let dir={NAME:which,TYPE:type,KIDS:{},APP:FOLDER_APP,sys:true,fullpath:`/${which}`};
+const get_tree=(name,type)=>{//«
+	let dir={NAME:name,TYPE:type,KIDS:{},APP:FOLDER_APP,sys:true,fullpath:`/${name}`};
 	dir.root=dir;
 	dir.KIDS['.']=dir;
 	return dir;
@@ -2123,6 +1956,7 @@ const make_dev_tree = ()=>{//«
 this.make_all_trees = async(allcb) => {//«
 	mount_dir("mnt", get_tree("mnt", "mount"));
 	mount_dir("www", get_tree("www", "www"));
+	mount_dir(".tst", get_tree(".tst", "testing"));
 	await make_bin_tree();
 	await make_dev_tree();
 	for (let name of root_dirs){
@@ -2195,25 +2029,28 @@ const populate_dirobj_by_path = async(patharg, cb, opts={}) => {//«
 	populate_dirobj(obj, cb, opts);
 };
 //»
+const populate_testing_dirobj = (dirobj, cb, opts={})=>{
+let path = dirobj.fullpath;
+cwarn("POPULATE TESTING", path);
+dirobj.done = true;
+cb(dirobj.KIDS);
+};
 const populate_dirobj = (dirobj, cb = NOOP, opts = {}) => {//«
 	let type = dirobj.root.TYPE;
 	let path = dirobj.fullpath;
 	if (type == "fs") return populate_fs_dirobj_by_path(path, cb, {par:dirobj, long:opts.LONG, streamCb: opts.streamCb});
 	if (type == "www"||type=="local") return populate_rem_dirobj(path, cb, dirobj, opts);
-	if (type == "mount") return cb(root.KIDS.mnt.KIDS);
-	if (type == "bin") return cb(root.KIDS.bin.KIDS);
+	if (type == "testing") return populate_testing_dirobj(dirobj, cb, opts);
+	cb(dirobj.KIDS);
 }
+
 //»
 const populate_fs_dirobj_by_path = async(patharg, cb=NOOP, opts={}) => {//«
-//cwarn("popdir",patharg);
 	let parobj = opts.par;
 	let if_long = opts.long;
-
 	let rootarg;
 	let fsarg;
-
 	patharg = patharg.regpath();
-
 	if (!parobj) {
 		let arr = patharg.split("/");
 		if (!arr[0]) arr.shift();
@@ -2225,76 +2062,13 @@ const populate_fs_dirobj_by_path = async(patharg, cb=NOOP, opts={}) => {//«
 		}
 		parobj = gotpar;
 	}
-
 	if (parobj.done) return cb(parobj.KIDS);	
-
 	let rootobj = parobj.root;
-//	let kids = parobj.KIDS;
 	if (patharg == "/") return cb(parobj.KIDS);
-//	let ents = await getFsDirKids(patharg, kids, opts);
 	await getFsDirKids(patharg, parobj, opts);
-//	let links=[];
-/*
-	for (let ent of ents){//«
-
-		let name = ent.name;
-		if (ent.isDirectory) {
-
-			kids[name] = mkdirkid(parobj, name, {
-				isDir: true,
-				size: 0,
-				modTime: 0,
-				path: patharg
-			});
-			kids[name].entry = ent;
-			continue;
-		}
-
-		let file = await getFsFileFromEntry(ent);
-		let timestr = get_time_str_from_file(file);
-		let is_link = false;
-		if (LINK_RE.test(name)) {
-			name = name.replace(`.${LINK_EXT}`,"");
-			is_link = true;
-		}
-		let gotkid = kids[name];
-		let kid = mkdirkid(parobj, name, {
-			isLink: is_link,
-			size: file.size,
-			modTime: timestr,
-			path: patharg,
-			file: file,
-			entry: ent,
-			useKid: gotkid
-		});
-		if (!gotkid) kids[name] = kid;
-
-		let narr = capi.getNameExt(name);
-		kid.name = narr[0];
-		kid.ext = narr[1];
-		if (!kid.ext) kid.fullname = kid.name;
-		else kid.fullname = name;;
-		if (is_link){
-			let val = await getDataFromFsFile(file, "text");
-			kid.LINK = val;
-			links.push(kid);
-		}
-		else if (name.match(/\.app$/)){
-			kid.appicon = await getDataFromFsFile(file, "text");
-		}
-		else{
-			kid.app = capi.extToApp(name);
-			kid.APP=kid.app;
-		}
-	}//»
-*/
 	parobj.longdone = true;
 	parobj.done = true;
-
-//	for (let kid of links) kid.ref = await pathToNode(kid.LINK);
-
 	cb(parobj.KIDS);
-
 }
 //»
 const populate_rem_dirobj = async(patharg, cb, dirobj, opts = {}) => {//«
@@ -2429,6 +2203,92 @@ this.getmod = getmod;
 
 //»
 //Shell/System«
+
+const format_ls = (w, arr, lens, cb, types, col_arg, ret, col_ret) => {//«
+	const min_col_wid = (col_num, use_cols) => {
+		let max_len = 0;
+		let got_len;
+		let use_pad = pad;
+		for (let i = col_num; i < num; i += use_cols) {
+			if (i + 1 == use_cols) use_pad = 0;
+			got_len = lens[i] + use_pad;
+			if (got_len > max_len) max_len = got_len;
+		}
+		return max_len;
+	};
+	const do_colors=()=>{
+		let single=false;
+		if (!num){
+			num=arr.length;
+			num_cols=1;
+			single=true;
+		}
+		for (let i = 0; i < num; i++) {
+			type = types[i];
+			if (type == FOLDER_APP) colarg = "#909fff";
+			else if (type == "Link") colarg = "#0cc";
+			else if (type == "BadLink") colarg = "#f00";
+			else colarg = null;
+			col_num = Math.floor(i % num_cols);
+			row_num = Math.floor(i / num_cols);
+			if (row_num != cur_row) {
+				matrix.push([]);
+				xpos = 0;
+			}
+			let str = arr[i] + "\xa0".rep(col_wids[col_num] - arr[i].length);
+			matrix[row_num][col_num] = str;
+			if (!col_ret[row_num]) col_ret[row_num] = {};
+			let uselen = arr[i].length;
+			if (arr[i].match(/\/$/)) uselen--;
+			if (colarg) col_ret[row_num][xpos] = [uselen, colarg];
+			xpos += str.length;
+			cur_row = row_num;
+		}
+		if (single) return;
+		for (let i = 0; i < matrix.length; i++) ret.push(matrix[i].join(""));
+
+	};
+	let pad = 2;
+	let col_wids = [];
+	let col_pos = [0];
+	let max_cols = col_arg;
+	let num, num_rows, num_cols, rem, tot_wid, min_wid;
+	let row_num, col_num;
+	let cur_row = -1;
+	let matrix = [];
+	let type, colarg;
+	let xpos;
+	if (col_arg == 1) {
+		ret = arr.slice();
+		do_colors();
+		cb(ret, col_ret);
+		return;
+	}
+	num = arr.length;
+	if (!max_cols) {
+		min_wid = 1 + pad;
+		max_cols = Math.floor(w / min_wid);
+		if (arr.length < max_cols) max_cols = arr.length;
+	}
+	num_rows = Math.floor(num / max_cols);
+	num_cols = max_cols;
+	rem = num % num_cols;
+	tot_wid = 0;
+	for (let i = 0; i < max_cols; i++) {
+		min_wid = min_col_wid(i, num_cols);
+		tot_wid += min_wid;
+		if (tot_wid > w && max_cols > 1) {
+			format_ls(w, arr, lens, cb, types, (num_cols - 1), ret, col_ret);
+			return;
+		}
+		col_wids.push(min_wid);
+		col_pos.push(tot_wid);
+	}
+	col_pos.pop();
+
+	do_colors();
+	cb(ret, col_ret);
+}//»
 
 this.com_mv = async(shell_exports, args, if_cp, dom_objects, recur_opts) => {//«
 
@@ -2660,7 +2520,7 @@ for (let arr of mvarr) {//«
 
 //Only saving to type=='fs'
 	if (savetype != "fs") {
-		werr(`Not (yet) supporting ${verb} to ${savetype}`);
+		werr(`Not (yet) supporting ${verb} to type='${savetype}'`);
 		continue;
 	}
 
@@ -2736,91 +2596,6 @@ if (gotfail) return cberr();
 cbok();
 
 
-}//»
-const format_ls = (w, arr, lens, cb, types, col_arg, ret, col_ret) => {//«
-	const min_col_wid = (col_num, use_cols) => {
-		let max_len = 0;
-		let got_len;
-		let use_pad = pad;
-		for (let i = col_num; i < num; i += use_cols) {
-			if (i + 1 == use_cols) use_pad = 0;
-			got_len = lens[i] + use_pad;
-			if (got_len > max_len) max_len = got_len;
-		}
-		return max_len;
-	};
-	const do_colors=()=>{
-		let single=false;
-		if (!num){
-			num=arr.length;
-			num_cols=1;
-			single=true;
-		}
-		for (let i = 0; i < num; i++) {
-			type = types[i];
-			if (type == FOLDER_APP) colarg = "#909fff";
-			else if (type == "Link") colarg = "#0cc";
-			else if (type == "BadLink") colarg = "#f00";
-			else colarg = null;
-			col_num = Math.floor(i % num_cols);
-			row_num = Math.floor(i / num_cols);
-			if (row_num != cur_row) {
-				matrix.push([]);
-				xpos = 0;
-			}
-			let str = arr[i] + "\xa0".rep(col_wids[col_num] - arr[i].length);
-			matrix[row_num][col_num] = str;
-			if (!col_ret[row_num]) col_ret[row_num] = {};
-			let uselen = arr[i].length;
-			if (arr[i].match(/\/$/)) uselen--;
-			if (colarg) col_ret[row_num][xpos] = [uselen, colarg];
-			xpos += str.length;
-			cur_row = row_num;
-		}
-		if (single) return;
-		for (let i = 0; i < matrix.length; i++) ret.push(matrix[i].join(""));
-
-	};
-	let pad = 2;
-	let col_wids = [];
-	let col_pos = [0];
-	let max_cols = col_arg;
-	let num, num_rows, num_cols, rem, tot_wid, min_wid;
-	let row_num, col_num;
-	let cur_row = -1;
-	let matrix = [];
-	let type, colarg;
-	let xpos;
-	if (col_arg == 1) {
-		ret = arr.slice();
-		do_colors();
-		cb(ret, col_ret);
-		return;
-	}
-	num = arr.length;
-	if (!max_cols) {
-		min_wid = 1 + pad;
-		max_cols = Math.floor(w / min_wid);
-		if (arr.length < max_cols) max_cols = arr.length;
-	}
-	num_rows = Math.floor(num / max_cols);
-	num_cols = max_cols;
-	rem = num % num_cols;
-	tot_wid = 0;
-	for (let i = 0; i < max_cols; i++) {
-		min_wid = min_col_wid(i, num_cols);
-		tot_wid += min_wid;
-		if (tot_wid > w && max_cols > 1) {
-			format_ls(w, arr, lens, cb, types, (num_cols - 1), ret, col_ret);
-			return;
-		}
-		col_wids.push(min_wid);
-		col_pos.push(tot_wid);
-	}
-	col_pos.pop();
-
-	do_colors();
-	cb(ret, col_ret);
 }//»
 this.get_listing = (kids, w, opts = {}) => {//«
 
@@ -3218,6 +2993,9 @@ let type = root.TYPE;
 if (type == "fs") {
 	if (!check_fs_dir_perm(dirobj, is_root)) return cb(`${dirobj.fullpath}: permission denied`);
 } 
+else if (type == "testing"){
+	return cb(`CREATE FILE '${usefname}' IN TESTING!`);
+}
 else return cb(`cannot write to directory type: '${type}'`);
 
 let obj = {
@@ -3890,7 +3668,14 @@ const getUniquePath = (path, opts = {}) => {//«
 const pathExists=(path,opts={})=>{opts.isRoot=true;opts.create=false;opts.isDir=true;return new Promise(async(Y,N)=>{if(await getFsEntryByPath(path,opts))return Y(true);opts.isDir=false;if(await getFsEntryByPath(path,opts))return Y(true);Y(false);});};
 const loadModules=(arr,opts_arr=[])=>{let proms=[];for(let i=0;i<arr.length;i++)proms.push(loadMod(arr[i],opts_arr[i]));return Promise.all(proms);};
 const getMod=(which,opts={})=>{return new Promise((Y,N)=>{getmod(which,Y,opts);});};
-const saveFsByPath=(path,val,opts)=>{return new Promise((Y,N)=>{save_fs_by_path(path,val,Y,opts);});};
+const saveFsByPath = (path, val, opts={}) => {
+	return new Promise((Y, N) => {
+		save_fs_by_path(path, val, (rv, err)=>{
+			if (opts.retArr) return Y([rv, err]);
+			Y(rv);
+		}, opts);
+	});
+};
 
 const api_funcs = [//«
 	"doFsRm", doFsRm,

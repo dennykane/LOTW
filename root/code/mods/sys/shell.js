@@ -3937,10 +3937,21 @@ cerr("Dropping", ret);
 		let fparts = fs.path_to_par_and_name(fullpath);
 		let parpath = fparts[0];
 		let fname = fparts[1];
-		let ret = await fsapi.mkFsDir(parpath, fname, is_root);
-		if (!ret) {
-			werr(`${parpath}/${fname}: could not make the directory`);
-			refresh();
+		let parobj = await pathToNode(parpath);
+		let rtype = parobj.root.TYPE;
+		if (rtype=="fs") {
+			let ret = await fsapi.mkFsDir(parpath, fname, is_root);
+			if (!ret) {
+				werr(`${parpath}/${fname}: could not make the directory`);
+				have_error = true;
+			}
+		}		
+		else if (rtype=="testing"){
+			werr(`CREATE DIRECTORY '${fname}' IN TESTING!`);
+			have_error = true;
+		}
+		else{
+			werr(`${fname}: skipping directory type '${rtype}'`);
 			have_error = true;
 		}
 		domake();

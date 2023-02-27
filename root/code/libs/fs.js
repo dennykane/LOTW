@@ -38,15 +38,21 @@ let lnname;
 let lnpath;
 let target_node;
 const makeit=async()=>{//«
+	let rtype = par.root.TYPE;
+//	if (rtype!=="fs"){
+//		return cberr(`Cannot create links in type='${rtype}'`);
+//	}
 	let kids = par.KIDS;
-//	let ln_ext = globals.LINK_EXT;
-//	if (kids[`${lnname}.${ln_ext}`]) return exists(par.fullpath+"/"+lnname);
 	if (kids[`${lnname}`]) return exists(par.fullpath+"/"+lnname);
-//    let rv = await fsapi.saveFsByPath(`${lnpath}.${ln_ext}`, target, {ROOT: is_root, OK_LNK: true});
-    let rv = await fsapi.saveFsByPath(`${lnpath}`, target, {ROOT: is_root, isLink: true});
-	if (!rv) return cberr("The link could not be created");
+	let rv, err;
+	if (rtype=="fs")  {
+		[rv, err] = await fsapi.saveFsByPath(`${lnpath}`, target, {ROOT: is_root, isLink: true, retArr: true});
+	}
+	else if (rtype=="testing"){
+		return cberr(`CREATE LINK '${lnname}' IN TESTING!`);
+	}
+	if (!rv) return cberr(err||"The link could not be created");
 	rv.ref = target_node;
-//	fs.mk_desk_icon(lnpath, {LINK:target, node: rv});
 	cbok(lnpath + " -> " + target);
 };//»
 let opts = failopts(args,{LONG:{force:1}});
@@ -91,6 +97,7 @@ let parret = await pathToNode(parpath);
 if (!(parret && parret.KIDS)) {
 	return cberr(`failed to create symbolic link "${lnname}": ${parpath}: no such directory`);
 }
+//log("PAR", parret);
 lnpath = normpath(parpath + "/" + lnname);
 par = parret;
 makeit();
@@ -1126,18 +1133,26 @@ const dotouch=async()=>{//«
 		dotouch();
 		return;
 	}
-	if (parobj.root.TYPE != "fs") {
+	let rtype = parobj.root.TYPE;
+	if (rtype == "fs") {
+		if (!fs.check_fs_dir_perm(parobj,is_root)) {
+			werr(`${fullpath}: permission denied`);
+			dotouch();
+			return;
+		}
+		let ret = await fsapi.touchFsFile(fullpath, is_root);
+		if (!ret) return cberr("Could not create or update the file");
+	}
+	else if (rtype == "testing"){
+		werr(`TOUCH '${fname}' in TESTING`);
+		return dotouch();
+	}
+	else{
 		werr(`${fullpath}: cannot touch the file`);
 		return dotouch();
 	}
-	if (!fs.check_fs_dir_perm(parobj,is_root)) {
-		werr(`${fullpath}: permission denied`);
-		dotouch();
-		return;
-	}
-	let ret = await fsapi.touchFsFile(fullpath, is_root);
-	if (!ret) return cberr("Could not create or update the file");
 	if (Core.Desk) Core.Desk.make_icon_if_new(ret);
+
 	dotouch();
 };//»
 

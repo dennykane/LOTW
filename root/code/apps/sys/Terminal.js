@@ -60,11 +60,11 @@ const DEL_COMS=[
 const DEL_LIBS=[
 //	"math.trading",
 //	"admin"
-//	"wasm",
+	"wasm",
 //	"synth",
 //	"net",
 //	"util",
-//	"fs",
+	"fs",
 //	"net.hn",
 //"dev.testing",
 //	"js",
