@@ -12,9 +12,6 @@ You can try it out at https://linuxontheweb.github.io/.
 
 ![Screenshot of LOTW desktop](https://github.com/linuxontheweb/os/blob/main/www/img/screenshot.png)
 
-## Try it!
-
-Here >>> https://lotw.site
 
 ## Overview
 
