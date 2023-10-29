@@ -2,7 +2,9 @@
 
 This repository is no longer updated. 
 
-The current version is now at https://github.com/linuxontheweb/linuxontheweb.github.io
+The current version is now at https://github.com/linuxontheweb/linuxontheweb.github.io. 
+You can try it out at https://linuxontheweb.github.io/.
+
 
 # About *Linux on the Web* (LOTW)
 
